@@ -7,16 +7,10 @@ type Store interface {
 	//  This new object isn't' synced/created in the backing store
 	//  until the object is Closed/Sync'ed.
 	NewObject(o string) (Object, error)
-	//WriteObject convenience method like ioutil.WriteFile
-	//  The object will be created if it doesn't already exists.
-	//  If the object does exists it will be overwritten.
-	WriteObject(o string, meta map[string]string, b []byte) error
+
 	//Get returns the object from the cloud store.   The object
 	//  isn't opened already, see Object.Open()
 	Get(o string) (Object, error)
-	//GetAndOpen is a convenience method that combines Store.Get() and Object.Open() into
-	// a single call.
-	GetAndOpen(o string, readonly bool) (Object, error)
 	//List takes a prefix query and returns an array of unopened objects
 	// that have the given prefix.
 	List(query Query) (Objects, error)

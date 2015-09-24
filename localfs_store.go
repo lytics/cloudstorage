@@ -46,8 +46,11 @@ func (l *Localstore) NewObject(name string) (Object, error) {
 		storepath: path.Join(l.storepath, name),
 		cachepath: cachepathObj(l.cachepath, name, l.Id),
 	}, nil
-	panic(cachepathObj(l.cachepath, name, l.Id))
 }
+
+/*
+
+removed as part of the effort to simply the interface
 
 func (l *Localstore) WriteObject(o string, meta map[string]string, b []byte) error {
 	fo := path.Join(l.storepath, o)
@@ -70,6 +73,7 @@ func (l *Localstore) WriteObject(o string, meta map[string]string, b []byte) err
 
 	return nil
 }
+*/
 
 func (l *Localstore) List(query Query) (Objects, error) {
 	objects := make(map[string]*localFSObject)
@@ -144,20 +148,6 @@ func (l *Localstore) Get(o string) (Object, error) {
 		storepath: fo,
 		cachepath: cachepathObj(l.cachepath, o, l.Id),
 	}, nil
-}
-
-func (l *Localstore) GetAndOpen(o string, readonly bool) (Object, error) {
-	obj, err := l.Get(o)
-	if err == ObjectNotFound {
-		return nil, ObjectNotFound
-	} else if err != nil {
-		return nil, err
-	}
-
-	if err = obj.Open(readonly); err != nil {
-		return nil, err
-	}
-	return obj, nil
 }
 
 func (l *Localstore) Delete(obj string) error {

@@ -55,6 +55,10 @@ func (g *GcsFS) String() string {
 	return fmt.Sprintf("gs://%s/", g.bucket)
 }
 
+/*
+
+removed as part of the effort to simply the interface
+
 func (g *GcsFS) WriteObject(o string, meta map[string]string, b []byte) error {
 	wc := storage.NewWriter(g.googlectx, g.bucket, o)
 
@@ -78,6 +82,8 @@ func (g *GcsFS) WriteObject(o string, meta map[string]string, b []byte) error {
 
 	return nil
 }
+
+*/
 
 func (g *GcsFS) NewObject(name string) (Object, error) {
 	return &gcsFSObject{
@@ -114,20 +120,6 @@ func (g *GcsFS) Get(o string) (Object, error) {
 		log:       g.Log,
 	}
 	return res, nil
-}
-
-func (g *GcsFS) GetAndOpen(o string, readonly bool) (Object, error) {
-	obj, err := g.Get(o)
-	if err == ObjectNotFound {
-		return nil, ObjectNotFound
-	} else if err != nil {
-		return nil, err
-	}
-
-	if err = obj.Open(readonly); err != nil {
-		return nil, err
-	}
-	return obj, nil
 }
 
 func (g *GcsFS) List(query Query) (Objects, error) {
