@@ -2,13 +2,13 @@ package cloudstorage
 
 import (
 	"fmt"
+	"log"
 	"mime"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
 
-	"github.com/lytics/lio/src/common"
 	"google.golang.org/cloud"
 )
 
@@ -47,11 +47,11 @@ func NewStore(csctx *CloudStoreContext) (Store, error) {
 
 		//TODO replace lio's logger witn one for the package.
 		prefix := fmt.Sprintf("%s:(project=%s bucket=%s)", csctx.LogggingContext, project, bucket)
-		l := common.NewPrefixLogger(prefix)
+		l := log.New(os.Stderr, prefix, log.Lshortfile)
 
 		googleclient, err := BuildGCEMetadatTransporter("")
 		if err != nil {
-			l.Errorf("error creating the GCEMetadataTransport and http client. project=%s gs://%s/ err=%v ",
+			l.Printf("error creating the GCEMetadataTransport and http client. project=%s gs://%s/ err=%v ",
 				project, bucket, err)
 			return nil, err
 		}
@@ -61,11 +61,11 @@ func NewStore(csctx *CloudStoreContext) (Store, error) {
 		project := csctx.Project
 		bucket := csctx.Bucket
 		prefix := fmt.Sprintf("%s:(project=%s bucket=%s)", csctx.LogggingContext, project, bucket)
-		l := common.NewPrefixLogger(prefix)
+		l := log.New(os.Stderr, prefix, log.Lshortfile)
 
 		googleclient, err := BuildJWTTransporter(csctx.JwtConf)
 		if err != nil {
-			l.Errorf("error creating the JWTTransport and http client. project=%s gs://%s/ keylen:%d err=%v ",
+			l.Printf("error creating the JWTTransport and http client. project=%s gs://%s/ keylen:%d err=%v ",
 				project, bucket, len(csctx.JwtConf.Private_keybase64), err)
 			return nil, err
 		}
@@ -73,7 +73,7 @@ func NewStore(csctx *CloudStoreContext) (Store, error) {
 		return NewGCSStore(ctx, bucket, csctx.TmpDir, maxResults, l), nil
 	case LocalFileSource:
 		prefix := fmt.Sprintf("%s:", csctx.LogggingContext)
-		l := common.NewPrefixLogger(prefix)
+		l := log.New(os.Stderr, prefix, log.Lshortfile)
 		return NewLocalStore(csctx.LocalFS, csctx.TmpDir, l), nil
 	default:
 		return nil, fmt.Errorf("bad sourcetype: %v", csctx.TokenSource)

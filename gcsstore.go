@@ -3,6 +3,7 @@ package cloudstorage
 import (
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"math/rand"
 	"os"
@@ -10,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lytics/lio/src/common"
 	"github.com/pborman/uuid"
 	"golang.org/x/net/context"
 	"google.golang.org/cloud/storage"
@@ -29,13 +29,13 @@ type GcsFS struct {
 	PageSize  int //TODO pipe this in from eventstore
 	Id        string
 
-	Log common.Logger
+	Log *log.Logger
 }
 
-func NewGCSStore(gctx context.Context, bucket, cachepath string, pagesize int, log common.Logger) *GcsFS {
+func NewGCSStore(gctx context.Context, bucket, cachepath string, pagesize int, l *log.Logger) *GcsFS {
 	err := os.MkdirAll(path.Dir(cachepath), 0775)
 	if err != nil {
-		log.Errorf("unable to create path. path=%s err=%v", cachepath, err)
+		l.Printf("unable to create path. path=%s err=%v", cachepath, err)
 	}
 
 	uid := uuid.NewUUID().String()
@@ -47,7 +47,7 @@ func NewGCSStore(gctx context.Context, bucket, cachepath string, pagesize int, l
 		cachepath: cachepath,
 		Id:        uid,
 		PageSize:  pagesize,
-		Log:       log,
+		Log:       l,
 	}
 }
 
@@ -72,7 +72,7 @@ func (g *GcsFS) WriteObject(o string, meta map[string]string, b []byte) error {
 	wc.ACL = []storage.ACLRule{{storage.AllAuthenticatedUsers, storage.RoleReader}}
 
 	if _, err := wc.Write(b); err != nil {
-		g.Log.Errorf("couldn't save object. %s err=%v", o, err)
+		g.Log.Printf("couldn't save object. %s err=%v", o, err)
 		return err
 	}
 
@@ -102,7 +102,7 @@ func (g *GcsFS) Get(o string) (Object, error) {
 
 	gobjects, err := g.listObjects(q, GCSRetries)
 	if err != nil {
-		g.Log.Errorf("couldn't list objects. prefix=%s err=%v", q.Prefix, err)
+		g.Log.Printf("couldn't list objects. prefix=%s err=%v", q.Prefix, err)
 		return nil, err
 	}
 
@@ -128,7 +128,7 @@ func (g *GcsFS) List(query Query) (Objects, error) {
 
 	gobjects, err := g.listObjects(q, GCSRetries)
 	if err != nil {
-		g.Log.Errorf("couldn't list objects. prefix=%s err=%v", q.Prefix, err)
+		g.Log.Printf("couldn't list objects. prefix=%s err=%v", q.Prefix, err)
 		return nil, err
 	}
 
@@ -141,7 +141,7 @@ func (g *GcsFS) List(query Query) (Objects, error) {
 		for q != nil {
 			gobjectsB, err := g.listObjects(q, GCSRetries)
 			if err != nil {
-				g.Log.Errorf("couldn't list the remaining pages of objects. prefix=%s err=%v", q.Prefix, err)
+				g.Log.Printf("couldn't list the remaining pages of objects. prefix=%s err=%v", q.Prefix, err)
 				return nil, err
 			}
 
@@ -182,7 +182,7 @@ func (g *GcsFS) listObjects(q *storage.Query, retries int) (*storage.Objects, er
 	for i := 0; i < retries; i++ {
 		objects, err := storage.ListObjects(g.googlectx, g.bucket, q)
 		if err != nil {
-			g.Log.Errorf("error listing objects for the bucket. try:%d store:%s q.prefix:%v err:%v", i, g, q.Prefix, err)
+			g.Log.Printf("error listing objects for the bucket. try:%d store:%s q.prefix:%v err:%v", i, g, q.Prefix, err)
 			lasterr = err
 			backoff(i)
 			continue
@@ -205,7 +205,7 @@ func concatGCSObjects(a, b *storage.Objects) *storage.Objects {
 func (g *GcsFS) Delete(obj string) error {
 	err := storage.DeleteObject(g.googlectx, g.bucket, obj)
 	if err != nil {
-		g.Log.Errorf("error deleting object. object=%s%s err=%v", g, obj, err)
+		g.Log.Printf("error deleting object. object=%s%s err=%v", g, obj, err)
 		return err
 	}
 	return nil
@@ -224,7 +224,7 @@ type gcsFSObject struct {
 	opened     bool
 
 	cachepath string
-	log       common.Logger
+	log       *log.Logger
 }
 
 func (o *gcsFSObject) StorageSource() string {
@@ -268,7 +268,7 @@ func (o *gcsFSObject) Open(readonly bool) error {
 		rc, err := storage.NewReader(o.googlectx, o.bucket, o.name)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error storage.NewReader err=%v", err))
-			o.log.Error("%v", errs)
+			o.log.Printf("%v", errs)
 			backoff(try)
 			continue
 		}
@@ -277,7 +277,7 @@ func (o *gcsFSObject) Open(readonly bool) error {
 		_, err = io.Copy(cachedcopy, rc)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error coping bytes. err=%v", err))
-			o.log.Error("%v", errs)
+			o.log.Printf("%v", errs)
 			backoff(try)
 			continue
 		}
