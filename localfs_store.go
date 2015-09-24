@@ -5,39 +5,39 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
 
-	"github.com/lytics/lio/src/common"
 	"github.com/pborman/uuid"
 )
 
 const LocalFSStorageSource = "localFS"
 
 type Localstore struct {
-	Log       common.Logger
+	Log       *log.Logger
 	storepath string
 	cachepath string
 	Id        string
 }
 
-func NewLocalStore(storepath, cachepath string, log common.Logger) *Localstore {
+func NewLocalStore(storepath, cachepath string, l *log.Logger) *Localstore {
 	err := os.MkdirAll(path.Dir(storepath), 0775)
 	if err != nil {
-		log.Errorf("unable to create path. path=%s err=%v", storepath, err)
+		l.Printf("unable to create path. path=%s err=%v", storepath, err)
 	}
 
 	err = os.MkdirAll(path.Dir(cachepath), 0775)
 	if err != nil {
-		log.Errorf("unable to create path. path=%s err=%v", cachepath, err)
+		l.Printf("unable to create path. path=%s err=%v", cachepath, err)
 	}
 
 	uid := uuid.NewUUID().String()
 	uid = strings.Replace(uid, "-", "", -1)
 
-	return &Localstore{storepath: storepath, cachepath: cachepath, Id: uid, Log: log}
+	return &Localstore{storepath: storepath, cachepath: cachepath, Id: uid, Log: l}
 }
 
 func (l *Localstore) NewObject(name string) (Object, error) {
@@ -57,7 +57,7 @@ func (l *Localstore) WriteObject(o string, meta map[string]string, b []byte) err
 
 	err := os.MkdirAll(path.Dir(fo), 0775)
 	if err != nil {
-		l.Log.Errorf("unable to create path. file=%s err=%v", fo, err)
+		l.Log.Printf("unable to create path. file=%s err=%v", fo, err)
 		return err
 	}
 
@@ -96,7 +96,6 @@ func (l *Localstore) List(query Query) (Objects, error) {
 		} else if filepath.Ext(f.Name()) == ".metadata" {
 			b, err := ioutil.ReadFile(fo)
 			if err != nil {
-				l.Log.Debugf("localfile: unable to open metadata file. err:%v", err)
 				return err
 			}
 			md := make(map[string]string)
