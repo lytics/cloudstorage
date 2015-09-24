@@ -9,8 +9,6 @@ import (
 	"strings"
 
 	"github.com/lytics/lio/src/common"
-	"github.com/lytics/lio/src/config"
-	"github.com/lytics/lio/src/ext_svcs/google"
 	"google.golang.org/cloud"
 )
 
@@ -22,58 +20,63 @@ var ObjectNotFound = fmt.Errorf("object not found")
 // if more objects exist, then they will need to be paged
 const maxResults = 3000
 
-func NewStore(conf *config.CloudStore, l common.Logger) (Store, error) {
+func NewStore(csctx *CloudStoreContext) (Store, error) {
 
-	if conf.PageSize == 0 {
-		conf.PageSize = maxResults
+	if csctx.PageSize == 0 {
+		csctx.PageSize = maxResults
 	}
 
-	if conf.TmpDir == "" {
-		conf.TmpDir = os.TempDir()
+	if csctx.TmpDir == "" {
+		csctx.TmpDir = os.TempDir()
 	}
 
-	switch conf.TokenSource {
+	switch csctx.TokenSource {
 
 	//TODO
-	// case config.GCEDefaultOAuthToken :
+	//
+	// case GCEDefaultOAuthToken :
 	//   This auth method would use the default OAuth token created by tools like gsutils, gcloud, etc...
 	//   I plan on using this token with bulkutils so we can run bulkutils locally like we can current
 	//   use gsutils to download files.
 	//   See github.com/lytics/lio/src/ext_svcs/google/google_transporter.go : BuildDefaultGoogleTransporter
 	//   The only reason Im not doing this now is to avoid the overhead of testing it..
 	//
-	case config.GCEMetaKeySource:
-		project := conf.Project
-		bucket := conf.Bucket
-		prefix := fmt.Sprintf("%s:(project=%s bucket=%s)", l.Prefix(), project, bucket)
+	case GCEMetaKeySource:
+		project := csctx.Project
+		bucket := csctx.Bucket
+
+		//TODO replace lio's logger witn one for the package.
+		prefix := fmt.Sprintf("%s:(project=%s bucket=%s)", csctx.LogggingContext, project, bucket)
 		l := common.NewPrefixLogger(prefix)
 
-		googleclient, err := google.BuildGCEMetadatTransporter("")
+		googleclient, err := BuildGCEMetadatTransporter("")
 		if err != nil {
 			l.Errorf("error creating the GCEMetadataTransport and http client. project=%s gs://%s/ err=%v ",
 				project, bucket, err)
 			return nil, err
 		}
 		ctx := cloud.NewContext(project, googleclient.Client())
-		return NewGCSStore(ctx, bucket, conf.TmpDir, maxResults, l), nil
-	case config.JWTKeySource:
-		project := conf.Project
-		bucket := conf.Bucket
-		prefix := fmt.Sprintf("%s:(project=%s bucket=%s)", l.Prefix(), project, bucket)
+		return NewGCSStore(ctx, bucket, csctx.TmpDir, maxResults, l), nil
+	case JWTKeySource:
+		project := csctx.Project
+		bucket := csctx.Bucket
+		prefix := fmt.Sprintf("%s:(project=%s bucket=%s)", csctx.LogggingContext, project, bucket)
 		l := common.NewPrefixLogger(prefix)
 
-		googleclient, err := google.eventstore - gcs - localfiles(conf.JwtConf)
+		googleclient, err := BuildJWTTransporter(csctx.JwtConf)
 		if err != nil {
 			l.Errorf("error creating the JWTTransport and http client. project=%s gs://%s/ keylen:%d err=%v ",
-				project, bucket, len(conf.JwtConf.Private_keybase64), err)
+				project, bucket, len(csctx.JwtConf.Private_keybase64), err)
 			return nil, err
 		}
 		ctx := cloud.NewContext(project, googleclient.Client())
-		return NewGCSStore(ctx, bucket, conf.TmpDir, maxResults, l), nil
-	case config.LocalFileSource:
-		return NewLocalStore(conf.LocalFS, conf.TmpDir, l), nil
+		return NewGCSStore(ctx, bucket, csctx.TmpDir, maxResults, l), nil
+	case LocalFileSource:
+		prefix := fmt.Sprintf("%s:", csctx.LogggingContext)
+		l := common.NewPrefixLogger(prefix)
+		return NewLocalStore(csctx.LocalFS, csctx.TmpDir, l), nil
 	default:
-		return nil, fmt.Errorf("bad sourcetype: %v", conf.TokenSource)
+		return nil, fmt.Errorf("bad sourcetype: %v", csctx.TokenSource)
 	}
 }
 
