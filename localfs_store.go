@@ -5,46 +5,54 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
 
+	"github.com/lytics/cloudstorage/logging"
 	"github.com/pborman/uuid"
 )
 
 const LocalFSStorageSource = "localFS"
 
 type Localstore struct {
-	Log       *log.Logger
+	Log       logging.Logger
 	storepath string
 	cachepath string
 	Id        string
 }
 
-func NewLocalStore(storepath, cachepath string, l *log.Logger) *Localstore {
-	err := os.MkdirAll(path.Dir(storepath), 0775)
+func NewLocalStore(storepath, cachepath string, l logging.Logger) (*Localstore, error) {
+
+	err := os.MkdirAll(storepath, 0775)
 	if err != nil {
-		l.Printf("unable to create path. path=%s err=%v", storepath, err)
+		return nil, fmt.Errorf("unable to create path. path=%s err=%v", storepath, err)
 	}
 
-	err = os.MkdirAll(path.Dir(cachepath), 0775)
+	err = os.MkdirAll(cachepath, 0775)
 	if err != nil {
-		l.Printf("unable to create path. path=%s err=%v", cachepath, err)
+		return nil, fmt.Errorf("unable to create path. path=%s err=%v", cachepath, err)
 	}
 
 	uid := uuid.NewUUID().String()
 	uid = strings.Replace(uid, "-", "", -1)
 
-	return &Localstore{storepath: storepath, cachepath: cachepath, Id: uid, Log: l}
+	return &Localstore{storepath: storepath, cachepath: cachepath, Id: uid, Log: l}, nil
 }
 
-func (l *Localstore) NewObject(name string) (Object, error) {
+func (l *Localstore) NewObject(objectname string) (Object, error) {
+	obj, err := l.Get(objectname)
+	if err != nil && err != ObjectNotFound {
+		return nil, err
+	} else if obj != nil {
+		return nil, ObjectExists
+	}
+
 	return &localFSObject{
-		name:      name,
-		storepath: path.Join(l.storepath, name),
-		cachepath: cachepathObj(l.cachepath, name, l.Id),
+		name:      objectname,
+		storepath: path.Join(l.storepath, objectname),
+		cachepath: cachepathObj(l.cachepath, objectname, l.Id),
 	}, nil
 }
 
@@ -190,33 +198,30 @@ func (o *localFSObject) MetaData() map[string]string {
 func (o *localFSObject) SetMetaData(meta map[string]string) {
 	o.metadata = meta
 }
-func (o *localFSObject) Open(readonly bool) error {
+
+func (o *localFSObject) Open(accesslevel AccessLevel) (*os.File, error) {
 	if o.opened {
-		return fmt.Errorf("the store object is already opened. %s", o.storepath)
+		return nil, fmt.Errorf("the store object is already opened. %s", o.storepath)
 	}
+
+	var readonly = accesslevel == ReadOnly
 
 	storecopy, err := os.OpenFile(o.storepath, os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
-		return fmt.Errorf("localfile: error occurred open storecopy file. local=%s err=%v",
+		return nil, fmt.Errorf("localfile: error occurred opening storecopy file. local=%s err=%v",
 			o.storepath, err)
 	}
 	defer storecopy.Close()
 
-	err = os.MkdirAll(path.Dir(o.cachepath), 0775)
-	if err != nil {
-		return fmt.Errorf("localfile: error occurred creating cachedcopy dir. cachepath=%s object=%s err=%v",
-			o.cachepath, o.name, err)
-	}
-
 	cachedcopy, err := os.Create(o.cachepath)
 	if err != nil {
-		return fmt.Errorf("localfile: error occurred open cachedcopy file. cachepath=%s object=%s err=%v",
+		return nil, fmt.Errorf("localfile: error occurred opening cachedcopy file. cachepath=%s object=%s err=%v",
 			o.cachepath, o.name, err)
 	}
 
 	_, err = io.Copy(cachedcopy, storecopy)
 	if err != nil {
-		return fmt.Errorf("localfile: error occurred reading the bytes returned from localfile. storepath=%s object=%s tfile=%v err=%v",
+		return nil, fmt.Errorf("localfile: error occurred reading the bytes returned from localfile. storepath=%s object=%s tfile=%v err=%v",
 			o.storepath, o.name, cachedcopy.Name(), err)
 	}
 
@@ -224,7 +229,7 @@ func (o *localFSObject) Open(readonly bool) error {
 		cachedcopy.Close()
 		cachedcopy, err = os.Open(o.cachepath)
 		if err != nil {
-			return fmt.Errorf("localfile: error occurred open file. storepath=%s object=%s tfile=%v err=%v",
+			return nil, fmt.Errorf("localfile: error occurred opening file. storepath=%s object=%s tfile=%v err=%v",
 				o.storepath, o.name, cachedcopy.Name(), err)
 		}
 	}
@@ -232,9 +237,10 @@ func (o *localFSObject) Open(readonly bool) error {
 	o.cachedcopy = cachedcopy
 	o.readonly = readonly
 	o.opened = true
-	return nil
+	return o.cachedcopy, nil
 }
-func (o *localFSObject) CachedCopy() *os.File {
+
+func (o *localFSObject) File() *os.File {
 	return o.cachedcopy
 }
 func (o *localFSObject) Read(p []byte) (n int, err error) {
@@ -259,7 +265,7 @@ func (o *localFSObject) Sync() error {
 	}
 	defer cachedcopy.Close()
 
-	storecopy, err := os.OpenFile(o.storepath, os.O_APPEND|os.O_RDWR, 0664)
+	storecopy, err := os.OpenFile(o.storepath, os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0664)
 	if err != nil {
 		return fmt.Errorf("localfile: error occurred open file. local=%s err=%v",
 			o.storepath, err)
@@ -273,9 +279,12 @@ func (o *localFSObject) Sync() error {
 	}
 
 	if o.metadata != nil && len(o.metadata) > 0 {
-		fmd := o.storepath + ".metadata"
-		writemeta(fmd, o.metadata)
+		o.metadata = make(map[string]string)
 	}
+
+	fmd := o.storepath + ".metadata"
+	writemeta(fmd, o.metadata)
+
 	return nil
 }
 

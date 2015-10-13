@@ -7,11 +7,24 @@ import (
 
 type TokenSource string
 
+type AccessLevel int
+
 const (
-	JWTKeySource     TokenSource = "JWTkey"
-	GCEMetaKeySource TokenSource = "gcemetadata"
-	LocalFileSource  TokenSource = "localfiles"
+	JWTKeySource         TokenSource = "JWTkey"
+	GCEMetaKeySource     TokenSource = "gcemetadata"
+	LocalFileSource      TokenSource = "localfiles"
+	GCEDefaultOAuthToken TokenSource = "gcedefaulttoken"
+
+	ReadOnly  AccessLevel = 0
+	ReadWrite AccessLevel = 1
 )
+
+//Objects are just a collection of Object(s).  Used as the results for store.List commands.
+type Objects []Object
+
+func (o Objects) Len() int           { return len(o) }
+func (o Objects) Less(i, j int) bool { return o[i].Name() < o[j].Name() }
+func (o Objects) Swap(i, j int)      { o[i], o[j] = o[j], o[i] }
 
 // the cloud store config parameters
 //

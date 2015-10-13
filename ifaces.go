@@ -21,13 +21,6 @@ type Store interface {
 	String() string
 }
 
-//Objects are just a collection of Object(s).  Used as the results for store.List commands.
-type Objects []Object
-
-func (o Objects) Len() int           { return len(o) }
-func (o Objects) Less(i, j int) bool { return o[i].Name() < o[j].Name() }
-func (o Objects) Swap(i, j int)      { o[i], o[j] = o[j], o[i] }
-
 //Object is a handle to a cloud stored file/object.  Calling Open will pull the remote file onto
 // your local filesystem for reading/writing.  Calling Sync/Close will push the local copy
 // backup to the cloud store.
@@ -42,7 +35,7 @@ type Object interface {
 	//Open copies the remote file to a local cache and opens the cached version
 	// for read/writing.  Calling Close/Sync will push the copy back to the
 	// backing store.
-	Open(readonly bool) error
+	Open(readonly AccessLevel) (*os.File, error)
 	//Release will remove the locally cached copy of the file.  You most call Close
 	// before releasing.  Release will call os.Remove(local_copy_file) so opened
 	//filehandles need to be closed.
@@ -53,23 +46,4 @@ type Object interface {
 	Write(p []byte) (n int, err error)
 	Sync() error
 	Close() error
-
-	//CachedCopy returns a pointer to the local cache file.  Changes made to the
-	// file will flushed to the remote store when Close/Sync is called.
-	CachedCopy() *os.File
-}
-
-//A logging interface
-type Logger interface {
-	Debug(v ...interface{})
-	Debugf(format string, v ...interface{})
-
-	Info(v ...interface{})
-	Infof(format string, v ...interface{})
-
-	Warn(v ...interface{})
-	Warnf(format string, v ...interface{})
-
-	Error(v ...interface{})
-	Errorf(format string, v ...interface{})
 }

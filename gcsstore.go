@@ -3,7 +3,6 @@ package cloudstorage
 import (
 	"fmt"
 	"io"
-	"log"
 	"math"
 	"math/rand"
 	"os"
@@ -11,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lytics/cloudstorage/logging"
 	"github.com/pborman/uuid"
 	"golang.org/x/net/context"
 	"google.golang.org/cloud/storage"
@@ -29,13 +29,13 @@ type GcsFS struct {
 	PageSize  int //TODO pipe this in from eventstore
 	Id        string
 
-	Log *log.Logger
+	Log logging.Logger
 }
 
-func NewGCSStore(gctx context.Context, bucket, cachepath string, pagesize int, l *log.Logger) *GcsFS {
+func NewGCSStore(gctx context.Context, bucket, cachepath string, pagesize int, l logging.Logger) (*GcsFS, error) {
 	err := os.MkdirAll(path.Dir(cachepath), 0775)
 	if err != nil {
-		l.Printf("unable to create path. path=%s err=%v", cachepath, err)
+		return nil, fmt.Errorf("unable to create path. path=%s err=%v", cachepath, err)
 	}
 
 	uid := uuid.NewUUID().String()
@@ -48,7 +48,7 @@ func NewGCSStore(gctx context.Context, bucket, cachepath string, pagesize int, l
 		Id:        uid,
 		PageSize:  pagesize,
 		Log:       l,
-	}
+	}, nil
 }
 
 func (g *GcsFS) String() string {
@@ -85,24 +85,31 @@ func (g *GcsFS) WriteObject(o string, meta map[string]string, b []byte) error {
 
 */
 
-func (g *GcsFS) NewObject(name string) (Object, error) {
+func (g *GcsFS) NewObject(objectname string) (Object, error) {
+	obj, err := g.Get(objectname)
+	if err != nil && err != ObjectNotFound {
+		return nil, err
+	} else if obj != nil {
+		return nil, ObjectExists
+	}
+
 	return &gcsFSObject{
-		name:       name,
-		metadata:   map[string]string{ContextTypeKey: contentType(name)},
+		name:       objectname,
+		metadata:   map[string]string{ContextTypeKey: contentType(objectname)},
 		googlectx:  g.googlectx,
 		bucket:     g.bucket,
 		cachedcopy: nil,
-		cachepath:  cachepathObj(g.cachepath, name, g.Id),
+		cachepath:  cachepathObj(g.cachepath, objectname, g.Id),
 		log:        g.Log,
 	}, nil
 }
 
-func (g *GcsFS) Get(o string) (Object, error) {
-	var q = &storage.Query{Prefix: o, MaxResults: g.PageSize}
+func (g *GcsFS) Get(objectpath string) (Object, error) {
+	var q = &storage.Query{Prefix: objectpath, MaxResults: g.PageSize}
 
 	gobjects, err := g.listObjects(q, GCSRetries)
 	if err != nil {
-		g.Log.Printf("couldn't list objects. prefix=%s err=%v", q.Prefix, err)
+		g.Log.Errorf("couldn't list objects. prefix=%s err=%v", q.Prefix, err)
 		return nil, err
 	}
 
@@ -128,7 +135,7 @@ func (g *GcsFS) List(query Query) (Objects, error) {
 
 	gobjects, err := g.listObjects(q, GCSRetries)
 	if err != nil {
-		g.Log.Printf("couldn't list objects. prefix=%s err=%v", q.Prefix, err)
+		g.Log.Errorf("couldn't list objects. prefix=%s err=%v", q.Prefix, err)
 		return nil, err
 	}
 
@@ -141,7 +148,7 @@ func (g *GcsFS) List(query Query) (Objects, error) {
 		for q != nil {
 			gobjectsB, err := g.listObjects(q, GCSRetries)
 			if err != nil {
-				g.Log.Printf("couldn't list the remaining pages of objects. prefix=%s err=%v", q.Prefix, err)
+				g.Log.Errorf("couldn't list the remaining pages of objects. prefix=%s err=%v", q.Prefix, err)
 				return nil, err
 			}
 
@@ -182,7 +189,7 @@ func (g *GcsFS) listObjects(q *storage.Query, retries int) (*storage.Objects, er
 	for i := 0; i < retries; i++ {
 		objects, err := storage.ListObjects(g.googlectx, g.bucket, q)
 		if err != nil {
-			g.Log.Printf("error listing objects for the bucket. try:%d store:%s q.prefix:%v err:%v", i, g, q.Prefix, err)
+			g.Log.Errorf("error listing objects for the bucket. try:%d store:%s q.prefix:%v err:%v", i, g, q.Prefix, err)
 			lasterr = err
 			backoff(i)
 			continue
@@ -205,7 +212,7 @@ func concatGCSObjects(a, b *storage.Objects) *storage.Objects {
 func (g *GcsFS) Delete(obj string) error {
 	err := storage.DeleteObject(g.googlectx, g.bucket, obj)
 	if err != nil {
-		g.Log.Printf("error deleting object. object=%s%s err=%v", g, obj, err)
+		g.Log.Errorf("error deleting object. object=%s%s err=%v", g, obj, err)
 		return err
 	}
 	return nil
@@ -224,7 +231,7 @@ type gcsFSObject struct {
 	opened     bool
 
 	cachepath string
-	log       *log.Logger
+	log       logging.Logger
 }
 
 func (o *gcsFSObject) StorageSource() string {
@@ -243,32 +250,33 @@ func (o *gcsFSObject) SetMetaData(meta map[string]string) {
 	o.metadata = meta
 }
 
-func (o *gcsFSObject) Open(readonly bool) error {
+func (o *gcsFSObject) Open(accesslevel AccessLevel) (*os.File, error) {
 	if o.opened {
-		return fmt.Errorf("the store object is already opened. %s", o.name)
+		return nil, fmt.Errorf("the store object is already opened. %s", o.name)
 	}
 
 	var errs []error = make([]error, 0)
 	var cachedcopy *os.File = nil
 	var err error
+	var readonly = accesslevel == ReadOnly
 
 	err = os.MkdirAll(path.Dir(o.cachepath), 0775)
 	if err != nil {
-		return fmt.Errorf("gcsfs: error occurred creating cachedcopy dir. cachepath=%s object=%s err=%v",
+		return nil, fmt.Errorf("gcsfs: error occurred creating cachedcopy dir. cachepath=%s object=%s err=%v",
 			o.cachepath, o.name, err)
 	}
 
 	for try := 0; try < GCSRetries; try++ {
 		cachedcopy, err = os.Create(o.cachepath)
 		if err != nil {
-			return fmt.Errorf("gcsfs: error occurred creating file. local=%s err=%v",
+			return nil, fmt.Errorf("gcsfs: error occurred creating file. local=%s err=%v",
 				o.cachepath, err)
 		}
 
 		rc, err := storage.NewReader(o.googlectx, o.bucket, o.name)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error storage.NewReader err=%v", err))
-			o.log.Printf("%v", errs)
+			o.log.Debugf("%v", errs)
 			backoff(try)
 			continue
 		}
@@ -277,7 +285,7 @@ func (o *gcsFSObject) Open(readonly bool) error {
 		_, err = io.Copy(cachedcopy, rc)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error coping bytes. err=%v", err))
-			o.log.Printf("%v", errs)
+			o.log.Debugf("%v", errs)
 			backoff(try)
 			continue
 		}
@@ -286,7 +294,7 @@ func (o *gcsFSObject) Open(readonly bool) error {
 			cachedcopy.Close()
 			cachedcopy, err = os.Open(o.cachepath)
 			if err != nil {
-				return fmt.Errorf("gcsfs: error occurred open file. local=%s object=%s tfile=%v err=%v",
+				return nil, fmt.Errorf("gcsfs: error occurred opening file. local=%s object=%s tfile=%v err=%v",
 					o.cachepath, o.name, cachedcopy.Name(), err)
 			}
 		}
@@ -294,21 +302,19 @@ func (o *gcsFSObject) Open(readonly bool) error {
 		o.cachedcopy = cachedcopy
 		o.readonly = readonly
 		o.opened = true
-		return nil
+		return o.cachedcopy, nil
 	}
 
-	return fmt.Errorf("gcsfs: fetch error retry cnt reached: obj=%s tfile=%v errs:[%v]",
+	return nil, fmt.Errorf("gcsfs: fetch error retry cnt reached: obj=%s tfile=%v errs:[%v]",
 		o.name, o.cachepath, errs)
 }
 
-func (o *gcsFSObject) CachedCopy() *os.File {
+func (o *gcsFSObject) File() *os.File {
 	return o.cachedcopy
 }
-
 func (o *gcsFSObject) Read(p []byte) (n int, err error) {
 	return o.cachedcopy.Read(p)
 }
-
 func (o *gcsFSObject) Write(p []byte) (n int, err error) {
 	return o.cachedcopy.Write(p)
 }

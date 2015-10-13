@@ -2,19 +2,24 @@ package cloudstorage
 
 import (
 	"fmt"
-	"log"
 	"mime"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
 
+	"github.com/lytics/cloudstorage/logging"
 	"google.golang.org/cloud"
 )
 
-const StoreCacheFileExt = ".storecache"
+const StoreCacheFileExt = ".cache"
 
 var ObjectNotFound = fmt.Errorf("object not found")
+var ObjectExists = fmt.Errorf("object already exists in backing store (use store.Get)")
+
+var LogConstructor = func(prefix string) logging.Logger {
+	return logging.NewStdLogger(true, logging.INFO, prefix)
+}
 
 //maxResults default number of objects to retrieve during a list-objects request,
 // if more objects exist, then they will need to be paged
@@ -32,49 +37,81 @@ func NewStore(csctx *CloudStoreContext) (Store, error) {
 
 	switch csctx.TokenSource {
 
-	//TODO
-	//
-	// case GCEDefaultOAuthToken :
-	//   This auth method would use the default OAuth token created by tools like gsutils, gcloud, etc...
-	//   I plan on using this token with bulkutils so we can run bulkutils locally like we can current
-	//   use gsutils to download files.
-	//   See github.com/lytics/lio/src/ext_svcs/google/google_transporter.go : BuildDefaultGoogleTransporter
-	//   The only reason Im not doing this now is to avoid the overhead of testing it..
-	//
+	case GCEDefaultOAuthToken:
+		//   This token method uses the default OAuth token with GCS created by tools like gsutils, gcloud, etc...
+		//   See github.com/lytics/lio/src/ext_svcs/google/google_transporter.go : BuildDefaultGoogleTransporter
+		//   The only reason Im not doing this now is to avoid the overhead of testing it..
+		//
+		project := csctx.Project
+		bucket := csctx.Bucket
+
+		//TODO replace lio's logger witn one for the package.
+		prefix := fmt.Sprintf("%s:(project=%s bucket=%s)", csctx.LogggingContext, project, bucket)
+		l := LogConstructor(prefix)
+
+		googleclient, err := BuildDefaultGoogleTransporter("")
+		if err != nil {
+			l.Errorf("error creating the GCEMetadataTransport and http client. project=%s gs://%s/ err=%v ",
+				project, bucket, err)
+			return nil, err
+		}
+		ctx := cloud.NewContext(project, googleclient.Client())
+		store, err := NewGCSStore(ctx, bucket, csctx.TmpDir, maxResults, l)
+		if err != nil {
+			l.Errorf("error creating the store. err=%v ", err)
+			return nil, err
+		}
+		return store, nil
 	case GCEMetaKeySource:
 		project := csctx.Project
 		bucket := csctx.Bucket
 
 		//TODO replace lio's logger witn one for the package.
 		prefix := fmt.Sprintf("%s:(project=%s bucket=%s)", csctx.LogggingContext, project, bucket)
-		l := log.New(os.Stderr, prefix, log.Lshortfile)
+		l := LogConstructor(prefix)
 
 		googleclient, err := BuildGCEMetadatTransporter("")
 		if err != nil {
-			l.Printf("error creating the GCEMetadataTransport and http client. project=%s gs://%s/ err=%v ",
+			l.Errorf("error creating the GCEMetadataTransport and http client. project=%s gs://%s/ err=%v ",
 				project, bucket, err)
 			return nil, err
 		}
 		ctx := cloud.NewContext(project, googleclient.Client())
-		return NewGCSStore(ctx, bucket, csctx.TmpDir, maxResults, l), nil
+		store, err := NewGCSStore(ctx, bucket, csctx.TmpDir, maxResults, l)
+		if err != nil {
+			l.Errorf("error creating the store. err=%v ", err)
+			return nil, err
+		}
+		return store, nil
 	case JWTKeySource:
 		project := csctx.Project
 		bucket := csctx.Bucket
 		prefix := fmt.Sprintf("%s:(project=%s bucket=%s)", csctx.LogggingContext, project, bucket)
-		l := log.New(os.Stderr, prefix, log.Lshortfile)
+		l := LogConstructor(prefix)
 
 		googleclient, err := BuildJWTTransporter(csctx.JwtConf)
 		if err != nil {
-			l.Printf("error creating the JWTTransport and http client. project=%s gs://%s/ keylen:%d err=%v ",
+			l.Errorf("error creating the JWTTransport and http client. project=%s gs://%s/ keylen:%d err=%v ",
 				project, bucket, len(csctx.JwtConf.Private_keybase64), err)
 			return nil, err
 		}
 		ctx := cloud.NewContext(project, googleclient.Client())
-		return NewGCSStore(ctx, bucket, csctx.TmpDir, maxResults, l), nil
+		store, err := NewGCSStore(ctx, bucket, csctx.TmpDir, maxResults, l)
+		if err != nil {
+			l.Errorf("error creating the store. err=%v ", err)
+			return nil, err
+		}
+		return store, nil
 	case LocalFileSource:
 		prefix := fmt.Sprintf("%s:", csctx.LogggingContext)
-		l := log.New(os.Stderr, prefix, log.Lshortfile)
-		return NewLocalStore(csctx.LocalFS, csctx.TmpDir, l), nil
+		l := LogConstructor(prefix)
+
+		store, err := NewLocalStore(csctx.LocalFS, csctx.TmpDir, l)
+		if err != nil {
+			l.Errorf("error creating the store. err=%v ", err)
+			return nil, err
+		}
+		return store, nil
 	default:
 		return nil, fmt.Errorf("bad sourcetype: %v", csctx.TokenSource)
 	}
@@ -120,8 +157,9 @@ func cachepathObj(cachepath, oname, storeid string) string {
 	obase := path.Base(oname)
 	opath := path.Dir(oname)
 	ext := path.Ext(oname)
-	ext2 := fmt.Sprintf(".%s%s", storeid, StoreCacheFileExt)
+	ext2 := fmt.Sprintf("%s.%s%s", ext, storeid, StoreCacheFileExt)
 	obase2 := strings.Replace(obase, ext, ext2, 1)
 	cn := path.Join(cachepath, opath, obase2)
+
 	return cn
 }
