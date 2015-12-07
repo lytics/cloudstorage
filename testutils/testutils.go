@@ -9,21 +9,58 @@ import (
 )
 
 type testlogger struct {
-	t     *testing.T
-	level int
+	t            *testing.T
+	LogLevel     int
+	LogLvlPrefix map[int]string
+	LogPrefix    string
+	LogPostfix   string
 }
 
-func (l *testlogger) Debug(v ...interface{})                 {}
-func (l *testlogger) Debugf(format string, v ...interface{}) {}
+func (l *testlogger) Debug(v ...interface{}) {
+	l.logP(DEBUG, v...)
+}
 
-func (l *testlogger) Info(v ...interface{})                 {}
-func (l *testlogger) Infof(format string, v ...interface{}) {}
+func (l *testlogger) Debugf(format string, v ...interface{}) {
+	l.logPf(DEBUG, format, v...)
+}
 
-func (l *testlogger) Warn(v ...interface{})                 {}
-func (l *testlogger) Warnf(format string, v ...interface{}) {}
+func (l *testlogger) Info(v ...interface{}) {
+	l.logP(INFO, v...)
+}
 
-func (l *testlogger) Error(v ...interface{})                 {}
-func (l *testlogger) Errorf(format string, v ...interface{}) {}
+func (l *testlogger) Infof(format string, v ...interface{}) {
+	l.logPf(INFO, format, v...)
+}
+
+func (l *testlogger) Warn(v ...interface{}) {
+	l.logP(WARN, v...)
+}
+
+func (l *testlogger) Warnf(format string, v ...interface{}) {
+	l.logPf(WARN, format, v...)
+}
+
+func (l *testlogger) Error(v ...interface{}) {
+	l.logP(ERROR, v...)
+}
+
+func (l *testlogger) Errorf(format string, v ...interface{}) {
+	l.logPf(ERROR, format, v...)
+}
+
+func (l *testlogger) logP(logLvl int, v ...interface{}) {
+	if l.LogLevel >= logLvl && l.t != nil {
+		l.t.Log(
+			l.LogPrefix + l.LogLvlPrefix[logLvl] + fmt.Sprint(v...) + l.LogPostfix)
+	}
+}
+
+func (l *testlogger) logPf(logLvl int, format string, v ...interface{}) {
+	if l.LogLevel >= logLvl && l.t != nil {
+		l.t.Log(
+			l.LogPrefix + l.LogLvlPrefix[logLvl] + fmt.Sprintf(format, v...) + l.LogPostfix)
+	}
+}
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // ~ Test Utilizes
@@ -51,6 +88,7 @@ func AssertEq(t *testing.T, exp interface{}, got interface{}, v ...interface{}) 
 			t.Errorf("???format=%T??? : msg:%v", v[0], v2)
 		}
 	}
+
 	t.Logf("exp      :\n[%v]", exp)
 	t.Logf("got      :\n[%v]", got)
 	if gv.Type() != ev.Type() {
