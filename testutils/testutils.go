@@ -8,6 +8,15 @@ import (
 	"github.com/lytics/cloudstorage/logging"
 )
 
+const (
+	NOLOGGING = -1
+	FATAL     = 0
+	ERROR     = 1
+	WARN      = 2
+	INFO      = 3
+	DEBUG     = 4
+)
+
 type testlogger struct {
 	t            *testing.T
 	LogLevel     int
