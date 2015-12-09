@@ -6,33 +6,66 @@ import (
 	"os"
 	"testing"
 
+	"github.com/lytics/cloudstorage/logging"
 	"github.com/lytics/cloudstorage/testutils"
 )
 
+//
+// use os.Getenv("TESTINT") == "1" to run integration tests with Google CloudStore
+//
+
 var localconfig = &CloudStoreContext{
-	LogggingContext: "unittest:1",
+	LogggingContext: "unittest",
 	TokenSource:     LocalFileSource,
 	LocalFS:         "/tmp/mockcloud",
 	TmpDir:          "/tmp/localcache",
 }
 
-func createStore(t *testing.T) Store {
-	os.RemoveAll("/tmp/mockcloud")
-	os.RemoveAll("/tmp/localcache")
+var gcsIntconfig = &CloudStoreContext{
+	LogggingContext: "integration-test",
+	TokenSource:     GCEDefaultOAuthToken,
+	Project:         "lyticsstaging",
+	Bucket:          "cloudstore-tests",
+	TmpDir:          "/tmp/localcache",
+}
 
-	store, err := NewStore(localconfig)
+func createStore(t *testing.T) Store {
+
+	LogConstructor = func(prefix string) logging.Logger {
+		return logging.NewStdLogger(true, logging.DEBUG, prefix)
+		//return testutils.NewStdLogger(t, prefix)
+	}
+
+	var config *CloudStoreContext
+	if os.Getenv("TESTINT") == "" {
+		//os.RemoveAll("/tmp/mockcloud")
+		//os.RemoveAll("/tmp/localcache")
+		config = localconfig
+	} else {
+		config = gcsIntconfig
+	}
+	store, err := NewStore(config)
 	testutils.AssertEq(t, nil, err, "error.")
 
 	return store
 }
 
-//TODO add GCS testscases if os.Getenv("TESTINT") == "true"
+func clearstore(t *testing.T, store Store) {
+	objs, err := store.List(Query{"", nil})
+	testutils.AssertEq(t, nil, err, "error.")
+	for _, o := range objs {
+		t.Logf("clearstore(): deleting %v", o.Name())
+		store.Delete(o.Name())
+	}
+}
+
 func TestBasicRW(t *testing.T) {
 	store := createStore(t)
+	clearstore(t, store)
 	//
 	//Create a new object and write to it.
 	//
-	obj, err := store.NewObject("test.csv")
+	obj, err := store.NewObject("prefix/test.csv")
 	testutils.AssertEq(t, nil, err, "error.")
 
 	f, err := obj.Open(ReadWrite)
@@ -52,7 +85,7 @@ func TestBasicRW(t *testing.T) {
 	//
 	//Read the object back out of the cloud storage.
 	//
-	obj2, err := store.Get("test.csv")
+	obj2, err := store.Get("prefix/test.csv")
 	testutils.AssertEq(t, nil, err, "error.")
 
 	f2, err := obj2.Open(ReadOnly)
@@ -66,6 +99,7 @@ func TestBasicRW(t *testing.T) {
 
 func TestAppend(t *testing.T) {
 	store := createStore(t)
+	clearstore(t, store)
 	//
 	//Create a new object and write to it.
 	//
@@ -122,6 +156,7 @@ func TestAppend(t *testing.T) {
 
 func TestTruncate(t *testing.T) {
 	store := createStore(t)
+	clearstore(t, store)
 	//
 	//Create a new object and write to it.
 	//
@@ -183,6 +218,7 @@ func TestTruncate(t *testing.T) {
 
 func TestNewObjectWithExisting(t *testing.T) {
 	store := createStore(t)
+	clearstore(t, store)
 	//
 	//Create a new object and write to it.
 	//

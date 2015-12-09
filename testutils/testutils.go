@@ -17,12 +17,14 @@ const (
 	DEBUG     = 4
 )
 
+func NewStdLogger(t *testing.T, prefix string) logging.Logger {
+	return &testlogger{t, DEBUG, prefix}
+}
+
 type testlogger struct {
-	t            *testing.T
-	LogLevel     int
-	LogLvlPrefix map[int]string
-	LogPrefix    string
-	LogPostfix   string
+	t         *testing.T
+	LogLevel  int
+	LogPrefix string
 }
 
 func (l *testlogger) Debug(v ...interface{}) {
@@ -60,14 +62,14 @@ func (l *testlogger) Errorf(format string, v ...interface{}) {
 func (l *testlogger) logP(logLvl int, v ...interface{}) {
 	if l.LogLevel >= logLvl && l.t != nil {
 		l.t.Log(
-			l.LogPrefix + l.LogLvlPrefix[logLvl] + fmt.Sprint(v...) + l.LogPostfix)
+			l.LogPrefix + fmt.Sprint(v...))
 	}
 }
 
 func (l *testlogger) logPf(logLvl int, format string, v ...interface{}) {
 	if l.LogLevel >= logLvl && l.t != nil {
 		l.t.Log(
-			l.LogPrefix + l.LogLvlPrefix[logLvl] + fmt.Sprintf(format, v...) + l.LogPostfix)
+			l.LogPrefix + fmt.Sprintf(format, v...))
 	}
 }
 
@@ -79,8 +81,8 @@ func AssertEq(t *testing.T, exp interface{}, got interface{}, v ...interface{}) 
 		return
 	}
 
-	gv := reflect.ValueOf(got)
-	ev := reflect.ValueOf(exp)
+	//gv := reflect.ValueOf(got)
+	//ev := reflect.ValueOf(exp)
 
 	t.Logf("caller   : %v", logging.Whoami(1))
 	if len(v) == 0 {
@@ -100,15 +102,16 @@ func AssertEq(t *testing.T, exp interface{}, got interface{}, v ...interface{}) 
 
 	t.Logf("exp      :\n[%v]", exp)
 	t.Logf("got      :\n[%v]", got)
-	if gv.Type() != ev.Type() {
-		t.Logf("T != T   : %v != %v", gv.Type(), ev.Type())
-	}
+	/*
+		if gv.Type() != ev.Type() {
+			t.Logf("T != T   : %v != %v", gv.Type(), ev.Type())
+		}
 
-	g, e := gv.Interface(), ev.Interface()
-	if g != e {
-		t.Errorf("Hex: %q != %q", e, g)
-	}
-
+		g, e := gv.Interface(), ev.Interface()
+		if g != e {
+			t.Errorf("Hex: %q != %q", e, g)
+		}
+	*/
 	t.FailNow()
 }
 

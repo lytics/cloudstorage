@@ -49,10 +49,22 @@ func (l *Localstore) NewObject(objectname string) (Object, error) {
 		return nil, ObjectExists
 	}
 
+	of := path.Join(l.storepath, objectname)
+	err = ensureDir(of)
+	if err != nil {
+		return nil, err
+	}
+
+	cf := cachepathObj(l.cachepath, objectname, l.Id)
+	err = ensureDir(cf)
+	if err != nil {
+		return nil, err
+	}
+
 	return &localFSObject{
 		name:      objectname,
-		storepath: path.Join(l.storepath, objectname),
-		cachepath: cachepathObj(l.cachepath, objectname, l.Id),
+		storepath: of,
+		cachepath: cf,
 	}, nil
 }
 
@@ -133,7 +145,6 @@ func (l *Localstore) List(query Query) (Objects, error) {
 	for objname, obj := range objects {
 		if md, ok := metadatas[objname]; ok {
 			obj.metadata = md
-			ensureContextType(obj.name, md)
 		}
 		res = append(res, obj)
 	}
@@ -206,7 +217,7 @@ func (o *localFSObject) Open(accesslevel AccessLevel) (*os.File, error) {
 
 	var readonly = accesslevel == ReadOnly
 
-	storecopy, err := os.OpenFile(o.storepath, os.O_RDWR|os.O_CREATE, 0666)
+	storecopy, err := os.OpenFile(o.storepath, os.O_RDWR|os.O_CREATE, 0665)
 	if err != nil {
 		return nil, fmt.Errorf("localfile: error occurred opening storecopy file. local=%s err=%v",
 			o.storepath, err)

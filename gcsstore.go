@@ -93,13 +93,19 @@ func (g *GcsFS) NewObject(objectname string) (Object, error) {
 		return nil, ObjectExists
 	}
 
+	cf := cachepathObj(g.cachepath, objectname, g.Id)
+	err = ensureDir(cf)
+	if err != nil {
+		return nil, err
+	}
+
 	return &gcsFSObject{
 		name:       objectname,
 		metadata:   map[string]string{ContextTypeKey: contentType(objectname)},
 		googlectx:  g.googlectx,
 		bucket:     g.bucket,
 		cachedcopy: nil,
-		cachepath:  cachepathObj(g.cachepath, objectname, g.Id),
+		cachepath:  cf,
 		log:        g.Log,
 	}, nil
 }
@@ -262,39 +268,51 @@ func (o *gcsFSObject) Open(accesslevel AccessLevel) (*os.File, error) {
 
 	err = os.MkdirAll(path.Dir(o.cachepath), 0775)
 	if err != nil {
-		return nil, fmt.Errorf("gcsfs: error occurred creating cachedcopy dir. cachepath=%s object=%s err=%v",
+		return nil, fmt.Errorf("error occurred creating cachedcopy dir. cachepath=%s object=%s err=%v",
 			o.cachepath, o.name, err)
 	}
 
-	for try := 0; try < GCSRetries; try++ {
-		cachedcopy, err = os.Create(o.cachepath)
-		if err != nil {
-			return nil, fmt.Errorf("gcsfs: error occurred creating file. local=%s err=%v",
-				o.cachepath, err)
-		}
+	cachedcopy, err = os.Create(o.cachepath)
+	if err != nil {
+		return nil, fmt.Errorf("error occurred creating file. local=%s err=%v",
+			o.cachepath, err)
+	}
 
-		rc, err := storage.NewReader(o.googlectx, o.bucket, o.name)
+	for try := 0; try < GCSRetries; try++ {
+		var query = &storage.Query{Prefix: o.name, MaxResults: 1}
+		objects, err := storage.ListObjects(o.googlectx, o.bucket, query)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error storage.NewReader err=%v", err))
 			o.log.Debugf("%v", errs)
 			backoff(try)
 			continue
 		}
-		defer rc.Close()
 
-		_, err = io.Copy(cachedcopy, rc)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("error coping bytes. err=%v", err))
-			o.log.Debugf("%v", errs)
-			backoff(try)
-			continue
+		if objects.Results != nil && len(objects.Results) != 0 {
+			//we have a preexisting object, so lets download it..
+			rc, err := storage.NewReader(o.googlectx, o.bucket, o.name)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("error storage.NewReader err=%v", err))
+				o.log.Debugf("%v", errs)
+				backoff(try)
+				continue
+			}
+			defer rc.Close()
+
+			_, err = io.Copy(cachedcopy, rc)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("error coping bytes. err=%v", err))
+				o.log.Debugf("%v", errs)
+				backoff(try)
+				continue
+			}
 		}
 
 		if readonly {
 			cachedcopy.Close()
 			cachedcopy, err = os.Open(o.cachepath)
 			if err != nil {
-				return nil, fmt.Errorf("gcsfs: error occurred opening file. local=%s object=%s tfile=%v err=%v",
+				return nil, fmt.Errorf("error occurred opening file. local=%s object=%s tfile=%v err=%v",
 					o.cachepath, o.name, cachedcopy.Name(), err)
 			}
 		}
@@ -305,7 +323,7 @@ func (o *gcsFSObject) Open(accesslevel AccessLevel) (*os.File, error) {
 		return o.cachedcopy, nil
 	}
 
-	return nil, fmt.Errorf("gcsfs: fetch error retry cnt reached: obj=%s tfile=%v errs:[%v]",
+	return nil, fmt.Errorf("fetch error retry cnt reached: obj=%s tfile=%v errs:[%v]",
 		o.name, o.cachepath, errs)
 }
 
@@ -322,15 +340,15 @@ func (o *gcsFSObject) Write(p []byte) (n int, err error) {
 func (o *gcsFSObject) Sync() error {
 
 	if !o.opened {
-		return fmt.Errorf("object isn't opened %s", o.name)
+		return fmt.Errorf("object isn't opened object:%s", o.name)
 	}
 	if o.readonly {
-		return fmt.Errorf("trying to Sync a readonly object %s", o.name)
+		return fmt.Errorf("trying to Sync a readonly object:%s", o.name)
 	}
 
-	cachedcopy, err := os.OpenFile(o.cachepath, os.O_WRONLY, 0664)
+	cachedcopy, err := os.OpenFile(o.cachepath, os.O_RDWR, 0664)
 	if err != nil {
-		return fmt.Errorf("gcsfs: couldn't open localfile for sync'ing. local=%s err=%v",
+		return fmt.Errorf("couldn't open localfile for sync'ing. local=%s err=%v",
 			o.cachepath, err)
 	}
 	defer cachedcopy.Close()
@@ -347,11 +365,11 @@ func (o *gcsFSObject) Sync() error {
 	}
 
 	if _, err = io.Copy(wc, cachedcopy); err != nil {
-		return fmt.Errorf("gcsfs: couldn't copy object. %s err=%v", o.name, err)
+		return fmt.Errorf("couldn't sync object. object:%s err=%v", o.name, err)
 	}
 
 	if err = wc.Close(); err != nil {
-		return fmt.Errorf("gcsfs: couldn't close gcs writer. %s err=%v", o.name, err)
+		return fmt.Errorf("couldn't close gcs writer. object:%s err=%v", o.name, err)
 	}
 
 	return nil
@@ -369,7 +387,7 @@ func (o *gcsFSObject) Close() error {
 
 	err = o.cachedcopy.Close()
 	if err != nil {
-		return fmt.Errorf("gcsfs: error on close localfile. %s err=%v", o.cachepath, err)
+		return fmt.Errorf("error on close localfile. %s err=%v", o.cachepath, err)
 	}
 
 	if o.opened && !o.readonly {

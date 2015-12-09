@@ -98,14 +98,14 @@ func (l *stdlogger) Errorf(format string, v ...interface{}) {
 
 func (l *stdlogger) logP(logLvl int, v ...interface{}) {
 	if l.LogLevel >= logLvl && l.logger != nil {
-		l.logger.Output(4,
+		l.logger.Output(3,
 			l.LogPrefix+l.LogLvlPrefix[logLvl]+fmt.Sprint(v...)+l.LogPostfix)
 	}
 }
 
 func (l *stdlogger) logPf(logLvl int, format string, v ...interface{}) {
 	if l.LogLevel >= logLvl && l.logger != nil {
-		l.logger.Output(4,
+		l.logger.Output(3,
 			l.LogPrefix+l.LogLvlPrefix[logLvl]+fmt.Sprintf(format, v...)+l.LogPostfix)
 	}
 }

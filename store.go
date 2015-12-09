@@ -18,7 +18,7 @@ var ObjectNotFound = fmt.Errorf("object not found")
 var ObjectExists = fmt.Errorf("object already exists in backing store (use store.Get)")
 
 var LogConstructor = func(prefix string) logging.Logger {
-	return logging.NewStdLogger(true, logging.INFO, prefix)
+	return logging.NewStdLogger(true, logging.DEBUG, prefix)
 }
 
 //maxResults default number of objects to retrieve during a list-objects request,
@@ -162,4 +162,22 @@ func cachepathObj(cachepath, oname, storeid string) string {
 	cn := path.Join(cachepath, opath, obase2)
 
 	return cn
+}
+
+func ensureDir(filename string) error {
+	fdir := path.Dir(filename)
+	if fdir != "" && fdir != filename {
+		d, err := os.Stat(fdir)
+		if err == nil {
+			if !d.IsDir() {
+				return fmt.Errorf("filename's dir exists but isn't' a directory: filename:%v dir:%v", filename, fdir)
+			}
+		} else if os.IsNotExist(err) {
+			err := os.MkdirAll(fdir, 0775)
+			if err != nil {
+				return fmt.Errorf("unable to create path. : filename:%v dir:%v err:%v", filename, fdir, err)
+			}
+		}
+	}
+	return nil
 }
