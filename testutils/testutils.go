@@ -2,9 +2,12 @@ package testutils
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 	"testing"
+	"time"
 
+	"github.com/lytics/cloudstorage"
 	"github.com/lytics/cloudstorage/logging"
 )
 
@@ -16,6 +19,58 @@ const (
 	INFO      = 3
 	DEBUG     = 4
 )
+
+var localconfig = &cloudstorage.CloudStoreContext{
+	LogggingContext: "unittest",
+	TokenSource:     cloudstorage.LocalFileSource,
+	LocalFS:         "/tmp/mockcloud",
+	TmpDir:          "/tmp/localcache",
+}
+
+var gcsIntconfig = &cloudstorage.CloudStoreContext{
+	LogggingContext: "integration-test",
+	TokenSource:     cloudstorage.GCEDefaultOAuthToken,
+	Project:         "lyticsstaging",
+	Bucket:          "cloudstore-tests",
+	TmpDir:          "/tmp/localcache",
+}
+
+func CreateStore(t *testing.T) cloudstorage.Store {
+
+	cloudstorage.LogConstructor = func(prefix string) logging.Logger {
+		return logging.NewStdLogger(true, logging.DEBUG, prefix)
+		//return testutils.NewStdLogger(t, prefix)
+	}
+
+	var config *cloudstorage.CloudStoreContext
+	if os.Getenv("TESTINT") == "" {
+		//os.RemoveAll("/tmp/mockcloud")
+		//os.RemoveAll("/tmp/localcache")
+		config = localconfig
+	} else {
+		config = gcsIntconfig
+	}
+	store, err := cloudstorage.NewStore(config)
+	AssertEq(t, nil, err, "error.")
+
+	return store
+}
+
+func Clearstore(t *testing.T, store cloudstorage.Store) {
+	q := cloudstorage.Query{"", nil}
+	q.Sorted()
+	objs, err := store.List(q)
+	AssertEq(t, nil, err, "error.")
+	for _, o := range objs {
+		t.Logf("clearstore(): deleting %v", o.Name())
+		store.Delete(o.Name())
+	}
+
+	if os.Getenv("TESTINT") != "" {
+		//GCS is lazy about deletes...
+		time.Sleep(15 * time.Second)
+	}
+}
 
 func NewStdLogger(t *testing.T, prefix string) logging.Logger {
 	return &testlogger{t, DEBUG, prefix}

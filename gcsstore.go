@@ -94,10 +94,6 @@ func (g *GcsFS) NewObject(objectname string) (Object, error) {
 	}
 
 	cf := cachepathObj(g.cachepath, objectname, g.Id)
-	err = ensureDir(cf)
-	if err != nil {
-		return nil, err
-	}
 
 	return &gcsFSObject{
 		name:       objectname,
@@ -272,6 +268,12 @@ func (o *gcsFSObject) Open(accesslevel AccessLevel) (*os.File, error) {
 			o.cachepath, o.name, err)
 	}
 
+	err = ensureDir(o.cachepath)
+	if err != nil {
+		return nil, fmt.Errorf("error occurred creating cachedcopy's dir. cachepath=%s err=%v",
+			o.cachepath, err)
+	}
+
 	cachedcopy, err = os.Create(o.cachepath)
 	if err != nil {
 		return nil, fmt.Errorf("error occurred creating file. local=%s err=%v",
@@ -404,6 +406,9 @@ func (o *gcsFSObject) Close() error {
 }
 
 func (o *gcsFSObject) Release() error {
+	if o.cachedcopy != nil {
+		o.cachedcopy.Close()
+	}
 	return os.Remove(o.cachepath)
 }
 

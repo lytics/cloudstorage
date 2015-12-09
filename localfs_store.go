@@ -56,10 +56,6 @@ func (l *Localstore) NewObject(objectname string) (Object, error) {
 	}
 
 	cf := cachepathObj(l.cachepath, objectname, l.Id)
-	err = ensureDir(cf)
-	if err != nil {
-		return nil, err
-	}
 
 	return &localFSObject{
 		name:      objectname,
@@ -127,10 +123,11 @@ func (l *Localstore) List(query Query) (Objects, error) {
 			mdkey := strings.Replace(obj, ".metadata", "", 1)
 			metadatas[mdkey] = md
 		} else {
+			oname := strings.TrimPrefix(obj, "/")
 			objects[obj] = &localFSObject{
-				name:      obj,
+				name:      oname,
 				storepath: fo,
-				cachepath: cachepathObj(l.cachepath, obj, l.Id),
+				cachepath: cachepathObj(l.cachepath, oname, l.Id),
 			}
 		}
 		return err
@@ -224,24 +221,30 @@ func (o *localFSObject) Open(accesslevel AccessLevel) (*os.File, error) {
 	}
 	defer storecopy.Close()
 
+	err = ensureDir(o.cachepath)
+	if err != nil {
+		return nil, fmt.Errorf("localfile: error occurred creating cachedcopy's dir. cachepath=%s err=%v",
+			o.cachepath, err)
+	}
+
 	cachedcopy, err := os.Create(o.cachepath)
 	if err != nil {
-		return nil, fmt.Errorf("localfile: error occurred opening cachedcopy file. cachepath=%s object=%s err=%v",
-			o.cachepath, o.name, err)
+		return nil, fmt.Errorf("localfile: error occurred opening cachedcopy file. cachepath=%s err=%v",
+			o.cachepath, err)
 	}
 
 	_, err = io.Copy(cachedcopy, storecopy)
 	if err != nil {
-		return nil, fmt.Errorf("localfile: error occurred reading the bytes returned from localfile. storepath=%s object=%s tfile=%v err=%v",
-			o.storepath, o.name, cachedcopy.Name(), err)
+		return nil, fmt.Errorf("localfile: error occurred reading the bytes returned from localfile. storepath=%s tfile=%v err=%v",
+			o.storepath, cachedcopy.Name(), err)
 	}
 
 	if readonly {
 		cachedcopy.Close()
 		cachedcopy, err = os.Open(o.cachepath)
 		if err != nil {
-			return nil, fmt.Errorf("localfile: error occurred opening file. storepath=%s object=%s tfile=%v err=%v",
-				o.storepath, o.name, cachedcopy.Name(), err)
+			return nil, fmt.Errorf("localfile: error occurred opening file. storepath=%s tfile=%v err=%v",
+				o.storepath, cachedcopy.Name(), err)
 		}
 	}
 
