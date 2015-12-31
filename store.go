@@ -9,7 +9,9 @@ import (
 	"strings"
 
 	"github.com/lytics/cloudstorage/logging"
+	"golang.org/x/net/context"
 	"google.golang.org/cloud"
+	"google.golang.org/cloud/storage"
 )
 
 const StoreCacheFileExt = ".cache"
@@ -55,8 +57,13 @@ func NewStore(csctx *CloudStoreContext) (Store, error) {
 				project, bucket, err)
 			return nil, err
 		}
-		ctx := cloud.NewContext(project, googleclient.Client())
-		store, err := NewGCSStore(ctx, bucket, csctx.TmpDir, maxResults, l)
+		gcs, err := storage.NewClient(context.Background(), cloud.WithBaseHTTP(googleclient.Client()))
+		if err != nil {
+			l.Errorf("%v error creating google cloud storeage client. project:%s gs://%s/ err:%v ",
+				csctx.LogggingContext, project, bucket, err)
+			return nil, err
+		}
+		store, err := NewGCSStore(gcs, bucket, csctx.TmpDir, maxResults, l)
 		if err != nil {
 			l.Errorf("error creating the store. err=%v ", err)
 			return nil, err
@@ -76,8 +83,13 @@ func NewStore(csctx *CloudStoreContext) (Store, error) {
 				project, bucket, err)
 			return nil, err
 		}
-		ctx := cloud.NewContext(project, googleclient.Client())
-		store, err := NewGCSStore(ctx, bucket, csctx.TmpDir, maxResults, l)
+		gcs, err := storage.NewClient(context.Background(), cloud.WithBaseHTTP(googleclient.Client()))
+		if err != nil {
+			l.Errorf("%v error creating google cloud storeage client. project:%s gs://%s/ err:%v ",
+				csctx.LogggingContext, project, bucket, err)
+			return nil, err
+		}
+		store, err := NewGCSStore(gcs, bucket, csctx.TmpDir, maxResults, l)
 		if err != nil {
 			l.Errorf("error creating the store. err=%v ", err)
 			return nil, err
@@ -95,8 +107,13 @@ func NewStore(csctx *CloudStoreContext) (Store, error) {
 				project, bucket, len(csctx.JwtConf.Private_keybase64), err)
 			return nil, err
 		}
-		ctx := cloud.NewContext(project, googleclient.Client())
-		store, err := NewGCSStore(ctx, bucket, csctx.TmpDir, maxResults, l)
+		gcs, err := storage.NewClient(context.Background(), cloud.WithBaseHTTP(googleclient.Client()))
+		if err != nil {
+			l.Errorf("%v error creating google cloud storeage client. project:%s gs://%s/ err:%v ",
+				csctx.LogggingContext, project, bucket, err)
+			return nil, err
+		}
+		store, err := NewGCSStore(gcs, bucket, csctx.TmpDir, maxResults, l)
 		if err != nil {
 			l.Errorf("error creating the store. err=%v ", err)
 			return nil, err

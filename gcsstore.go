@@ -24,7 +24,7 @@ var GCSRetries int = 55
 //GcsFS Simple wrapper for accessing smaller GCS files, it doesn't currently implement a
 // Reader/Writer interface so not useful for stream reading of large files yet.
 type GcsFS struct {
-	googlectx context.Context
+	gcs       *storage.Client
 	bucket    string
 	cachepath string
 	PageSize  int //TODO pipe this in from eventstore
@@ -33,7 +33,7 @@ type GcsFS struct {
 	Log logging.Logger
 }
 
-func NewGCSStore(gctx context.Context, bucket, cachepath string, pagesize int, l logging.Logger) (*GcsFS, error) {
+func NewGCSStore(gcs *storage.Client, bucket, cachepath string, pagesize int, l logging.Logger) (*GcsFS, error) {
 	err := os.MkdirAll(path.Dir(cachepath), 0775)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create path. path=%s err=%v", cachepath, err)
@@ -43,7 +43,7 @@ func NewGCSStore(gctx context.Context, bucket, cachepath string, pagesize int, l
 	uid = strings.Replace(uid, "-", "", -1)
 
 	return &GcsFS{
-		googlectx: gctx,
+		gcs:       gcs,
 		bucket:    bucket,
 		cachepath: cachepath,
 		Id:        uid,
@@ -54,6 +54,10 @@ func NewGCSStore(gctx context.Context, bucket, cachepath string, pagesize int, l
 
 func (g *GcsFS) String() string {
 	return fmt.Sprintf("gs://%s/", g.bucket)
+}
+
+func (g *GcsFS) gcsb() *storage.BucketHandle {
+	return g.gcs.Bucket(g.bucket)
 }
 
 /*
@@ -99,7 +103,7 @@ func (g *GcsFS) NewObject(objectname string) (Object, error) {
 	return &gcsFSObject{
 		name:       objectname,
 		metadata:   map[string]string{ContextTypeKey: contentType(objectname)},
-		googlectx:  g.googlectx,
+		gcsb:       g.gcsb(),
 		bucket:     g.bucket,
 		cachedcopy: nil,
 		cachepath:  cf,
@@ -108,7 +112,7 @@ func (g *GcsFS) NewObject(objectname string) (Object, error) {
 }
 
 func (g *GcsFS) Get(objectpath string) (Object, error) {
-	var q = &storage.Query{Prefix: objectpath, MaxResults: g.PageSize}
+	var q = &storage.Query{Prefix: objectpath, MaxResults: 1}
 
 	gobjects, err := g.listObjects(q, GCSRetries)
 	if err != nil {
@@ -122,12 +126,13 @@ func (g *GcsFS) Get(objectpath string) (Object, error) {
 
 	gobj := gobjects.Results[0]
 	res := &gcsFSObject{
-		name:      gobj.Name,
-		metadata:  gobj.Metadata,
-		googlectx: g.googlectx,
-		bucket:    g.bucket,
-		cachepath: cachepathObj(g.cachepath, gobj.Name, g.Id),
-		log:       g.Log,
+		name:         gobj.Name,
+		metadata:     gobj.Metadata,
+		gcsb:         g.gcsb(),
+		googleObject: gobj,
+		bucket:       g.bucket,
+		cachepath:    cachepathObj(g.cachepath, gobj.Name, g.Id),
+		log:          g.Log,
 	}
 	return res, nil
 }
@@ -171,7 +176,7 @@ func (g *GcsFS) List(query Query) (Objects, error) {
 		o := &gcsFSObject{
 			name:      gobj.Name,
 			metadata:  gobj.Metadata,
-			googlectx: g.googlectx,
+			gcsb:      g.gcsb(),
 			bucket:    g.bucket,
 			cachepath: cachepathObj(g.cachepath, gobj.Name, g.Id),
 			log:       g.Log,
@@ -186,11 +191,11 @@ func (g *GcsFS) List(query Query) (Objects, error) {
 
 //ListObjects is a wrapper around storeage.ListObjects, that retries on a GCS error.  GCS isn't a prefect system :p, and returns an error
 //  about once every 2 weeks.
-func (g *GcsFS) listObjects(q *storage.Query, retries int) (*storage.Objects, error) {
+func (g *GcsFS) listObjects(q *storage.Query, retries int) (*storage.ObjectList, error) {
 	var lasterr error = nil
 	//GCS sometimes returns a 500 error, so we'll just retry...
 	for i := 0; i < retries; i++ {
-		objects, err := storage.ListObjects(g.googlectx, g.bucket, q)
+		objects, err := g.gcsb().List(context.Background(), q)
 		if err != nil {
 			g.Log.Errorf("error listing objects for the bucket. try:%d store:%s q.prefix:%v err:%v", i, g, q.Prefix, err)
 			lasterr = err
@@ -202,7 +207,7 @@ func (g *GcsFS) listObjects(q *storage.Query, retries int) (*storage.Objects, er
 	return nil, lasterr
 }
 
-func concatGCSObjects(a, b *storage.Objects) *storage.Objects {
+func concatGCSObjects(a, b *storage.ObjectList) *storage.ObjectList {
 	for _, obj := range b.Results {
 		a.Results = append(a.Results, obj)
 	}
@@ -213,7 +218,7 @@ func concatGCSObjects(a, b *storage.Objects) *storage.Objects {
 }
 
 func (g *GcsFS) Delete(obj string) error {
-	err := storage.DeleteObject(g.googlectx, g.bucket, obj)
+	err := g.gcsb().Object(obj).Delete(context.Background())
 	if err != nil {
 		g.Log.Errorf("error deleting object. object=%s%s err=%v", g, obj, err)
 		return err
@@ -222,12 +227,12 @@ func (g *GcsFS) Delete(obj string) error {
 }
 
 type gcsFSObject struct {
-	name     string
-	metadata map[string]string
-	//GoogleObject *storage.Object
+	name         string
+	metadata     map[string]string
+	googleObject *storage.ObjectAttrs
 
-	googlectx context.Context
-	bucket    string
+	gcsb   *storage.BucketHandle
+	bucket string
 
 	cachedcopy *os.File
 	readonly   bool
@@ -282,18 +287,24 @@ func (o *gcsFSObject) Open(accesslevel AccessLevel) (*os.File, error) {
 	}
 
 	for try := 0; try < GCSRetries; try++ {
-		var query = &storage.Query{Prefix: o.name, MaxResults: 1}
-		objects, err := storage.ListObjects(o.googlectx, o.bucket, query)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("error storage.NewReader err=%v", err))
-			o.log.Debugf("%v", errs)
-			backoff(try)
-			continue
+		if o.googleObject == nil {
+			var q = &storage.Query{Prefix: o.name, MaxResults: 1}
+			objects, err := o.gcsb.List(context.Background(), q)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("error storage.NewReader err=%v", err))
+				o.log.Debugf("%v", errs)
+				backoff(try)
+				continue
+			}
+
+			if objects.Results != nil && len(objects.Results) != 0 {
+				o.googleObject = objects.Results[0]
+			}
 		}
 
-		if objects.Results != nil && len(objects.Results) != 0 {
+		if o.googleObject != nil {
 			//we have a preexisting object, so lets download it..
-			rc, err := storage.NewReader(o.googlectx, o.bucket, o.name)
+			rc, err := o.gcsb.Object(o.name).NewReader(context.Background())
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error storage.NewReader err=%v", err))
 				o.log.Debugf("%v", errs)
@@ -349,7 +360,7 @@ func (o *gcsFSObject) Sync() error {
 		return fmt.Errorf("trying to Sync a readonly object:%s", o.name)
 	}
 
-	var errs []string = make([]string, 0)
+	var errs = make([]string, 0)
 
 	cachedcopy, err := os.OpenFile(o.cachepath, os.O_RDWR, 0664)
 	if err != nil {
@@ -365,7 +376,7 @@ func (o *gcsFSObject) Sync() error {
 		}
 		rd := bufio.NewReader(cachedcopy)
 
-		wc := storage.NewWriter(o.googlectx, o.bucket, o.name)
+		wc := o.gcsb.Object(o.name).NewWriter(context.Background())
 		wc.ACL = []storage.ACLRule{{storage.AllAuthenticatedUsers, storage.RoleReader}}
 
 		if o.metadata != nil {
