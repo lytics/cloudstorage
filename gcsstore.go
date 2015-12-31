@@ -1,6 +1,7 @@
 package cloudstorage
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"math"
@@ -348,6 +349,8 @@ func (o *gcsFSObject) Sync() error {
 		return fmt.Errorf("trying to Sync a readonly object:%s", o.name)
 	}
 
+	var errs []string = make([]string, 0)
+
 	cachedcopy, err := os.OpenFile(o.cachepath, os.O_RDWR, 0664)
 	if err != nil {
 		return fmt.Errorf("couldn't open localfile for sync'ing. local=%s err=%v",
@@ -355,26 +358,41 @@ func (o *gcsFSObject) Sync() error {
 	}
 	defer cachedcopy.Close()
 
-	wc := storage.NewWriter(o.googlectx, o.bucket, o.name)
+	for try := 0; try < GCSRetries; try++ {
 
-	wc.ACL = []storage.ACLRule{{storage.AllAuthenticatedUsers, storage.RoleReader}}
+		if _, err := cachedcopy.Seek(0, os.SEEK_SET); err != nil {
+			return fmt.Errorf("error seeking to start of cachedcopy err=%v", err) //don't retry on local filesystem errors
+		}
+		rd := bufio.NewReader(cachedcopy)
 
-	if o.metadata != nil {
-		wc.Metadata = o.metadata
-		//contenttype is only used for viewing the file in a browser. (i.e. the GCS Object browser).
-		ctype := ensureContextType(o.name, o.metadata)
-		wc.ContentType = ctype
+		wc := storage.NewWriter(o.googlectx, o.bucket, o.name)
+		wc.ACL = []storage.ACLRule{{storage.AllAuthenticatedUsers, storage.RoleReader}}
+
+		if o.metadata != nil {
+			wc.Metadata = o.metadata
+			//contenttype is only used for viewing the file in a browser. (i.e. the GCS Object browser).
+			ctype := ensureContextType(o.name, o.metadata)
+			wc.ContentType = ctype
+		}
+
+		if _, err = io.Copy(wc, rd); err != nil {
+			errs = append(errs, fmt.Sprintf("couldn't copy localcache file to remote object. object:%s err=%v", o.name, err))
+			backoff(try)
+			continue
+		}
+
+		if err = wc.Close(); err != nil {
+			errs = append(errs, fmt.Sprintf("couldn't close gcs writer. object:%s err=%v", o.name, err))
+			backoff(try)
+			continue
+		}
+
+		return nil
 	}
 
-	if _, err = io.Copy(wc, cachedcopy); err != nil {
-		return fmt.Errorf("couldn't sync object. object:%s err=%v", o.name, err)
-	}
+	errmsg := strings.Join(errs, ",")
 
-	if err = wc.Close(); err != nil {
-		return fmt.Errorf("couldn't close gcs writer. object:%s err=%v", o.name, err)
-	}
-
-	return nil
+	return fmt.Errorf("unable to sync file: errors[%v]", errmsg)
 }
 
 func (o *gcsFSObject) Close() error {
