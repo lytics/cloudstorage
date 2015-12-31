@@ -7,3 +7,6 @@
 
 - [ ] Research supporting multipart uploads to mutiple files, then using the https://cloud.google.com/storage/docs/json_api/v1/objects/compose api to concatenate them into one. 
    -  https://cloud.google.com/storage/docs/composite-objects
+
+- [ ] Create a store to store functions.  
+   - [ ] Rsync: `store.Rsync(s *Store)`, Rsync could be used to sync all files between GCS and S3.
