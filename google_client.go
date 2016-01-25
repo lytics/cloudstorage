@@ -2,7 +2,9 @@ package cloudstorage
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net/http"
+	"os"
 
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
@@ -22,7 +24,7 @@ func (g *gOAuthClient) Client() *http.Client {
 	return g.httpclient
 }
 
-func BuildJWTTransporter(jwtConf *JwtConf) (GoogleOAuthClient, error) {
+func BuildLyticsJWTTransporter(jwtConf *JwtConf) (GoogleOAuthClient, error) {
 	key, err := jwtConf.KeyBytes()
 	if err != nil {
 		return nil, err
@@ -34,6 +36,24 @@ func BuildJWTTransporter(jwtConf *JwtConf) (GoogleOAuthClient, error) {
 		PrivateKey: key,
 		Scopes:     jwtConf.Scopes,
 		TokenURL:   googleOauth2.JWTTokenURL,
+	}
+
+	client := conf.Client(oauth2.NoContext)
+
+	return &gOAuthClient{
+		httpclient: client,
+	}, nil
+}
+
+func BuildGoogleJWTTransporter(keyPath string, scope string) (GoogleOAuthClient, error) {
+	jsonKey, err := ioutil.ReadFile(os.ExpandEnv(keyPath))
+	if err != nil {
+		return nil, err
+	}
+
+	conf, err := googleOauth2.JWTConfigFromJSON(jsonKey, scope)
+	if err != nil {
+		return nil, err
 	}
 
 	client := conf.Client(oauth2.NoContext)

@@ -10,7 +10,8 @@ type TokenSource string
 type AccessLevel int
 
 const (
-	JWTKeySource         TokenSource = "JWTkey"
+	LyticsJWTKeySource   TokenSource = "LyticsJWTkey"
+	GoogleJWTKeySource   TokenSource = "GoogleJWTFile"
 	GCEMetaKeySource     TokenSource = "gcemetadata"
 	LocalFileSource      TokenSource = "localfiles"
 	GCEDefaultOAuthToken TokenSource = "gcedefaulttoken"
@@ -54,8 +55,13 @@ type CloudStoreContext struct {
 	//GCS Archive
 	Project  string
 	Bucket   string
-	JwtConf  *JwtConf
 	PageSize int // the page size to use with google api requests (default 1000)
+
+	// used by LyticsJWTKeySource
+	JwtConf *JwtConf
+	// used by GoogleJWTKeySource
+	JwtFile string
+	Scope   string
 
 	//LocalFS Archive
 	LocalFS string // The location to use for archived events
