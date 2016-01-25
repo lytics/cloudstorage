@@ -39,43 +39,9 @@ func NewStore(csctx *CloudStoreContext) (Store, error) {
 	}
 
 	switch csctx.TokenSource {
-
-	case GCEDefaultOAuthToken:
-		//   This token method uses the default OAuth token with GCS created by tools like gsutils, gcloud, etc...
-		//   See github.com/lytics/lio/src/ext_svcs/google/google_transporter.go : BuildDefaultGoogleTransporter
-		googleclient, err := BuildDefaultGoogleTransporter("")
+	case GCEDefaultOAuthToken, GCEMetaKeySource, LyticsJWTKeySource, GoogleJWTKeySource:
+		googleclient, err := NewGoogleClient(csctx)
 		if err != nil {
-			l := LogConstructor(fmt.Sprintf("%s:(project=%s bucket=%s)", csctx.LogggingContext, csctx.Project, csctx.Bucket))
-			l.Errorf("error creating the GCEMetadataTransport and HTTP client. project=%s gs://%s/ err=%v ",
-				csctx.Project, csctx.Bucket, err)
-			return nil, err
-		}
-		return gcsCommonClient(googleclient.Client(), csctx)
-	case GCEMetaKeySource:
-		googleclient, err := BuildGCEMetadatTransporter("")
-		if err != nil {
-			l := LogConstructor(fmt.Sprintf("%s:(project=%s bucket=%s)", csctx.LogggingContext, csctx.Project, csctx.Bucket))
-			l.Errorf("error creating the GCEMetadataTransport and HTTP client. project=%s gs://%s/ err=%v ",
-				csctx.Project, csctx.Bucket, err)
-			return nil, err
-		}
-		return gcsCommonClient(googleclient.Client(), csctx)
-	case LyticsJWTKeySource:
-		//used because our internal configs aren't stored as JSON.
-		googleclient, err := BuildLyticsJWTTransporter(csctx.JwtConf)
-		if err != nil {
-			l := LogConstructor(fmt.Sprintf("%s:(project=%s bucket=%s)", csctx.LogggingContext, csctx.Project, csctx.Bucket))
-			l.Errorf("error creating the JWTTransport and HTTP client. project=%s gs://%s/ keylen:%d err=%v ",
-				csctx.Project, csctx.Bucket, len(csctx.JwtConf.Private_keybase64), err)
-			return nil, err
-		}
-		return gcsCommonClient(googleclient.Client(), csctx)
-	case GoogleJWTKeySource:
-		googleclient, err := BuildGoogleJWTTransporter(csctx.JwtFile, csctx.Scope)
-		if err != nil {
-			l := LogConstructor(fmt.Sprintf("%s:(project=%s bucket=%s)", csctx.LogggingContext, csctx.Project, csctx.Bucket))
-			l.Errorf("error creating the JWTTransport and HTTP client. project=%s gs://%s/ keylen:%d err=%v ",
-				csctx.Project, csctx.Bucket, len(csctx.JwtConf.Private_keybase64), err)
 			return nil, err
 		}
 		return gcsCommonClient(googleclient.Client(), csctx)
