@@ -115,3 +115,48 @@ func BuildDefaultGoogleTransporter(scope ...string) (GoogleOAuthClient, error) {
 		httpclient: client,
 	}, nil
 }
+
+func NewGoogleClient(csctx *CloudStoreContext) (client GoogleOAuthClient, err error) {
+	switch csctx.TokenSource {
+
+	case GCEDefaultOAuthToken:
+		//   This token method uses the default OAuth token with GCS created by tools like gsutils, gcloud, etc...
+		//   See github.com/lytics/lio/src/ext_svcs/google/google_transporter.go : BuildDefaultGoogleTransporter
+		client, err = BuildDefaultGoogleTransporter("")
+		if err != nil {
+			l := LogConstructor(fmt.Sprintf("%s:(project=%s bucket=%s)", csctx.LogggingContext, csctx.Project, csctx.Bucket))
+			l.Errorf("error creating the GCEMetadataTransport and HTTP client. project=%s gs://%s/ err=%v ",
+				csctx.Project, csctx.Bucket, err)
+			return nil, err
+		}
+	case GCEMetaKeySource:
+		client, err = BuildGCEMetadatTransporter("")
+		if err != nil {
+			l := LogConstructor(fmt.Sprintf("%s:(project=%s bucket=%s)", csctx.LogggingContext, csctx.Project, csctx.Bucket))
+			l.Errorf("error creating the GCEMetadataTransport and HTTP client. project=%s gs://%s/ err=%v ",
+				csctx.Project, csctx.Bucket, err)
+			return nil, err
+		}
+	case LyticsJWTKeySource:
+		//used because our internal configs aren't stored as JSON.
+		client, err = BuildLyticsJWTTransporter(csctx.JwtConf)
+		if err != nil {
+			l := LogConstructor(fmt.Sprintf("%s:(project=%s bucket=%s)", csctx.LogggingContext, csctx.Project, csctx.Bucket))
+			l.Errorf("error creating the JWTTransport and HTTP client. project=%s gs://%s/ keylen:%d err=%v ",
+				csctx.Project, csctx.Bucket, len(csctx.JwtConf.Private_keybase64), err)
+			return nil, err
+		}
+	case GoogleJWTKeySource:
+		client, err = BuildGoogleJWTTransporter(csctx.JwtFile, csctx.Scope)
+		if err != nil {
+			l := LogConstructor(fmt.Sprintf("%s:(project=%s bucket=%s)", csctx.LogggingContext, csctx.Project, csctx.Bucket))
+			l.Errorf("error creating the JWTTransport and HTTP client. project=%s gs://%s/ keylen:%d err=%v ",
+				csctx.Project, csctx.Bucket, len(csctx.JwtConf.Private_keybase64), err)
+			return nil, err
+		}
+	default:
+		return nil, fmt.Errorf("bad sourcetype: %v", csctx.TokenSource)
+	}
+
+	return client, err
+}
