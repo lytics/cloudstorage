@@ -24,17 +24,17 @@ func (g *gOAuthClient) Client() *http.Client {
 	return g.httpclient
 }
 
-func BuildLyticsJWTTransporter(jwtConf *JwtConf) (GoogleOAuthClient, error) {
+func BuildLyticsJWTTransporter(jwtConf JwtConfig) (GoogleOAuthClient, error) {
 	key, err := jwtConf.KeyBytes()
 	if err != nil {
 		return nil, err
 	}
 
 	conf := &jwt.Config{
-		Email: jwtConf.Client_email,
+		Email: jwtConf.GetClientEmail(),
 
 		PrivateKey: key,
-		Scopes:     jwtConf.Scopes,
+		Scopes:     jwtConf.GetScopes(),
 		TokenURL:   googleOauth2.JWTTokenURL,
 	}
 
@@ -143,7 +143,7 @@ func NewGoogleClient(csctx *CloudStoreContext) (client GoogleOAuthClient, err er
 		if err != nil {
 			l := LogConstructor(fmt.Sprintf("%s:(project=%s bucket=%s)", csctx.LogggingContext, csctx.Project, csctx.Bucket))
 			l.Errorf("error creating the JWTTransport and HTTP client. project=%s gs://%s/ keylen:%d err=%v ",
-				csctx.Project, csctx.Bucket, len(csctx.JwtConf.Private_keybase64), err)
+				csctx.Project, csctx.Bucket, csctx.JwtConf.KeyLen(), err)
 			return nil, err
 		}
 	case GoogleJWTKeySource:
@@ -151,7 +151,7 @@ func NewGoogleClient(csctx *CloudStoreContext) (client GoogleOAuthClient, err er
 		if err != nil {
 			l := LogConstructor(fmt.Sprintf("%s:(project=%s bucket=%s)", csctx.LogggingContext, csctx.Project, csctx.Bucket))
 			l.Errorf("error creating the JWTTransport and HTTP client. project=%s gs://%s/ keylen:%d err=%v ",
-				csctx.Project, csctx.Bucket, len(csctx.JwtConf.Private_keybase64), err)
+				csctx.Project, csctx.Bucket, csctx.JwtConf.KeyLen(), err)
 			return nil, err
 		}
 	default:

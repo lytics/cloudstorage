@@ -1,10 +1,5 @@
 package cloudstorage
 
-import (
-	"encoding/base64"
-	"fmt"
-)
-
 type TokenSource string
 
 type AccessLevel int
@@ -58,7 +53,7 @@ type CloudStoreContext struct {
 	PageSize int // the page size to use with google api requests (default 1000)
 
 	// used by LyticsJWTKeySource
-	JwtConf *JwtConf
+	JwtConf JwtConfig
 	// used by GoogleJWTKeySource
 	JwtFile string
 	Scope   string
@@ -72,28 +67,12 @@ type CloudStoreContext struct {
 
 //For use with google/google_jwttransporter.go
 // Which can be used by the google go sdk's
-type JwtConf struct {
-	//below are the fields from a Google Compute Engine's Credentials json file.
-	Private_key_id    string
-	Private_keybase64 string //TODO convert this to an encrypted key that only our code can decrypt.  Maybe using a key stored in metadata??
-	Client_email      string
-	Client_id         string
-	Keytype           string
-	Scopes            []string // what scope to use when the token is created.  for example https://github.com/google/google-api-go-client/blob/0d3983fb069cb6651353fc44c5cb604e263f2a93/storage/v1/storage-gen.go#L54
-}
-
-func (j *JwtConf) Validate() error {
-	//convert Private_keybase64 to bytes.
-	_, err := j.KeyBytes()
-	if err != nil {
-		return fmt.Errorf("Invalid EventStoreArchive.JwtConf.Private_keybase64  (error trying to decode base64 err: %v", err)
-	}
-
-	return nil
-}
-
-func (j *JwtConf) KeyBytes() ([]byte, error) {
-	//convert Private_keybase64 to bytes.
-	str := j.Private_keybase64
-	return base64.StdEncoding.DecodeString(str)
+type JwtConfig interface {
+	KeyLen() int
+	Validate() error
+	KeyBytes() ([]byte, error)
+	GetClientEmail() string
+	GetClientID() string
+	GetKeyType() string
+	GetScopes() []string
 }
