@@ -1,5 +1,5 @@
 # Cloudstorage Introduction:
-Is an abstraction layer for distributed filesystems like Google's Cloud Storage or Amazon's S3.  In addition is also supports mocking remote storage with the LocalFiles.  Lytics is currently using this framework in production for abstracting access to Google Cloud Storeage. 
+Is an abstraction layer for distributed filesystems like Google's Cloud Storage or Amazon's S3.  In addition it also supports mocking remote storage with the local files.  Lytics is currently using this framework in production for abstracting access to Google Cloud Storage. 
 
 Note: S3 isn't implemented yet, but is on it's way.  
 
@@ -33,9 +33,9 @@ obj.Close()
 ```
 
 
-##### Reading an existing obejct:
+##### Reading an existing object:
 ```go
-// Calling Get on an existing object will return a cloudstoreage object or the cloudstorage.ObjectNotFound error.
+// Calling Get on an existing object will return a cloudstorage object or the cloudstorage.ObjectNotFound error.
 obj2, _ := store.Get("prefix/test.csv")
 f2, _ := obj2.Open(cloudstorage.ReadOnly)
 bytes, _ := ioutil.ReadAll(f2)
@@ -44,17 +44,20 @@ fmt.Println(string(bytes)) // should print the CSV file from the block above...
 
 ##### Transferring an existing object:
 ```go 
+config := &TransferConfig{
+       ProjectID:  "my-project",
+	   DestBucket: "my-destination-bucket",
+	   Src:        cloudstorage.NewGcsSource("my-source-bucket"),
+       Include:    []string{"include", "these", "prefixes"},
+}
+
+
 transferer, _ := NewTransferer(client)
-include := []string{"include", "these", "prefixes"}
-exclude := []string{"but", "exclude", "these_prefixes"}
+resp, _ := transferer.NewTransfer(config)
 
-source := NewGcsSource("my-source-bucket")
-sink := "my-sink-bucket"
-transferer.NewTransfer(sink, source, include, exclude)
-
-source := NewAwsSource("bucket", "key", "secret")
-transferer.NewTransfer(sink, source, include, exclude)
-
+// use S3 source instead
+config.Src = NewAwsSource("bucket", "key", "secret") 
+resp, _ = transferer.NewTransfer(config)
 ```
 
 
