@@ -43,20 +43,19 @@ fmt.Println(string(bytes)) // should print the CSV file from the block above...
 ```
 
 ##### Transferring an existing object:
-```go 
-config := &TransferConfig{
-       ProjectID:  "my-project",
-	   DestBucket: "my-destination-bucket",
-	   Src:        cloudstorage.NewGcsSource("my-source-bucket"),
-       Include:    []string{"include", "these", "prefixes"},
+```go
+var config = &storeutils.TransferConfig{
+	ProjectID:             "my-project",
+	DestBucket:            "my-destination-bucket",
+	Src:                   storeutils.NewGcsSource("my-source-bucket"),
+	IncludePrefxies:       []string{"these", "prefixes"},
 }
-
-
-transferer, _ := NewTransferer(client)
+ 
+transferer, _ := storeutils.NewTransferer(client)
 resp, _ := transferer.NewTransfer(config)
 
 // use S3 source instead
-config.Src = NewAwsSource("bucket", "key", "secret") 
+config.Src = storeutils.NewAwsSource("bucket", "key", "secret") 
 resp, _ = transferer.NewTransfer(config)
 ```
 

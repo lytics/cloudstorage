@@ -1,4 +1,4 @@
-package cloudstorage
+package storeutils
 
 import (
 	"encoding/json"
@@ -213,12 +213,12 @@ func newTransferSpec(sink string) *storagetransfer.TransferSpec {
 // TransferConfig wraps all of the relevant variables for transfer jobs
 // into a unified struct
 type TransferConfig struct {
-	ProjectID  string // projectID of destination bucket
-	DestBucket string
-	Src        Source
-	Include    []string
-	Exclude    []string
-	Schedule   *storagetransfer.Schedule
+	ProjectID       string // projectID of destination bucket
+	DestBucket      string
+	Src             Source
+	IncludePrefixes []string
+	ExcludePrefixes []string
+	Schedule        *storagetransfer.Schedule
 }
 
 // Job instantiates a Transfer job from the TransferConfig struct
@@ -228,17 +228,17 @@ func (t *TransferConfig) Job() (*storagetransfer.TransferJob, error) {
 	}
 
 	// Google returns an error if more than 20 inclusionary/exclusionary fields are included
-	if len(t.Include) > MaxPrefix || len(t.Exclude) > MaxPrefix {
+	if len(t.IncludePrefixes) > MaxPrefix || len(t.ExcludePrefixes) > MaxPrefix {
 		return nil, errBadFilter
 	}
 
 	spec := t.Src.TransferSpec(t.DestBucket)
 
 	// Set the file-filters if the conditions are met
-	if len(t.Include) > 0 || len(t.Exclude) > 0 {
+	if len(t.IncludePrefixes) > 0 || len(t.ExcludePrefixes) > 0 {
 		spec.ObjectConditions = &storagetransfer.ObjectConditions{
-			ExcludePrefixes: t.Exclude,
-			IncludePrefixes: t.Include,
+			ExcludePrefixes: t.ExcludePrefixes,
+			IncludePrefixes: t.IncludePrefixes,
 		}
 	}
 

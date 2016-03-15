@@ -4,15 +4,16 @@ import "github.com/lytics/cloudstorage"
 
 //GetAndOpen is a convenience method that combines Store.Get() and Object.Open() into
 // a single call.
-func GetAndOpen(s cloudstorage.Store, o string, readonly bool) (cloudstorage.Object, error) {
+func GetAndOpen(s cloudstorage.Store, o string, level cloudstorage.AccessLevel) (cloudstorage.Object, error) {
 	obj, err := s.Get(o)
-	if err == ObjectNotFound {
-		return nil, ObjectNotFound
+	if err == cloudstorage.ObjectNotFound {
+		return nil, cloudstorage.ObjectNotFound
 	} else if err != nil {
 		return nil, err
 	}
 
-	if err = obj.Open(readonly); err != nil {
+	_, err = obj.Open(level)
+	if err != nil {
 		return nil, err
 	}
 	return obj, nil
@@ -29,5 +30,3 @@ type ObjectIterator interface {
 	Next() cloudstorage.Object
 	HasNext() bool
 }
-
-func CreatePrefetchingIterator() ObjectIterator {}
