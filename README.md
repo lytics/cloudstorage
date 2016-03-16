@@ -1,5 +1,5 @@
 # Cloudstorage Introduction:
-Is an abstraction layer for disisibuted filesystems like Google's Cloud Storage or Amazon's S3.  In addition is also supports mocking remote storage with the LocalFiles.  Lytics is currently using this framework in production for abstracting access to Google Cloud Storeage. 
+Is an abstraction layer for distributed filesystems like Google's Cloud Storage or Amazon's S3.  In addition it also supports mocking remote storage with local files.  Lytics is currently using this framework in production for abstracting access to Google Cloud Storage. 
 
 Note: S3 isn't implemented yet, but is on it's way.  
 
@@ -35,12 +35,30 @@ obj.Close()
 
 ##### Reading an existing object:
 ```go
-// Calling Get on an existing object will return a cloudstoreage object or the cloudstorage.ObjectNotFound error.
+// Calling Get on an existing object will return a cloudstorage object or the cloudstorage.ObjectNotFound error.
 obj2, _ := store.Get("prefix/test.csv")
 f2, _ := obj2.Open(cloudstorage.ReadOnly)
 bytes, _ := ioutil.ReadAll(f2)
 fmt.Println(string(bytes)) // should print the CSV file from the block above...
 ```
+
+##### Transferring an existing object:
+```go
+var config = &storeutils.TransferConfig{
+	ProjectID:             "my-project",
+	DestBucket:            "my-destination-bucket",
+	Src:                   storeutils.NewGcsSource("my-source-bucket"),
+	IncludePrefxies:       []string{"these", "prefixes"},
+}
+ 
+transferer, _ := storeutils.NewTransferer(client)
+resp, _ := transferer.NewTransfer(config)
+
+// use S3 source instead
+config.Src = storeutils.NewAwsSource("bucket", "key", "secret") 
+resp, _ = transferer.NewTransfer(config)
+```
+
 
 
 See [object_test.go](https://github.com/lytics/cloudstorage/blob/master/object_test.go) for more examples
