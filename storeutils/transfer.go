@@ -23,8 +23,8 @@ var (
 	// MaxPrefix is the maximum number of prefix filters allowed when transfering files in GCS buckets
 	MaxPrefix = 20
 
-	errBadFilter = errors.New("too many inclusion/exclusion prefixes")
-	errBadConfig = errors.New("transferconfig not valid")
+	ErrBadFilter = errors.New("too many inclusion/exclusion prefixes")
+	ErrBadConfig = errors.New("transferconfig not valid")
 )
 
 // Transferer manages the transfer of data sources to GCS
@@ -224,12 +224,12 @@ type TransferConfig struct {
 // Job instantiates a Transfer job from the TransferConfig struct
 func (t *TransferConfig) Job() (*storagetransfer.TransferJob, error) {
 	if t.DestBucket == "" || t.Src == nil {
-		return nil, errBadConfig
+		return nil, ErrBadConfig
 	}
 
 	// Google returns an error if more than 20 inclusionary/exclusionary fields are included
 	if len(t.IncludePrefixes) > MaxPrefix || len(t.ExcludePrefixes) > MaxPrefix {
-		return nil, errBadFilter
+		return nil, ErrBadFilter
 	}
 
 	spec := t.Src.TransferSpec(t.DestBucket)

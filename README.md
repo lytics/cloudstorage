@@ -1,5 +1,5 @@
 # Cloudstorage Introduction:
-Is an abstraction layer for distributed filesystems like Google's Cloud Storage or Amazon's S3.  In addition it also supports mocking remote storage with the local files.  Lytics is currently using this framework in production for abstracting access to Google Cloud Storage. 
+Is an abstraction layer for distributed filesystems like Google's Cloud Storage or Amazon's S3.  In addition it also supports mocking remote storage with local files.  Lytics is currently using this framework in production for abstracting access to Google Cloud Storage. 
 
 Note: S3 isn't implemented yet, but is on it's way.  
 
