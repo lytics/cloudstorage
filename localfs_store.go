@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/lytics/cloudstorage/logging"
 	"github.com/pborman/uuid"
@@ -126,6 +127,7 @@ func (l *Localstore) List(query Query) (Objects, error) {
 			oname := strings.TrimPrefix(obj, "/")
 			objects[obj] = &localFSObject{
 				name:      oname,
+				updated:   f.ModTime(),
 				storepath: fo,
 				cachepath: cachepathObj(l.cachepath, oname, l.Id),
 			}
@@ -157,9 +159,14 @@ func (l *Localstore) Get(o string) (Object, error) {
 	if !exists(fo) {
 		return nil, ObjectNotFound
 	}
+	var updated time.Time
+	if stat, err := os.Stat(fo); err == nil {
+		updated = stat.ModTime()
+	}
 
 	return &localFSObject{
 		name:      o,
+		updated:   updated,
 		storepath: fo,
 		cachepath: cachepathObj(l.cachepath, o, l.Id),
 	}, nil
@@ -181,6 +188,7 @@ func (l *Localstore) String() string {
 
 type localFSObject struct {
 	name     string
+	updated  time.Time
 	metadata map[string]string
 
 	storepath string
@@ -199,6 +207,9 @@ func (o *localFSObject) Name() string {
 }
 func (o *localFSObject) String() string {
 	return o.name
+}
+func (o *localFSObject) Updated() time.Time {
+	return o.updated
 }
 func (o *localFSObject) MetaData() map[string]string {
 	return o.metadata

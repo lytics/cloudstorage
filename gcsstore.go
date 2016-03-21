@@ -127,6 +127,7 @@ func (g *GcsFS) Get(objectpath string) (Object, error) {
 	gobj := gobjects.Results[0]
 	res := &gcsFSObject{
 		name:         gobj.Name,
+		updated:      gobj.Updated,
 		metadata:     gobj.Metadata,
 		gcsb:         g.gcsb(),
 		googleObject: gobj,
@@ -175,6 +176,7 @@ func (g *GcsFS) List(query Query) (Objects, error) {
 	for _, gobj := range gobjects.Results {
 		o := &gcsFSObject{
 			name:      gobj.Name,
+			updated:   gobj.Updated,
 			metadata:  gobj.Metadata,
 			gcsb:      g.gcsb(),
 			bucket:    g.bucket,
@@ -228,6 +230,7 @@ func (g *GcsFS) Delete(obj string) error {
 
 type gcsFSObject struct {
 	name         string
+	updated      time.Time
 	metadata     map[string]string
 	googleObject *storage.ObjectAttrs
 
@@ -250,6 +253,9 @@ func (o *gcsFSObject) Name() string {
 }
 func (o *gcsFSObject) String() string {
 	return o.name
+}
+func (o *gcsFSObject) Updated() time.Time {
+	return o.updated
 }
 func (o *gcsFSObject) MetaData() map[string]string {
 	return o.metadata

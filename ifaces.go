@@ -1,6 +1,9 @@
 package cloudstorage
 
-import "os"
+import (
+	"os"
+	"time"
+)
 
 type Store interface {
 	//NewObject creates a new empty object backed by the cloud store
@@ -28,6 +31,7 @@ type Object interface {
 	Name() string
 	String() string
 
+	Updated() time.Time
 	MetaData() map[string]string
 	SetMetaData(meta map[string]string)
 
