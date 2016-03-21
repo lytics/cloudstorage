@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/lytics/cloudstorage"
 	"github.com/lytics/cloudstorage/testutils"
@@ -56,6 +57,9 @@ func TestBasicRW(t *testing.T) {
 func TestAppend(t *testing.T) {
 	store := testutils.CreateStore(t)
 	testutils.Clearstore(t, store)
+	now := time.Now()
+	time.Sleep(10 * time.Millisecond)
+
 	//
 	//Create a new object and write to it.
 	//
@@ -83,6 +87,11 @@ func TestAppend(t *testing.T) {
 	obj2, err := store.Get("test.csv")
 	testutils.AssertEq(t, nil, err, "error.")
 
+	// get updated time
+	updated := obj2.Updated()
+	testutils.AssertT(t, updated.After(now), "updated time was not set")
+	time.Sleep(10 * time.Millisecond)
+
 	f2, err := obj2.Open(cloudstorage.ReadWrite)
 	testutils.AssertEq(t, nil, err, "error.")
 	testutils.AssertT(t, f2 != nil, "the file was nil")
@@ -100,7 +109,8 @@ func TestAppend(t *testing.T) {
 	//
 	obj3, err := store.Get("test.csv")
 	testutils.AssertEq(t, nil, err, "error.")
-
+	updated3 := obj3.Updated()
+	testutils.AssertT(t, updated3.After(updated), "updated time not updated")
 	f3, err := obj3.Open(cloudstorage.ReadOnly)
 	testutils.AssertEq(t, nil, err, "error.")
 
