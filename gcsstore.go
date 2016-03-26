@@ -173,6 +173,10 @@ func (g *GcsFS) List(query Query) (Objects, error) {
 	res := make(Objects, 0)
 
 	for _, gobj := range gobjects.Results {
+		if _, ok := gobj.Metadata["Content-Length"]; !ok {
+			gobj.Metadata["Content-Length"] = fmt.Sprintf("%v", gobj.Size)
+		}
+		gobj.Metadata["md5"] = string(gobj.MD5)
 		o := &gcsFSObject{
 			name:      gobj.Name,
 			metadata:  gobj.Metadata,
