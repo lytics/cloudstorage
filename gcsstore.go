@@ -74,8 +74,6 @@ func (g *GcsFS) WriteObject(o string, meta map[string]string, b []byte) error {
 		wc.ContentType = ctype
 	}
 
-	wc.ACL = []storage.ACLRule{{storage.AllAuthenticatedUsers, storage.RoleReader}}
-
 	if _, err := wc.Write(b); err != nil {
 		g.Log.Printf("couldn't save object. %s err=%v", o, err)
 		return err
@@ -390,7 +388,6 @@ func (o *gcsFSObject) Sync() error {
 		rd := bufio.NewReader(cachedcopy)
 
 		wc := o.gcsb.Object(o.name).NewWriter(context.Background())
-		wc.ACL = []storage.ACLRule{{storage.AllAuthenticatedUsers, storage.RoleReader}}
 
 		if o.metadata != nil {
 			wc.Metadata = o.metadata
