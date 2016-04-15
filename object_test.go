@@ -124,7 +124,7 @@ func TestListObjs(t *testing.T) {
 	store := testutils.CreateStore(t)
 	testutils.Clearstore(t, store)
 	//
-	//Create 100 objects
+	//Create 20 objects
 	//
 	names := []string{}
 	for i := 0; i < 20; i++ {

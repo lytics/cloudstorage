@@ -121,10 +121,13 @@ func cachepathObj(cachepath, oname, storeid string) string {
 	opath := path.Dir(oname)
 	ext := path.Ext(oname)
 	ext2 := fmt.Sprintf("%s.%s%s", ext, storeid, StoreCacheFileExt)
-	obase2 := strings.Replace(obase, ext, ext2, 1)
-	cn := path.Join(cachepath, opath, obase2)
-
-	return cn
+	var obase2 string
+	if ext == "" {
+		obase2 = obase + ext2
+	} else {
+		obase2 = strings.Replace(obase, ext, ext2, 1)
+	}
+	return path.Join(cachepath, opath, obase2)
 }
 
 func ensureDir(filename string) error {
