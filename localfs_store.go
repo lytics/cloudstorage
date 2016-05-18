@@ -26,6 +26,10 @@ type Localstore struct {
 
 func NewLocalStore(storepath, cachepath string, l logging.Logger) (*Localstore, error) {
 
+	if storepath == cachepath {
+		return nil, fmt.Errorf("storepath cannot be the same as cachepath")
+	}
+
 	err := os.MkdirAll(storepath, 0775)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create path. path=%s err=%v", storepath, err)
