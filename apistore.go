@@ -36,3 +36,19 @@ func (c *ApiStore) CreateBucket(name string) error {
 
 	return err
 }
+
+// AddOwner adds entity as a owner of the object
+func (c *ApiStore) AddOwner(bucket, object, entity string) error {
+	ac := &storage.ObjectAccessControl{Entity: entity, Role: "OWNER"}
+	_, err := c.service.ObjectAccessControls.Insert(bucket, object, ac).Do()
+
+	return err
+}
+
+// AddReader adds enitty as a reader of the object
+func (c *ApiStore) AddReader(bucket, object, entity string) error {
+	ac := &storage.ObjectAccessControl{Entity: entity, Role: "READER"}
+	_, err := c.service.ObjectAccessControls.Insert(bucket, object, ac).Do()
+
+	return err
+}
