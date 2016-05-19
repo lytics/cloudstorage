@@ -420,6 +420,7 @@ func (o *gcsFSObject) Close() error {
 	if !o.opened {
 		return nil
 	}
+	defer os.Remove(o.cachepath)
 
 	err := o.cachedcopy.Sync()
 	if err != nil {
