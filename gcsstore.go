@@ -420,15 +420,16 @@ func (o *gcsFSObject) Close() error {
 	if !o.opened {
 		return nil
 	}
+	defer func() {
+		os.Remove(o.cachepath)
+		o.cachedcopy = nil
+		o.opened = false
+	}()
 
-	err := o.cachedcopy.Sync()
-	if err != nil {
-		return err
-	}
-
-	err = o.cachedcopy.Close()
-	if err != nil {
-		return fmt.Errorf("error on close localfile. %s err=%v", o.cachepath, err)
+	serr := o.cachedcopy.Sync()
+	cerr := o.cachedcopy.Close()
+	if serr != nil || cerr != nil {
+		return fmt.Errorf("error on sync and closing localfile. %s sync=%v, err=%v", o.cachepath, serr, cerr)
 	}
 
 	if o.opened && !o.readonly {
@@ -437,10 +438,6 @@ func (o *gcsFSObject) Close() error {
 			return err
 		}
 	}
-
-	o.cachedcopy = nil
-	o.opened = false
-
 	return nil
 }
 
