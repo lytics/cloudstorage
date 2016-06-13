@@ -62,7 +62,7 @@ func OpenObject(objects *storage.ObjectList, gcsb *storage.BucketHandle) (*bytes
 			//we have a preexisting object, so lets download it..
 			rc, err := gcsb.Object(googleObject.Name).NewReader(context.Background())
 			if err != nil {
-				errs = append(errs, fmt.Errorf("error storage.NewReader err=%v", err))
+				errs = append(errs, fmt.Errorf("error storage.NewReader of %s err=%v", googleObject.Name, err))
 				log.Debugf("%v", errs)
 				backoff(try)
 				continue
