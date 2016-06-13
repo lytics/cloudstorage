@@ -59,6 +59,14 @@ config.Src = storeutils.NewAwsSource("bucket", "key", "secret")
 resp, _ = transferer.NewTransfer(config)
 ```
 
-
-
 See [object_test.go](https://github.com/lytics/cloudstorage/blob/master/object_test.go) for more examples
+
+## Testing
+
+Due to the way integration tests act against a GS bucket and objects; run tests without parallelization. 
+
+```
+cd $GOPATH/src/github.com/lytics/cloudstorage
+go test -p 1 ./...
+```
+
