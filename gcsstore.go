@@ -196,6 +196,25 @@ func (g *GcsFS) List(query Query) (Objects, error) {
 	return res, nil
 }
 
+func (g *GcsFS) NewReader(o string) (io.ReadCloser, error) {
+	rc, err := g.gcsb().Object(o).NewReader(context.Background())
+	if err == storage.ErrObjectNotExist {
+		return rc, ObjectNotFound
+	}
+	return rc, err
+}
+
+func (g *GcsFS) NewWriter(o string, metadata map[string]string) (io.WriteCloser, error) {
+	wc := g.gcsb().Object(o).NewWriter(context.Background())
+	if metadata != nil {
+		wc.Metadata = metadata
+		//contenttype is only used for viewing the file in a browser. (i.e. the GCS Object browser).
+		ctype := ensureContextType(o, metadata)
+		wc.ContentType = ctype
+	}
+	return wc, nil
+}
+
 //ListObjects is a wrapper around storeage.ListObjects, that retries on a GCS error.  GCS isn't a prefect system :p, and returns an error
 //  about once every 2 weeks.
 func (g *GcsFS) listObjects(q *storage.Query, retries int) (*storage.ObjectList, error) {

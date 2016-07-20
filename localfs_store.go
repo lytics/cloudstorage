@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lytics/cloudstorage/csbufio"
 	"github.com/lytics/cloudstorage/logging"
 	"github.com/pborman/uuid"
 )
@@ -68,33 +69,6 @@ func (l *Localstore) NewObject(objectname string) (Object, error) {
 		cachepath: cf,
 	}, nil
 }
-
-/*
-
-removed as part of the effort to simply the interface
-
-func (l *Localstore) WriteObject(o string, meta map[string]string, b []byte) error {
-	fo := path.Join(l.storepath, o)
-
-	err := os.MkdirAll(path.Dir(fo), 0775)
-	if err != nil {
-		l.Log.Printf("unable to create path. file=%s err=%v", fo, err)
-		return err
-	}
-
-	err = ioutil.WriteFile(fo, b, 0664)
-	if err != nil {
-		return err
-	}
-
-	if meta != nil && len(meta) > 0 {
-		fmd := fo + ".metadata"
-		writemeta(fmd, meta)
-	}
-
-	return nil
-}
-*/
 
 func (l *Localstore) List(query Query) (Objects, error) {
 	objects := make(map[string]*localFSObject)
@@ -155,6 +129,28 @@ func (l *Localstore) List(query Query) (Objects, error) {
 	res = query.applyFilters(res)
 
 	return res, nil
+}
+
+func (l *Localstore) NewReader(o string) (io.ReadCloser, error) {
+	fo := path.Join(l.storepath, o)
+	if !exists(fo) {
+		return nil, ObjectNotFound
+	}
+	return csbufio.OpenReader(fo)
+}
+
+func (l *Localstore) NewWriter(o string, metadata map[string]string) (io.WriteCloser, error) {
+	fo := path.Join(l.storepath, o)
+	if metadata != nil && len(metadata) > 0 {
+		metadata = make(map[string]string)
+	}
+
+	fmd := fo + ".metadata"
+	if err := writemeta(fmd, metadata); err != nil {
+		return nil, err
+	}
+
+	return csbufio.OpenWriter(fo)
 }
 
 func (l *Localstore) Get(o string) (Object, error) {
@@ -289,22 +285,19 @@ func (o *localFSObject) Sync() error {
 
 	cachedcopy, err := os.OpenFile(o.cachepath, os.O_RDONLY, 0664)
 	if err != nil {
-		return fmt.Errorf("gcsfs: couldn't open localfile for sync'ing. local=%s err=%v",
-			o.cachepath, err)
+		return err
 	}
 	defer cachedcopy.Close()
 
 	storecopy, err := os.OpenFile(o.storepath, os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0664)
 	if err != nil {
-		return fmt.Errorf("localfile: error occurred open file. local=%s err=%v",
-			o.storepath, err)
+		return err
 	}
 	defer storecopy.Close()
 
 	_, err = io.Copy(storecopy, cachedcopy)
 	if err != nil {
-		return fmt.Errorf("localfile: error occurred in sync copying of local to store. local=%s object=%s tfile=%v err=%v",
-			o.storepath, o.name, cachedcopy.Name(), err)
+		return err
 	}
 
 	if o.metadata != nil && len(o.metadata) > 0 {
@@ -312,9 +305,7 @@ func (o *localFSObject) Sync() error {
 	}
 
 	fmd := o.storepath + ".metadata"
-	writemeta(fmd, o.metadata)
-
-	return nil
+	return writemeta(fmd, o.metadata)
 }
 
 func writemeta(filename string, meta map[string]string) error {

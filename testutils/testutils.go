@@ -57,6 +57,7 @@ func CreateStore(t *testing.T) cloudstorage.Store {
 }
 
 func Clearstore(t *testing.T, store cloudstorage.Store) {
+	t.Logf("----------------Clearstore-----------------\n")
 	q := cloudstorage.Query{"", nil}
 	q.Sorted()
 	objs, err := store.List(q)
@@ -135,6 +136,7 @@ func AssertEq(t *testing.T, exp interface{}, got interface{}, v ...interface{}) 
 	if reflect.DeepEqual(exp, got) {
 		return
 	}
+	t.Logf("----------------AssertEq------------------\n")
 
 	//gv := reflect.ValueOf(got)
 	//ev := reflect.ValueOf(exp)
@@ -157,16 +159,7 @@ func AssertEq(t *testing.T, exp interface{}, got interface{}, v ...interface{}) 
 
 	t.Logf("exp      :\n[%v]", exp)
 	t.Logf("got      :\n[%v]", got)
-	/*
-		if gv.Type() != ev.Type() {
-			t.Logf("T != T   : %v != %v", gv.Type(), ev.Type())
-		}
 
-		g, e := gv.Interface(), ev.Interface()
-		if g != e {
-			t.Errorf("Hex: %q != %q", e, g)
-		}
-	*/
 	t.FailNow()
 }
 
