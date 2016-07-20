@@ -2,8 +2,10 @@ package cloudstorage_test
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"sort"
 	"testing"
 	"time"
@@ -273,4 +275,28 @@ func TestNewObjectWithExisting(t *testing.T) {
 	testutils.AssertEq(t, nil, err, "error.")
 
 	testutils.AssertEq(t, testcsv, string(bytes))
+}
+
+func TestReadWriteCloser(t *testing.T) {
+	store := testutils.CreateStore(t)
+	testutils.Clearstore(t, store)
+
+	object := "prefix/iorw.test"
+	data := fmt.Sprintf("pid:%v:time:%v", os.Getpid(), time.Now().Nanosecond())
+
+	wc, err := store.NewWriter(object, nil)
+	testutils.AssertEq(t, nil, err, "error.")
+	buf1 := bytes.NewBufferString(data)
+	_, err = buf1.WriteTo(wc)
+	testutils.AssertEq(t, nil, err, "error.")
+	err = wc.Close()
+	testutils.AssertEq(t, nil, err, "error.")
+
+	rc, err := store.NewReader(object)
+	testutils.AssertEq(t, nil, err, "error.")
+	buf2 := bytes.Buffer{}
+	_, err = buf2.ReadFrom(rc)
+	testutils.AssertEq(t, nil, err, "error.")
+	testutils.AssertEq(t, data, buf2.String(), "round trip data don't match")
+
 }

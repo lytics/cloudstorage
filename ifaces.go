@@ -1,11 +1,30 @@
 package cloudstorage
 
 import (
+	"io"
 	"os"
 	"time"
 )
 
 type Store interface {
+	//List takes a prefix query and returns an array of unopened objects
+	// that have the given prefix.
+	List(query Query) (Objects, error)
+
+	// NewReader creates a new Reader to read the contents of the
+	// object.
+	// ObjectNotFound will be returned if the object is not found.
+	NewReader(o string) (io.ReadCloser, error)
+
+	// NewWriter returns a io.Writer that writes to a Cloud object
+	// associated with this backing Store object.
+	//
+	// A new object will be created if an object with this name already exists.
+	// Otherwise any previous object with the same name will be replaced.
+	// The object will not be available (and any previous object will remain)
+	// until Close has been called
+	NewWriter(o string, metadata map[string]string) (io.WriteCloser, error)
+
 	//NewObject creates a new empty object backed by the cloud store
 	//  This new object isn't' synced/created in the backing store
 	//  until the object is Closed/Sync'ed.
@@ -13,10 +32,9 @@ type Store interface {
 
 	//Get returns the object from the cloud store.   The object
 	//  isn't opened already, see Object.Open()
+	// ObjectNotFound will be returned if the object is not found.
 	Get(o string) (Object, error)
-	//List takes a prefix query and returns an array of unopened objects
-	// that have the given prefix.
-	List(query Query) (Objects, error)
+
 	//Delete removes the object from the cloud store.   Any Objects which have
 	// had Open() called should work as normal.
 	Delete(o string) error
