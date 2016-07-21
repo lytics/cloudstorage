@@ -141,6 +141,12 @@ func (l *Localstore) NewReader(o string) (io.ReadCloser, error) {
 
 func (l *Localstore) NewWriter(o string, metadata map[string]string) (io.WriteCloser, error) {
 	fo := path.Join(l.storepath, o)
+
+	err := ensureDir(fo)
+	if err != nil {
+		return nil, err
+	}
+
 	if metadata != nil && len(metadata) > 0 {
 		metadata = make(map[string]string)
 	}
