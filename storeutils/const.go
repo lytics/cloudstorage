@@ -5,7 +5,7 @@ import (
 	"math/rand"
 	"time"
 
-	"google.golang.org/cloud/storage"
+	"cloud.google.com/go/storage"
 )
 
 // Copied from cloudstorage

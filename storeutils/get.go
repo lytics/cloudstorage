@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"io"
 
+	"cloud.google.com/go/storage"
 	"github.com/lytics/cloudstorage/logging"
 	"golang.org/x/net/context"
-	"google.golang.org/cloud/storage"
 )
 
 // Gets a single object's bytes based on bucket and name parameters

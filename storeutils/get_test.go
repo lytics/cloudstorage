@@ -3,7 +3,7 @@ package storeutils
 import (
 	"testing"
 
-	"google.golang.org/cloud/storage"
+	"cloud.google.com/go/storage"
 )
 
 func TestOpenObject(t *testing.T) {

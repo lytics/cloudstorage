@@ -3,7 +3,7 @@ package storeutils
 import (
 	"testing"
 
-	"google.golang.org/cloud/storage"
+	"cloud.google.com/go/storage"
 )
 
 // This is a difficult test for specifics since contents of test buckets will differ

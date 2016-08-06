@@ -3,8 +3,8 @@ package storeutils
 import (
 	"fmt"
 
+	"cloud.google.com/go/storage"
 	"golang.org/x/net/context"
-	"google.golang.org/cloud/storage"
 )
 
 // Iterates through pages of results from a Google Storage Bucket and
