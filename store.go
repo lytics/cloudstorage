@@ -9,10 +9,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"cloud.google.com/go/storage"
 	"github.com/lytics/cloudstorage/logging"
 	"golang.org/x/net/context"
-	"google.golang.org/cloud"
-	"google.golang.org/cloud/storage"
+	"google.golang.org/api/option"
 )
 
 const StoreCacheFileExt = ".cache"
@@ -66,7 +66,7 @@ func gcsCommonClient(client *http.Client, csctx *CloudStoreContext) (Store, erro
 	prefix := fmt.Sprintf("%s:(project=%s bucket=%s)", csctx.LogggingContext, project, bucket)
 	l := LogConstructor(prefix)
 
-	gcs, err := storage.NewClient(context.Background(), cloud.WithBaseHTTP(client))
+	gcs, err := storage.NewClient(context.Background(), option.WithHTTPClient(client))
 	if err != nil {
 		l.Errorf("%v error creating Google cloud storage client. project:%s gs://%s/ err:%v ",
 			csctx.LogggingContext, project, bucket, err)

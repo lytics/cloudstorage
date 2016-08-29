@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
+	"cloud.google.com/go/storage"
 	"github.com/lytics/cloudstorage/logging"
 	"github.com/pborman/uuid"
 	"golang.org/x/net/context"
-	"google.golang.org/cloud/storage"
 )
 
 const GCSFSStorageSource = "gcsFS"

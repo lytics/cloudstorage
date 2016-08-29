@@ -6,9 +6,9 @@ import (
 
 	"github.com/lytics/cloudstorage"
 
+	"cloud.google.com/go/storage"
 	"golang.org/x/net/context"
-	"google.golang.org/cloud"
-	"google.golang.org/cloud/storage"
+	"google.golang.org/api/option"
 )
 
 var testBucket = os.Getenv("TESTBUCKET")
@@ -33,7 +33,7 @@ func Setup(t *testing.T) *storage.Client {
 		t.Errorf("Failed to create Google Client: %v\n", err)
 	}
 
-	gsc, err := storage.NewClient(context.Background(), cloud.WithBaseHTTP(googleClient.Client()))
+	gsc, err := storage.NewClient(context.Background(), option.WithHTTPClient(googleClient.Client()))
 	if err != nil {
 		t.Errorf("Error creating Google cloud storage client. project:%s gs://%s/ err:%v\n",
 			gcsctx.Project, gcsctx.Bucket, err)
