@@ -13,7 +13,6 @@ import (
 
 	"github.com/lytics/cloudstorage/csbufio"
 	"github.com/lytics/cloudstorage/logging"
-	"github.com/pborman/uuid"
 )
 
 const LocalFSStorageSource = "localFS"
@@ -22,7 +21,6 @@ type Localstore struct {
 	Log       logging.Logger
 	storepath string
 	cachepath string
-	Id        string
 }
 
 func NewLocalStore(storepath, cachepath string, l logging.Logger) (*Localstore, error) {
@@ -41,10 +39,7 @@ func NewLocalStore(storepath, cachepath string, l logging.Logger) (*Localstore, 
 		return nil, fmt.Errorf("unable to create path. path=%s err=%v", cachepath, err)
 	}
 
-	uid := uuid.NewUUID().String()
-	uid = strings.Replace(uid, "-", "", -1)
-
-	return &Localstore{storepath: storepath, cachepath: cachepath, Id: uid, Log: l}, nil
+	return &Localstore{storepath: storepath, cachepath: cachepath, Log: l}, nil
 }
 
 func (l *Localstore) NewObject(objectname string) (Object, error) {
@@ -61,7 +56,7 @@ func (l *Localstore) NewObject(objectname string) (Object, error) {
 		return nil, err
 	}
 
-	cf := cachepathObj(l.cachepath, objectname, l.Id)
+	cf := cachepathObj(l.cachepath, objectname, uid())
 
 	return &localFSObject{
 		name:      objectname,
@@ -107,7 +102,7 @@ func (l *Localstore) List(query Query) (Objects, error) {
 				name:      oname,
 				updated:   f.ModTime(),
 				storepath: fo,
-				cachepath: cachepathObj(l.cachepath, oname, l.Id),
+				cachepath: cachepathObj(l.cachepath, oname, uid()),
 			}
 		}
 		return err
@@ -174,7 +169,7 @@ func (l *Localstore) Get(o string) (Object, error) {
 		name:      o,
 		updated:   updated,
 		storepath: fo,
-		cachepath: cachepathObj(l.cachepath, o, l.Id),
+		cachepath: cachepathObj(l.cachepath, o, uid()),
 	}, nil
 }
 
@@ -189,7 +184,7 @@ func (l *Localstore) Delete(obj string) error {
 }
 
 func (l *Localstore) String() string {
-	return fmt.Sprintf("[id:%s file://%s/]", l.Id, l.storepath)
+	return fmt.Sprintf("[id:%s file://%s/]", uid(), l.storepath)
 }
 
 type localFSObject struct {

@@ -3,6 +3,9 @@ package cloudstorage
 import (
 	"encoding/base64"
 	"fmt"
+	"strings"
+
+	"github.com/pborman/uuid"
 )
 
 type TokenSource string
@@ -96,4 +99,10 @@ func (j *JwtConf) KeyBytes() ([]byte, error) {
 	//convert Private_keybase64 to bytes.
 	str := j.Private_keybase64
 	return base64.StdEncoding.DecodeString(str)
+}
+
+func uid() string {
+	uid := uuid.NewUUID().String()
+	uid = strings.Replace(uid, "-", "", -1)
+	return uid
 }

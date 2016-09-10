@@ -13,7 +13,6 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/lytics/cloudstorage/logging"
-	"github.com/pborman/uuid"
 	"golang.org/x/net/context"
 )
 
@@ -28,7 +27,6 @@ type GcsFS struct {
 	bucket    string
 	cachepath string
 	PageSize  int //TODO pipe this in from eventstore
-	Id        string
 
 	Log logging.Logger
 }
@@ -39,14 +37,10 @@ func NewGCSStore(gcs *storage.Client, bucket, cachepath string, pagesize int, l 
 		return nil, fmt.Errorf("unable to create path. path=%s err=%v", cachepath, err)
 	}
 
-	uid := uuid.NewUUID().String()
-	uid = strings.Replace(uid, "-", "", -1)
-
 	return &GcsFS{
 		gcs:       gcs,
 		bucket:    bucket,
 		cachepath: cachepath,
-		Id:        uid,
 		PageSize:  pagesize,
 		Log:       l,
 	}, nil
@@ -96,7 +90,7 @@ func (g *GcsFS) NewObject(objectname string) (Object, error) {
 		return nil, ObjectExists
 	}
 
-	cf := cachepathObj(g.cachepath, objectname, g.Id)
+	cf := cachepathObj(g.cachepath, objectname, uid())
 
 	return &gcsFSObject{
 		name:       objectname,
@@ -130,7 +124,7 @@ func (g *GcsFS) Get(objectpath string) (Object, error) {
 		gcsb:         g.gcsb(),
 		googleObject: gobj,
 		bucket:       g.bucket,
-		cachepath:    cachepathObj(g.cachepath, gobj.Name, g.Id),
+		cachepath:    cachepathObj(g.cachepath, gobj.Name, uid()),
 		log:          g.Log,
 	}
 	return res, nil
@@ -185,7 +179,7 @@ func (g *GcsFS) List(query Query) (Objects, error) {
 			metadata:  gobj.Metadata,
 			gcsb:      g.gcsb(),
 			bucket:    g.bucket,
-			cachepath: cachepathObj(g.cachepath, gobj.Name, g.Id),
+			cachepath: cachepathObj(g.cachepath, gobj.Name, uid()),
 			log:       g.Log,
 		}
 		res = append(res, o)
