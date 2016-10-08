@@ -356,8 +356,12 @@ func (o *gcsFSObject) Open(accesslevel AccessLevel) (*os.File, error) {
 			cachedcopy.Close()
 			cachedcopy, err = os.Open(o.cachepath)
 			if err != nil {
+				name := "unknown"
+				if cachedcopy != nil {
+					name = cachedcopy.Name()
+				}
 				return nil, fmt.Errorf("error occurred opening file. local=%s object=%s tfile=%v err=%v",
-					o.cachepath, o.name, cachedcopy.Name(), err)
+					o.cachepath, o.name, name, err)
 			}
 		}
 
