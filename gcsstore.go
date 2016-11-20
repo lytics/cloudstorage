@@ -110,19 +110,17 @@ func (g *GcsFS) NewObject(objectname string) (Object, error) {
 }
 
 func (g *GcsFS) Get(objectpath string) (Object, error) {
-	var q = &storage.Query{Prefix: objectpath, MaxResults: 1}
 
-	gobjects, err := g.listObjects(q, GCSRetries)
+	gobj, err := g.gcsb().Object(objectpath).Attrs(context.Background()) // .Objects(context.Background(), q)
 	if err != nil {
-		g.Log.Errorf("couldn't list objects. prefix=%s err=%v", q.Prefix, err)
+		g.Log.Errorf("couldn't get object. obj=%q err=%v", objectpath, err)
 		return nil, err
 	}
 
-	if gobjects == nil || len(gobjects.Results) == 0 {
+	if gobj == nil {
 		return nil, ObjectNotFound
 	}
 
-	gobj := gobjects.Results[0]
 	res := &gcsFSObject{
 		name:         gobj.Name,
 		updated:      gobj.Updated,
@@ -213,24 +211,6 @@ func (g *GcsFS) NewWriter(o string, metadata map[string]string) (io.WriteCloser,
 		wc.ContentType = ctype
 	}
 	return wc, nil
-}
-
-//ListObjects is a wrapper around storeage.ListObjects, that retries on a GCS error.  GCS isn't a prefect system :p, and returns an error
-//  about once every 2 weeks.
-func (g *GcsFS) listObjects(q *storage.Query, retries int) (*storage.ObjectList, error) {
-	var lasterr error = nil
-	//GCS sometimes returns a 500 error, so we'll just retry...
-	for i := 0; i < retries; i++ {
-		objects, err := g.gcsb().List(context.Background(), q)
-		if err != nil {
-			g.Log.Errorf("error listing objects for the bucket. try:%d store:%s q.prefix:%v err:%v", i, g, q.Prefix, err)
-			lasterr = err
-			backoff(i)
-			continue
-		}
-		return objects, nil
-	}
-	return nil, lasterr
 }
 
 func concatGCSObjects(a, b *storage.ObjectList) *storage.ObjectList {
