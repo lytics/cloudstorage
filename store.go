@@ -116,11 +116,11 @@ func exists(filename string) bool {
 	return true
 }
 
-func cachepathObj(cachepath, oname, storeid string) string {
+func cachepathObj(cachepath, oname, uid string) string {
 	obase := path.Base(oname)
 	opath := path.Dir(oname)
 	ext := path.Ext(oname)
-	ext2 := fmt.Sprintf("%s.%s%s", ext, storeid, StoreCacheFileExt)
+	ext2 := fmt.Sprintf("%s.%s%s", ext, uid, StoreCacheFileExt)
 	var obase2 string
 	if ext == "" {
 		obase2 = obase + ext2
