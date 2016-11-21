@@ -4,8 +4,6 @@ import (
 	"math"
 	"math/rand"
 	"time"
-
-	"cloud.google.com/go/storage"
 )
 
 // Copied from cloudstorage
@@ -25,14 +23,4 @@ func backoff(try int) {
 	r := rand.Int31n(int32(nf))
 	d := time.Duration(r) * time.Second
 	time.Sleep(d)
-}
-
-func concatGCSObjects(a, b *storage.ObjectList) *storage.ObjectList {
-	for _, obj := range b.Results {
-		a.Results = append(a.Results, obj)
-	}
-	for _, prefix := range b.Prefixes {
-		a.Prefixes = append(a.Prefixes, prefix)
-	}
-	return a
 }

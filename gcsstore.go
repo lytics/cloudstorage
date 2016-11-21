@@ -12,9 +12,11 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
-	"github.com/lytics/cloudstorage/logging"
 	"github.com/pborman/uuid"
 	"golang.org/x/net/context"
+	"google.golang.org/api/iterator"
+
+	"github.com/lytics/cloudstorage/logging"
 )
 
 const GCSFSStorageSource = "gcsFS"
@@ -121,77 +123,53 @@ func (g *GcsFS) Get(objectpath string) (Object, error) {
 		return nil, ObjectNotFound
 	}
 
-	res := &gcsFSObject{
-		name:         gobj.Name,
-		updated:      gobj.Updated,
-		metadata:     gobj.Metadata,
-		gcsb:         g.gcsb(),
-		googleObject: gobj,
-		bucket:       g.bucket,
-		cachepath:    cachepathObj(g.cachepath, gobj.Name, g.Id),
-		log:          g.Log,
-	}
-	return res, nil
+	return newObjectFromGcs(g, gobj), nil
 }
 
 func (g *GcsFS) List(query Query) (Objects, error) {
 
-	var q = &storage.Query{Prefix: query.Prefix, MaxResults: g.PageSize}
+	var q = &storage.Query{Prefix: query.Prefix}
 
-	gobjects, err := g.listObjects(q, GCSRetries)
+	res, err := g.listObjects(q, GCSRetries)
 	if err != nil {
-		g.Log.Errorf("couldn't list objects. prefix=%s err=%v", q.Prefix, err)
+		g.Log.Warnf("couldn't list objects. prefix=%s err=%v", q.Prefix, err)
 		return nil, err
 	}
 
-	if gobjects == nil {
+	if res == nil {
 		return make(Objects, 0), nil
-	}
-
-	if gobjects.Next != nil {
-		q = gobjects.Next
-		for q != nil {
-			gobjectsB, err := g.listObjects(q, GCSRetries)
-			if err != nil {
-				g.Log.Errorf("couldn't list the remaining pages of objects. prefix=%s err=%v", q.Prefix, err)
-				return nil, err
-			}
-
-			concatGCSObjects(gobjects, gobjectsB)
-
-			if gobjectsB != nil {
-				q = gobjectsB.Next
-			} else {
-				q = nil
-			}
-		}
-	}
-
-	res := make(Objects, 0)
-
-	for _, gobj := range gobjects.Results {
-		if len(gobj.Metadata) == 0 {
-			gobj.Metadata = make(map[string]string)
-		}
-		if _, ok := gobj.Metadata["Content-Length"]; !ok {
-			gobj.Metadata["Content-Length"] = fmt.Sprintf("%v", gobj.Size)
-		}
-		gobj.Metadata["md5"] = string(gobj.MD5)
-		o := &gcsFSObject{
-			name:      gobj.Name,
-			updated:   gobj.Updated,
-			metadata:  gobj.Metadata,
-			gcsb:      g.gcsb(),
-			bucket:    g.bucket,
-			cachepath: cachepathObj(g.cachepath, gobj.Name, g.Id),
-			log:       g.Log,
-		}
-		res = append(res, o)
 	}
 
 	res = query.applyFilters(res)
 
 	return res, nil
+}
+
+// ListObjects iterates to find a list of objects
+func (g *GcsFS) listObjects(q *storage.Query, retries int) (Objects, error) {
+	var lasterr error = nil
+	//GCS sometimes returns a 500 error, so we'll just retry...
+
+	for i := 0; i < retries; i++ {
+		objects := make(Objects, 0)
+		iter := g.gcsb().Objects(context.Background(), q)
+	iterLoop:
+		for {
+			oa, err := iter.Next()
+			switch err {
+			case nil:
+				objects = append(objects, newObjectFromGcs(g, oa))
+			case iterator.Done:
+				return objects, nil
+			default:
+				g.Log.Warnf("error listing objects for the bucket. try:%d store:%s q.prefix:%v err:%v", i, g, q.Prefix, err)
+				lasterr = err
+				backoff(i)
+				break iterLoop
+			}
+		}
+	}
+	return nil, lasterr
 }
 
 func (g *GcsFS) NewReader(o string) (io.ReadCloser, error) {
@@ -211,16 +189,6 @@ func (g *GcsFS) NewWriter(o string, metadata map[string]string) (io.WriteCloser,
 		wc.ContentType = ctype
 	}
 	return wc, nil
-}
-
-func concatGCSObjects(a, b *storage.ObjectList) *storage.ObjectList {
-	for _, obj := range b.Results {
-		a.Results = append(a.Results, obj)
-	}
-	for _, prefix := range b.Prefixes {
-		a.Prefixes = append(a.Prefixes, prefix)
-	}
-	return a
 }
 
 func (g *GcsFS) Delete(obj string) error {
@@ -249,6 +217,17 @@ type gcsFSObject struct {
 	log       logging.Logger
 }
 
+func newObjectFromGcs(g *GcsFS, o *storage.ObjectAttrs) *gcsFSObject {
+	return &gcsFSObject{
+		name:      o.Name,
+		updated:   o.Updated,
+		metadata:  o.Metadata,
+		gcsb:      g.gcsb(),
+		bucket:    g.bucket,
+		cachepath: cachepathObj(g.cachepath, o.Name, g.Id),
+		log:       g.Log,
+	}
+}
 func (o *gcsFSObject) StorageSource() string {
 	return GCSFSStorageSource
 }
@@ -298,17 +277,16 @@ func (o *gcsFSObject) Open(accesslevel AccessLevel) (*os.File, error) {
 
 	for try := 0; try < GCSRetries; try++ {
 		if o.googleObject == nil {
-			var q = &storage.Query{Prefix: o.name, MaxResults: 1}
-			objects, err := o.gcsb.List(context.Background(), q)
+			gobj, err := o.gcsb.Object(o.name).Attrs(context.Background())
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error storage.NewReader err=%v", err))
-				o.log.Debugf("%v", errs)
+				o.log.Debugf("error fetching object %q err=%v", o.name, errs)
 				backoff(try)
 				continue
 			}
 
-			if objects.Results != nil && len(objects.Results) != 0 {
-				o.googleObject = objects.Results[0]
+			if gobj != nil {
+				o.googleObject = gobj
 			}
 		}
 
