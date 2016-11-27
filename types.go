@@ -24,10 +24,6 @@ const (
 	ReadWrite AccessLevel = 1
 )
 
-// ObjectIterator
-type ObjectIterator interface {
-}
-
 // Objects are just a collection of Object(s).  Used as the results for store.List commands.
 type Objects []Object
 
