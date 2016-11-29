@@ -115,6 +115,9 @@ func (g *GcsFS) Get(objectpath string) (Object, error) {
 
 	gobj, err := g.gcsb().Object(objectpath).Attrs(context.Background()) // .Objects(context.Background(), q)
 	if err != nil {
+		if strings.Contains(err.Error(), "doesn't exist") {
+			return nil, ObjectNotFound
+		}
 		g.Log.Errorf("couldn't get object. obj=%q err=%v", objectpath, err)
 		return nil, err
 	}
@@ -279,10 +282,14 @@ func (o *gcsFSObject) Open(accesslevel AccessLevel) (*os.File, error) {
 		if o.googleObject == nil {
 			gobj, err := o.gcsb.Object(o.name).Attrs(context.Background())
 			if err != nil {
-				errs = append(errs, fmt.Errorf("error storage.NewReader err=%v", err))
-				o.log.Debugf("error fetching object %q err=%v", o.name, errs)
-				backoff(try)
-				continue
+				if strings.Contains(err.Error(), "doesn't exist") {
+					// New, this is fine
+				} else {
+					errs = append(errs, fmt.Errorf("error storage.NewReader err=%v", err))
+					o.log.Debugf("error fetching object %q err=%v", o.name, errs)
+					backoff(try)
+					continue
+				}
 			}
 
 			if gobj != nil {

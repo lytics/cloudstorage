@@ -26,6 +26,7 @@ func TestBasicRW(t *testing.T) {
 	//
 	obj, err := store.NewObject("prefix/test.csv")
 	testutils.AssertEq(t, nil, err, "error.")
+	testutils.AssertT(t, obj != nil, "Should return new empty obj")
 
 	f, err := obj.Open(cloudstorage.ReadWrite)
 	testutils.AssertEq(t, nil, err, "error.")
