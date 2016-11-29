@@ -2,32 +2,7 @@ package storeutils
 
 import (
 	"testing"
-
-	"cloud.google.com/go/storage"
 )
-
-func TestOpenObject(t *testing.T) {
-	gsc := Setup(t)
-	bh := gsc.Bucket(testBucket)
-	if testGetFile == "" {
-		t.Skip("TESTFILE EnvVar must be set to run test")
-	}
-
-	// Create Query
-	q := storage.Query{Prefix: testGetFile, MaxResults: 100}
-
-	//list objects
-	ol, err := List(bh, q)
-	if err != nil {
-		t.Errorf("Error getting ObjectList: %v", err)
-	}
-
-	buff, errs := OpenObject(ol, bh)
-	if len(errs) > 0 {
-		t.Errorf("OpenObject Errors %#v", errs)
-	}
-	t.Logf("%s", buff.String())
-}
 
 func TestGetObject(t *testing.T) {
 	if testGetFile == "" {

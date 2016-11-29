@@ -1,14 +1,19 @@
-# Cloudstorage Introduction:
-Is an abstraction layer for distributed filesystems like Google's Cloud Storage or Amazon's S3.  In addition it also supports mocking remote storage with local files.  Lytics is currently using this framework in production for abstracting access to Google Cloud Storage. 
+# Introduction
+Cloudstorage is an abstraction layer for Google's Cloud Storage and Local Files.  
+It provides a unified api for local files and Google Cloud files that aids testing.
 
-Note: S3 isn't implemented yet, but is on it's way.  
+### Similar/Related works
+* https://github.com/graymeta/stow
+* https://github.com/rook/rook
+* sync tool https://github.com/ncw/rclone
 
-#Example usage:
+
+# Example usage:
 Note: For these examples Im ignoring all errors and using the `_` for them.
 
 ##### Creating a Store object:
 ```go
-//This is an example of a local storage object:  See(https://github.com/lytics/cloudstorage/blob/master/testutils/testutils.go#L30) for a GCS example:
+// This is an example of a local storage object:  See(https://github.com/lytics/cloudstorage/blob/master/testutils/testutils.go#L30) for a GCS example:
 var config = &cloudstorage.CloudStoreContext{
 	LogggingContext: "unittest",
 	TokenSource:     cloudstorage.LocalFileSource,
