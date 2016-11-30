@@ -308,10 +308,23 @@ func (o *gcsFSObject) Open(accesslevel AccessLevel) (*os.File, error) {
 			}
 			defer rc.Close()
 
+			if _, err := cachedcopy.Seek(0, os.SEEK_SET); err != nil {
+				return nil, fmt.Errorf("error seeking to start of cachedcopy err=%v", err) //don't retry on local fs errors
+			}
+
 			_, err = io.Copy(cachedcopy, rc)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error coping bytes. err=%v", err))
 				o.log.Debugf("%v", errs)
+				//recreate the cachedcopy file incase it has incomplete data
+				if err := os.Remove(o.cachepath); err != nil {
+					return nil, fmt.Errorf("error resetting the cachedcopy err=%v", err) //don't retry on local fs errors
+				}
+				if cachedcopy, err = os.Create(o.cachepath); err != nil {
+					return nil, fmt.Errorf("error occurred creating a new cachedcopy file. local=%s err=%v",
+						o.cachepath, err)
+				}
+
 				backoff(try)
 				continue
 			}
