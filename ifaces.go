@@ -4,6 +4,8 @@ import (
 	"io"
 	"os"
 	"time"
+
+	"golang.org/x/net/context"
 )
 
 type Store interface {
@@ -15,6 +17,7 @@ type Store interface {
 	// object.
 	// ObjectNotFound will be returned if the object is not found.
 	NewReader(o string) (io.ReadCloser, error)
+	NewReaderWithContext(ctx context.Context, o string) (io.ReadCloser, error)
 
 	// NewWriter returns a io.Writer that writes to a Cloud object
 	// associated with this backing Store object.
@@ -24,6 +27,7 @@ type Store interface {
 	// The object will not be available (and any previous object will remain)
 	// until Close has been called
 	NewWriter(o string, metadata map[string]string) (io.WriteCloser, error)
+	NewWriterWithContext(ctx context.Context, o string, metadata map[string]string) (io.WriteCloser, error)
 
 	//NewObject creates a new empty object backed by the cloud store
 	//  This new object isn't' synced/created in the backing store

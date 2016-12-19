@@ -14,6 +14,7 @@ import (
 	"github.com/lytics/cloudstorage/csbufio"
 	"github.com/lytics/cloudstorage/logging"
 	"github.com/pborman/uuid"
+	"golang.org/x/net/context"
 )
 
 const LocalFSStorageSource = "localFS"
@@ -132,6 +133,9 @@ func (l *Localstore) List(query Query) (Objects, error) {
 }
 
 func (l *Localstore) NewReader(o string) (io.ReadCloser, error) {
+	return l.NewReaderWithContext(context.Background(), o)
+}
+func (l *Localstore) NewReaderWithContext(ctx context.Context, o string) (io.ReadCloser, error) {
 	fo := path.Join(l.storepath, o)
 	if !exists(fo) {
 		return nil, ObjectNotFound
@@ -140,6 +144,10 @@ func (l *Localstore) NewReader(o string) (io.ReadCloser, error) {
 }
 
 func (l *Localstore) NewWriter(o string, metadata map[string]string) (io.WriteCloser, error) {
+	return l.NewWriterWithContext(context.Background(), o, metadata)
+}
+func (l *Localstore) NewWriterWithContext(ctx context.Context, o string, metadata map[string]string) (io.WriteCloser, error) {
+
 	fo := path.Join(l.storepath, o)
 
 	err := ensureDir(fo)

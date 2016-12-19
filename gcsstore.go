@@ -12,11 +12,10 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
+	"github.com/lytics/cloudstorage/logging"
 	"github.com/pborman/uuid"
 	"golang.org/x/net/context"
 	"google.golang.org/api/iterator"
-
-	"github.com/lytics/cloudstorage/logging"
 )
 
 const GCSFSStorageSource = "gcsFS"
@@ -151,7 +150,6 @@ func (g *GcsFS) List(query Query) (Objects, error) {
 // ListObjects iterates to find a list of objects
 func (g *GcsFS) listObjects(q *storage.Query, retries int) (Objects, error) {
 	var lasterr error = nil
-	//GCS sometimes returns a 500 error, so we'll just retry...
 
 	for i := 0; i < retries; i++ {
 		objects := make(Objects, 0)
@@ -176,7 +174,10 @@ func (g *GcsFS) listObjects(q *storage.Query, retries int) (Objects, error) {
 }
 
 func (g *GcsFS) NewReader(o string) (io.ReadCloser, error) {
-	rc, err := g.gcsb().Object(o).NewReader(context.Background())
+	return g.NewReaderWithContext(context.Background(), o)
+}
+func (g *GcsFS) NewReaderWithContext(ctx context.Context, o string) (io.ReadCloser, error) {
+	rc, err := g.gcsb().Object(o).NewReader(ctx)
 	if err == storage.ErrObjectNotExist {
 		return rc, ObjectNotFound
 	}
@@ -184,7 +185,10 @@ func (g *GcsFS) NewReader(o string) (io.ReadCloser, error) {
 }
 
 func (g *GcsFS) NewWriter(o string, metadata map[string]string) (io.WriteCloser, error) {
-	wc := g.gcsb().Object(o).NewWriter(context.Background())
+	return g.NewWriterWithContext(context.Background(), o, metadata)
+}
+func (g *GcsFS) NewWriterWithContext(ctx context.Context, o string, metadata map[string]string) (io.WriteCloser, error) {
+	wc := g.gcsb().Object(o).NewWriter(ctx)
 	if metadata != nil {
 		wc.Metadata = metadata
 		//contenttype is only used for viewing the file in a browser. (i.e. the GCS Object browser).
