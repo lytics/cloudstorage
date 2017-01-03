@@ -386,7 +386,6 @@ func (o *gcsFSObject) Sync() error {
 	defer cachedcopy.Close()
 
 	for try := 0; try < GCSRetries; try++ {
-
 		if _, err := cachedcopy.Seek(0, os.SEEK_SET); err != nil {
 			return fmt.Errorf("error seeking to start of cachedcopy err=%v", err) //don't retry on local filesystem errors
 		}
@@ -402,13 +401,17 @@ func (o *gcsFSObject) Sync() error {
 		}
 
 		if _, err = io.Copy(wc, rd); err != nil {
-			errs = append(errs, fmt.Sprintf("couldn't copy localcache file to remote object. object:%s err=%v", o.name, err))
+			errs = append(errs, fmt.Sprintf("copy to remote object error:%v", err))
+			err2 := wc.CloseWithError(err)
+			if err2 != nil {
+				errs = append(errs, fmt.Sprintf("CloseWithError error:%v", err2))
+			}
 			backoff(try)
 			continue
 		}
 
 		if err = wc.Close(); err != nil {
-			errs = append(errs, fmt.Sprintf("couldn't close gcs writer. object:%s err=%v", o.name, err))
+			errs = append(errs, fmt.Sprintf("close gcs writer error:%v", err))
 			backoff(try)
 			continue
 		}
@@ -417,8 +420,7 @@ func (o *gcsFSObject) Sync() error {
 	}
 
 	errmsg := strings.Join(errs, ",")
-
-	return fmt.Errorf("unable to sync file: errors[%v]", errmsg)
+	return fmt.Errorf("GCS sync error after retry: (oname=%s cpath:%v) errors[%v]", o.name, o.cachepath, errmsg)
 }
 
 func (o *gcsFSObject) Close() error {
