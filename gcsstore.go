@@ -254,6 +254,15 @@ func (o *gcsFSObject) SetMetaData(meta map[string]string) {
 	o.metadata = meta
 }
 
+func (o *gcsFSObject) Delete() error {
+	o.Release()
+	err := o.gcsb.Object(o.name).Delete(context.Background())
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (o *gcsFSObject) Open(accesslevel AccessLevel) (*os.File, error) {
 	if o.opened {
 		return nil, fmt.Errorf("the store object is already opened. %s", o.name)
