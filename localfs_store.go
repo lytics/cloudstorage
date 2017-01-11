@@ -232,6 +232,20 @@ func (o *localFSObject) SetMetaData(meta map[string]string) {
 	o.metadata = meta
 }
 
+func (o *localFSObject) Delete() error {
+	o.Release()
+	if err := os.Remove(o.storepath); err != nil {
+		return err
+	}
+	mf := o.storepath + ".metadata"
+	if exists(mf) {
+		if err := os.Remove(mf); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (o *localFSObject) Open(accesslevel AccessLevel) (*os.File, error) {
 	if o.opened {
 		return nil, fmt.Errorf("the store object is already opened. %s", o.storepath)

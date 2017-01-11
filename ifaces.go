@@ -39,8 +39,7 @@ type Store interface {
 	// ObjectNotFound will be returned if the object is not found.
 	Get(o string) (Object, error)
 
-	//Delete removes the object from the cloud store.   Any Objects which have
-	// had Open() called should work as normal.
+	//Delete removes the object from the cloud store.
 	Delete(o string) error
 
 	String() string
@@ -72,4 +71,7 @@ type Object interface {
 	Write(p []byte) (n int, err error)
 	Sync() error
 	Close() error
+
+	//Delete removes the object from the cloud store.
+	Delete() error
 }

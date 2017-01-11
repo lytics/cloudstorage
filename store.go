@@ -2,6 +2,7 @@ package cloudstorage
 
 import (
 	"fmt"
+	"io"
 	"mime"
 	"net/http"
 	"os"
@@ -146,4 +147,84 @@ func ensureDir(filename string) error {
 		}
 	}
 	return nil
+}
+
+func Copy(ctx context.Context, src, des Object) error {
+	//for GCS, take the fast path, and use the backend copier
+	if src.StorageSource() == GCSFSStorageSource && des.StorageSource() == GCSFSStorageSource {
+		srcgcs, ok := src.(*gcsFSObject)
+		if !ok {
+			return fmt.Errorf("error StoreageSource is declared as GCS, but cast failed???")
+		}
+		desgcs, ok := des.(*gcsFSObject)
+		if !ok {
+			return fmt.Errorf("error StoreageSource is declared as GCS, but cast failed???")
+		}
+
+		oh := srcgcs.gcsb.Object(srcgcs.name)
+		dh := desgcs.gcsb.Object(desgcs.name)
+
+		_, err := dh.CopierFrom(oh).Run(ctx)
+		return err
+	}
+
+	// Slow path, copy locally then up to des
+	fout, err := des.Open(ReadWrite)
+	if err != nil {
+		return err
+	}
+
+	fin, err := src.Open(ReadOnly)
+	if _, err = io.Copy(fout, fin); err != nil {
+		return err
+	}
+	defer src.Close()
+
+	return des.Close() //this will flush and sync the file.
+}
+
+func Move(ctx context.Context, src, des Object) error {
+	//for GCS, take the fast path, and use the backend copier
+	if src.StorageSource() == GCSFSStorageSource && des.StorageSource() == GCSFSStorageSource {
+		srcgcs, ok := src.(*gcsFSObject)
+		if !ok {
+			return fmt.Errorf("error StoreageSource is declared as GCS, but cast failed???")
+		}
+		desgcs, ok := des.(*gcsFSObject)
+		if !ok {
+			return fmt.Errorf("error StoreageSource is declared as GCS, but cast failed???")
+		}
+
+		oh := srcgcs.gcsb.Object(srcgcs.name)
+		dh := desgcs.gcsb.Object(desgcs.name)
+
+		if _, err := dh.CopierFrom(oh).Run(ctx); err != nil {
+			return err
+		}
+
+		if err := oh.Delete(ctx); err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	// Slow path, copy locally then up to des
+	fout, err := des.Open(ReadWrite)
+	if err != nil {
+		return err
+	}
+
+	fin, err := src.Open(ReadOnly)
+	if _, err = io.Copy(fout, fin); err != nil {
+		return err
+	}
+	if err := src.Close(); err != nil {
+		return err
+	}
+	if err := src.Delete(); err != nil {
+		return err
+	}
+
+	return des.Close() //this will flush and sync the file.
 }
