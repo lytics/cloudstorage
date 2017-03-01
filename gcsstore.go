@@ -20,9 +20,14 @@ import (
 
 const GCSFSStorageSource = "gcsFS"
 
-var GCSRetries int = 55
+var (
+	GCSRetries int = 55
 
-//GcsFS Simple wrapper for accessing smaller GCS files, it doesn't currently implement a
+	// Ensure we implement ObjectIterator
+	_ ObjectIterator = (*GcsObjectIterator)(nil)
+)
+
+// GcsFS Simple wrapper for accessing smaller GCS files, it doesn't currently implement a
 // Reader/Writer interface so not useful for stream reading of large files yet.
 type GcsFS struct {
 	gcs       *storage.Client
@@ -61,34 +66,6 @@ func (g *GcsFS) gcsb() *storage.BucketHandle {
 	return g.gcs.Bucket(g.bucket)
 }
 
-/*
-
-removed as part of the effort to simply the interface
-
-func (g *GcsFS) WriteObject(o string, meta map[string]string, b []byte) error {
-	wc := storage.NewWriter(g.googlectx, g.bucket, o)
-
-	if meta != nil {
-		wc.Metadata = meta
-		//contenttype is only used for viewing the file in a browser. (i.e. the GCS Object browser).
-		ctype := ensureContextType(o, meta)
-		wc.ContentType = ctype
-	}
-
-	if _, err := wc.Write(b); err != nil {
-		g.Log.Printf("couldn't save object. %s err=%v", o, err)
-		return err
-	}
-
-	if err := wc.Close(); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-*/
-
 func (g *GcsFS) NewObject(objectname string) (Object, error) {
 	obj, err := g.Get(objectname)
 	if err != nil && err != ObjectNotFound {
@@ -110,6 +87,7 @@ func (g *GcsFS) NewObject(objectname string) (Object, error) {
 	}, nil
 }
 
+// Get Gets a single File Object
 func (g *GcsFS) Get(objectpath string) (Object, error) {
 
 	gobj, err := g.gcsb().Object(objectpath).Attrs(context.Background()) // .Objects(context.Background(), q)
@@ -145,6 +123,14 @@ func (g *GcsFS) List(query Query) (Objects, error) {
 	res = query.applyFilters(res)
 
 	return res, nil
+}
+
+// Objects returns an iterator over the objects in the google bucket that match the Query q.
+// If q is nil, no filtering is done.
+func (g *GcsFS) Objects(ctx context.Context, csq Query) ObjectIterator {
+	var q = &storage.Query{Prefix: csq.Prefix}
+	iter := g.gcsb().Objects(ctx, q)
+	return &GcsObjectIterator{g, ctx, iter}
 }
 
 // ListObjects iterates to find a list of objects
@@ -205,6 +191,44 @@ func (g *GcsFS) Delete(obj string) error {
 		return err
 	}
 	return nil
+}
+
+type GcsObjectIterator struct {
+	g    *GcsFS
+	ctx  context.Context
+	iter *storage.ObjectIterator
+}
+
+func (it *GcsObjectIterator) Next() (Object, error) {
+	var lasterr error = nil
+	retryCt := 0
+
+	for {
+		select {
+		case <-it.ctx.Done():
+			// If has been closed
+			return nil, it.ctx.Err()
+		default:
+			o, err := it.iter.Next()
+			if err == nil {
+				return newObjectFromGcs(it.g, o), nil
+			} else if err == iterator.Done {
+				return nil, err
+			} else if err == context.Canceled || err == context.DeadlineExceeded {
+				// Return to user
+				return nil, err
+			}
+			lasterr = err
+			if retryCt < 5 {
+				backoff(retryCt)
+			} else {
+				return nil, err
+			}
+			retryCt++
+		}
+	}
+
+	return nil, lasterr
 }
 
 type gcsFSObject struct {
