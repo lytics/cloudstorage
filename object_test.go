@@ -135,7 +135,7 @@ func TestListObjs(t *testing.T) {
 	store := testutils.CreateStore(t)
 	testutils.Clearstore(t, store)
 	//
-	//Create 20 objects
+	// Create 20 objects
 	//
 	names := []string{}
 	for i := 0; i < 20; i++ {
@@ -172,7 +172,7 @@ func TestListObjs(t *testing.T) {
 	testutils.AssertEq(t, 20, len(objs), "incorrect list len.")
 
 	for i, o := range objs {
-		//t.Logf("%d found %v", i, o.Name())
+		t.Logf("%d found %v", i, o.Name())
 		testutils.AssertEq(t, names[i], o.Name(), "unexpected name.")
 	}
 
@@ -243,7 +243,7 @@ func TestTruncate(t *testing.T) {
 	testutils.AssertEq(t, nil, err, "error.")
 
 	//
-	//Read the object back out of the cloud storage.
+	// Read the object back out of the cloud storage.
 	//
 	obj3, err := store.Get("test.csv")
 	testutils.AssertEq(t, nil, err, "error.")

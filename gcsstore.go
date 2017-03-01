@@ -27,7 +27,7 @@ var (
 	_ ObjectIterator = (*GcsObjectIterator)(nil)
 )
 
-//GcsFS Simple wrapper for accessing smaller GCS files, it doesn't currently implement a
+// GcsFS Simple wrapper for accessing smaller GCS files, it doesn't currently implement a
 // Reader/Writer interface so not useful for stream reading of large files yet.
 type GcsFS struct {
 	gcs       *storage.Client
@@ -66,34 +66,6 @@ func (g *GcsFS) gcsb() *storage.BucketHandle {
 	return g.gcs.Bucket(g.bucket)
 }
 
-/*
-
-removed as part of the effort to simply the interface
-
-func (g *GcsFS) WriteObject(o string, meta map[string]string, b []byte) error {
-	wc := storage.NewWriter(g.googlectx, g.bucket, o)
-
-	if meta != nil {
-		wc.Metadata = meta
-		//contenttype is only used for viewing the file in a browser. (i.e. the GCS Object browser).
-		ctype := ensureContextType(o, meta)
-		wc.ContentType = ctype
-	}
-
-	if _, err := wc.Write(b); err != nil {
-		g.Log.Printf("couldn't save object. %s err=%v", o, err)
-		return err
-	}
-
-	if err := wc.Close(); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-*/
-
 func (g *GcsFS) NewObject(objectname string) (Object, error) {
 	obj, err := g.Get(objectname)
 	if err != nil && err != ObjectNotFound {
@@ -115,6 +87,7 @@ func (g *GcsFS) NewObject(objectname string) (Object, error) {
 	}, nil
 }
 
+// Get Gets a single File Object
 func (g *GcsFS) Get(objectpath string) (Object, error) {
 
 	gobj, err := g.gcsb().Object(objectpath).Attrs(context.Background()) // .Objects(context.Background(), q)

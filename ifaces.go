@@ -83,9 +83,4 @@ type Object interface {
 // ObjectIterator interface to page through objects
 type ObjectIterator interface {
 	Next() (Object, error)
-	// ctx   context.Context
-	// query Query
-	// pageInfo *iterator.PageInfo
-	// nextFunc func() error
-	// items    []*ObjectAttrs
 }
