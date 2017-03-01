@@ -130,7 +130,7 @@ func (g *GcsFS) List(query Query) (Objects, error) {
 func (g *GcsFS) Objects(ctx context.Context, csq Query) ObjectIterator {
 	var q = &storage.Query{Prefix: csq.Prefix}
 	iter := g.gcsb().Objects(ctx, q)
-	return &GcsObjectIterator{g, iter}
+	return &GcsObjectIterator{g, ctx, iter}
 }
 
 // ListObjects iterates to find a list of objects
@@ -195,6 +195,7 @@ func (g *GcsFS) Delete(obj string) error {
 
 type GcsObjectIterator struct {
 	g    *GcsFS
+	ctx  context.Context
 	iter *storage.ObjectIterator
 }
 
@@ -203,19 +204,28 @@ func (it *GcsObjectIterator) Next() (Object, error) {
 	retryCt := 0
 
 	for {
-		o, err := it.iter.Next()
-		if err == nil {
-			return newObjectFromGcs(it.g, o), nil
-		} else if err == iterator.Done {
-			return nil, err
+		select {
+		case <-it.ctx.Done():
+			// If has been closed
+			return nil, it.ctx.Err()
+		default:
+			o, err := it.iter.Next()
+			if err == nil {
+				return newObjectFromGcs(it.g, o), nil
+			} else if err == iterator.Done {
+				return nil, err
+			} else if err == context.Canceled || err == context.DeadlineExceeded {
+				// Return to user
+				return nil, err
+			}
+			lasterr = err
+			if retryCt < 5 {
+				backoff(retryCt)
+			} else {
+				return nil, err
+			}
+			retryCt++
 		}
-		lasterr = err
-		if retryCt < 5 {
-			backoff(retryCt)
-		} else {
-			return nil, err
-		}
-		retryCt++
 	}
 
 	return nil, lasterr
