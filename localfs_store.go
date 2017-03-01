@@ -15,6 +15,7 @@ import (
 	"github.com/lytics/cloudstorage/logging"
 	"github.com/pborman/uuid"
 	"golang.org/x/net/context"
+	"google.golang.org/api/iterator"
 )
 
 const LocalFSStorageSource = "localFS"
@@ -132,6 +133,14 @@ func (l *Localstore) List(query Query) (Objects, error) {
 	return res, nil
 }
 
+// Objects returns an iterator over the objects in the google bucket that match the Query q.
+// If q is nil, no filtering is done.
+func (l *Localstore) Objects(ctx context.Context, csq Query) ObjectIterator {
+	objects, err := l.List(csq)
+
+	return &localObjectIterator{objects: objects, err: err}
+}
+
 func (l *Localstore) NewReader(o string) (io.ReadCloser, error) {
 	return l.NewReaderWithContext(context.Background(), o)
 }
@@ -198,6 +207,24 @@ func (l *Localstore) Delete(obj string) error {
 
 func (l *Localstore) String() string {
 	return fmt.Sprintf("[id:%s file://%s/]", l.Id, l.storepath)
+}
+
+type localObjectIterator struct {
+	objects Objects
+	err     error
+	cursor  int
+}
+
+func (l *localObjectIterator) Next() (Object, error) {
+	if l.err != nil {
+		return nil, l.err
+	}
+	if l.cursor >= len(l.objects) {
+		return nil, iterator.Done
+	}
+	o := l.objects[l.cursor]
+	l.cursor++
+	return o, nil
 }
 
 type localFSObject struct {

@@ -1,3 +1,6 @@
+// Cloud Storage interface to make Local, Google, s3 file storage
+// share a common interface to aid testing local as well as
+// running in the cloud
 package cloudstorage
 
 import (

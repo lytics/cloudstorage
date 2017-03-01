@@ -10,14 +10,22 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+	"google.golang.org/api/iterator"
+
 	"github.com/lytics/cloudstorage"
 	"github.com/lytics/cloudstorage/testutils"
 )
 
-//
-// use os.Getenv("TESTINT") == "1" to run integration tests with Google CloudStore
-//
+/*
 
+# to use Google Cloud Storage ensure your current env
+# has access to a google cloud storage account and then
+# export TESTINT
+
+export TESTINT=1
+
+*/
 func TestBasicRW(t *testing.T) {
 	store := testutils.CreateStore(t)
 	testutils.Clearstore(t, store)
@@ -84,7 +92,7 @@ func TestAppend(t *testing.T) {
 	testutils.AssertEq(t, nil, err, "error.")
 
 	//
-	//get the object and append to it...
+	// get the object and append to it...
 	//
 	morerows := "2013,VW,Jetta\n2011,Dodge,Caravan\n"
 	obj2, err := store.Get("test.csv")
@@ -164,10 +172,27 @@ func TestListObjs(t *testing.T) {
 	testutils.AssertEq(t, 20, len(objs), "incorrect list len.")
 
 	for i, o := range objs {
-		//t.Logf("%i found %v", i, o.Name())
+		//t.Logf("%d found %v", i, o.Name())
 		testutils.AssertEq(t, names[i], o.Name(), "unexpected name.")
 	}
 
+	// Now with iterator
+	iter := store.Objects(context.Background(), q)
+
+	objs = make(cloudstorage.Objects, 0)
+	i := 0
+	for {
+		o, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		objs = append(objs, o)
+		t.Logf("%d found %v", i, o.Name())
+		testutils.AssertEq(t, names[i], o.Name(), "unexpected name.")
+		i++
+	}
+
+	testutils.AssertEq(t, 20, len(objs), "incorrect list len.")
 }
 
 func TestTruncate(t *testing.T) {

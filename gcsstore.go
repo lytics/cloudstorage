@@ -20,7 +20,12 @@ import (
 
 const GCSFSStorageSource = "gcsFS"
 
-var GCSRetries int = 55
+var (
+	GCSRetries int = 55
+
+	// Ensure we implement ObjectIterator
+	_ ObjectIterator = (*GcsObjectIterator)(nil)
+)
 
 //GcsFS Simple wrapper for accessing smaller GCS files, it doesn't currently implement a
 // Reader/Writer interface so not useful for stream reading of large files yet.
@@ -147,6 +152,14 @@ func (g *GcsFS) List(query Query) (Objects, error) {
 	return res, nil
 }
 
+// Objects returns an iterator over the objects in the google bucket that match the Query q.
+// If q is nil, no filtering is done.
+func (g *GcsFS) Objects(ctx context.Context, csq Query) ObjectIterator {
+	var q = &storage.Query{Prefix: csq.Prefix}
+	iter := g.gcsb().Objects(ctx, q)
+	return &GcsObjectIterator{g, iter}
+}
+
 // ListObjects iterates to find a list of objects
 func (g *GcsFS) listObjects(q *storage.Query, retries int) (Objects, error) {
 	var lasterr error = nil
@@ -205,6 +218,34 @@ func (g *GcsFS) Delete(obj string) error {
 		return err
 	}
 	return nil
+}
+
+type GcsObjectIterator struct {
+	g    *GcsFS
+	iter *storage.ObjectIterator
+}
+
+func (it *GcsObjectIterator) Next() (Object, error) {
+	var lasterr error = nil
+	retryCt := 0
+
+	for {
+		o, err := it.iter.Next()
+		if err == nil {
+			return newObjectFromGcs(it.g, o), nil
+		} else if err == iterator.Done {
+			return nil, err
+		}
+		lasterr = err
+		if retryCt < 5 {
+			backoff(retryCt)
+		} else {
+			return nil, err
+		}
+		retryCt++
+	}
+
+	return nil, lasterr
 }
 
 type gcsFSObject struct {
