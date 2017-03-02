@@ -7,8 +7,9 @@ type Filter func(objects Objects) Objects
 // Query used to query the cloud source. The primary query is a prefix query like
 // `ls /evt-store/aid-123/*`.
 type Query struct {
-	Prefix  string   // prefix (directory) to search for or object name if one file
-	Filters []Filter // Applied to the result sets to filter out Objects (i.e. remove objects by extension)
+	Delimiter string
+	Prefix    string   // prefix (directory) to search for or object name if one file
+	Filters   []Filter // Applied to the result sets to filter out Objects (i.e. remove objects by extension)
 }
 
 // AddFilter adds a post prefix query, that can be used to alter results set from the

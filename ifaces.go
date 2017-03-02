@@ -16,6 +16,8 @@ type Store interface {
 	List(query Query) (Objects, error)
 	// Iterator based api to get Objects
 	Objects(ctx context.Context, q Query) ObjectIterator
+	// Folders creates list of folders
+	Folders(ctx context.Context, q Query) ([]string, error)
 
 	// NewReader creates a new Reader to read the contents of the
 	// object.

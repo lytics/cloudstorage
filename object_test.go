@@ -131,16 +131,20 @@ func TestAppend(t *testing.T) {
 	testutils.AssertEq(t, testcsv+morerows, string(bytes), "not the rows we expected.")
 }
 
-func TestListObjs(t *testing.T) {
+func TestListObjsAndFolders(t *testing.T) {
 	store := testutils.CreateStore(t)
 	testutils.Clearstore(t, store)
 	//
-	// Create 20 objects
+	// Create 5 objects in each of 3 folders
+	// ie 15 objects
 	//
+	folders := []string{"a", "b", "c"}
 	names := []string{}
-	for i := 0; i < 20; i++ {
-		n := fmt.Sprintf("list-test/test%d.csv", i)
-		names = append(names, n)
+	for _, folder := range folders {
+		for i := 0; i < 5; i++ {
+			n := fmt.Sprintf("list-test/%s/test%d.csv", folder, i)
+			names = append(names, n)
+		}
 	}
 
 	sort.Strings(names)
@@ -164,12 +168,12 @@ func TestListObjs(t *testing.T) {
 		testutils.AssertEq(t, nil, err, "error.")
 	}
 
-	q := cloudstorage.Query{"list-test/", nil}
+	q := cloudstorage.Query{"", "list-test/", nil}
 	q.Sorted()
 	objs, err := store.List(q)
 	testutils.AssertEq(t, nil, err, "error.")
 
-	testutils.AssertEq(t, 20, len(objs), "incorrect list len.")
+	testutils.AssertEq(t, 15, len(objs), "incorrect list len. wanted 15 got %d", len(objs))
 
 	for i, o := range objs {
 		t.Logf("%d found %v", i, o.Name())
@@ -192,7 +196,12 @@ func TestListObjs(t *testing.T) {
 		i++
 	}
 
-	testutils.AssertEq(t, 20, len(objs), "incorrect list len.")
+	testutils.AssertEq(t, 15, len(objs), "incorrect list len.")
+
+	q = cloudstorage.Query{"/", "list-test/", nil}
+	folders, err = store.Folders(context.Background(), q)
+	testutils.AssertEq(t, nil, err, "error.")
+	testutils.AssertEq(t, 3, len(folders), "incorrect list len. wanted 3 folders. ", folders)
 }
 
 func TestTruncate(t *testing.T) {

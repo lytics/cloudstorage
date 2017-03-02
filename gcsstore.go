@@ -159,6 +159,31 @@ func (g *GcsFS) listObjects(q *storage.Query, retries int) (Objects, error) {
 	return nil, lasterr
 }
 
+// Folders
+func (g *GcsFS) Folders(ctx context.Context, csq Query) ([]string, error) {
+	var q = &storage.Query{Delimiter: csq.Delimiter, Prefix: csq.Prefix}
+	iter := g.gcsb().Objects(ctx, q)
+	folders := make([]string, 0)
+	for {
+		select {
+		case <-ctx.Done():
+			// If has been closed
+			return folders, ctx.Err()
+		default:
+			o, err := iter.Next()
+			if err == nil {
+				folders = append(folders, o.Prefix)
+			} else if err == iterator.Done {
+				return folders, nil
+			} else if err == context.Canceled || err == context.DeadlineExceeded {
+				// Return to user
+				return nil, err
+			}
+		}
+	}
+	panic("unreacheable")
+}
+
 func (g *GcsFS) NewReader(o string) (io.ReadCloser, error) {
 	return g.NewReaderWithContext(context.Background(), o)
 }
