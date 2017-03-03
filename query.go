@@ -12,6 +12,21 @@ type Query struct {
 	Filters   []Filter // Applied to the result sets to filter out Objects (i.e. remove objects by extension)
 }
 
+// NewQuery create a query for finding files under given prefix
+func NewQuery(prefix string) Query {
+	return Query{
+		Prefix: prefix,
+	}
+}
+
+// NewQuery create a query for finding Folders under given path
+func NewQueryForFolders(folderPath string) Query {
+	return Query{
+		Delimiter: "/",
+		Prefix:    folderPath,
+	}
+}
+
 // AddFilter adds a post prefix query, that can be used to alter results set from the
 // prefix query.
 func (q *Query) AddFilter(f Filter) *Query {

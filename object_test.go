@@ -168,7 +168,7 @@ func TestListObjsAndFolders(t *testing.T) {
 		testutils.AssertEq(t, nil, err, "error.")
 	}
 
-	q := cloudstorage.Query{"", "list-test/", nil}
+	q := cloudstorage.NewQuery("list-test/")
 	q.Sorted()
 	objs, err := store.List(q)
 	testutils.AssertEq(t, nil, err, "error.")
@@ -198,8 +198,9 @@ func TestListObjsAndFolders(t *testing.T) {
 
 	testutils.AssertEq(t, 15, len(objs), "incorrect list len.")
 
-	q = cloudstorage.Query{"/", "list-test/", nil}
+	q = cloudstorage.NewQueryForFolders("list-test/")
 	folders, err = store.Folders(context.Background(), q)
+	t.Logf("folders %v", folders)
 	testutils.AssertEq(t, nil, err, "error.")
 	testutils.AssertEq(t, 3, len(folders), "incorrect list len. wanted 3 folders. ", folders)
 }
