@@ -58,7 +58,7 @@ func CreateStore(t *testing.T) cloudstorage.Store {
 
 func Clearstore(t *testing.T, store cloudstorage.Store) {
 	t.Logf("----------------Clearstore-----------------\n")
-	q := cloudstorage.Query{"", nil}
+	q := cloudstorage.Query{"", "", nil}
 	q.Sorted()
 	objs, err := store.List(q)
 	AssertEq(t, nil, err, "error.")

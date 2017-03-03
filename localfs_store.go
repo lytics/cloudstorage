@@ -141,6 +141,21 @@ func (l *Localstore) Objects(ctx context.Context, csq Query) ObjectIterator {
 	return &localObjectIterator{objects: objects, err: err}
 }
 
+// Folders
+func (l *Localstore) Folders(ctx context.Context, csq Query) ([]string, error) {
+	spath := path.Join(l.storepath, csq.Prefix)
+	if !exists(spath) {
+		return nil, fmt.Errorf("That folder %q does not exist", spath)
+	}
+
+	folders := make([]string, 0)
+	files, _ := ioutil.ReadDir(spath)
+	for _, f := range files {
+		folders = append(folders, f.Name())
+	}
+	return folders, nil
+}
+
 func (l *Localstore) NewReader(o string) (io.ReadCloser, error) {
 	return l.NewReaderWithContext(context.Background(), o)
 }
