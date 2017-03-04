@@ -151,7 +151,9 @@ func (l *Localstore) Folders(ctx context.Context, csq Query) ([]string, error) {
 	folders := make([]string, 0)
 	files, _ := ioutil.ReadDir(spath)
 	for _, f := range files {
-		folders = append(folders, f.Name())
+		if f.IsDir() {
+			folders = append(folders, f.Name())
+		}
 	}
 	return folders, nil
 }
