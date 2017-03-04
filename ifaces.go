@@ -8,9 +8,13 @@ import (
 	"golang.org/x/net/context"
 )
 
-// Store interface to define the Storage Interface abstracting
-// the GCS, S3, LocalFile interfaces
-type Store interface {
+// StoreReader interface to define the Storage Interface abstracting
+// the GCS, S3, LocalFile, etc interfaces
+type StoreReader interface {
+	// Get returns the object from the cloud store.   The object
+	// isn't opened already, see Object.Open()
+	// ObjectNotFound will be returned if the object is not found.
+	Get(o string) (Object, error)
 	// List takes a prefix query and returns an array of unopened objects
 	// that have the given prefix.
 	List(query Query) (Objects, error)
@@ -24,6 +28,14 @@ type Store interface {
 	// ObjectNotFound will be returned if the object is not found.
 	NewReader(o string) (io.ReadCloser, error)
 	NewReaderWithContext(ctx context.Context, o string) (io.ReadCloser, error)
+
+	String() string
+}
+
+// Store interface to define the Storage Interface abstracting
+// the GCS, S3, LocalFile interfaces
+type Store interface {
+	StoreReader
 
 	// NewWriter returns a io.Writer that writes to a Cloud object
 	// associated with this backing Store object.
@@ -40,15 +52,8 @@ type Store interface {
 	// until the object is Closed/Sync'ed.
 	NewObject(o string) (Object, error)
 
-	// Get returns the object from the cloud store.   The object
-	// isn't opened already, see Object.Open()
-	// ObjectNotFound will be returned if the object is not found.
-	Get(o string) (Object, error)
-
 	// Delete removes the object from the cloud store.
 	Delete(o string) error
-
-	String() string
 }
 
 // Object is a handle to a cloud stored file/object.  Calling Open will pull the remote file onto
