@@ -21,10 +21,11 @@ import (
 const LocalFSStorageSource = "localFS"
 
 type Localstore struct {
-	Log       logging.Logger
-	storepath string
-	cachepath string
-	Id        string
+	Log         logging.Logger
+	storepath   string // possibly is relative  ./tables
+	pathCleaned string // cleaned removing  ./ = "tables"
+	cachepath   string
+	Id          string
 }
 
 func NewLocalStore(storepath, cachepath string, l logging.Logger) (*Localstore, error) {
@@ -32,6 +33,8 @@ func NewLocalStore(storepath, cachepath string, l logging.Logger) (*Localstore, 
 	if storepath == cachepath {
 		return nil, fmt.Errorf("storepath cannot be the same as cachepath")
 	}
+
+	pathCleaned := strings.TrimPrefix(storepath, "./")
 
 	err := os.MkdirAll(storepath, 0775)
 	if err != nil {
@@ -46,7 +49,13 @@ func NewLocalStore(storepath, cachepath string, l logging.Logger) (*Localstore, 
 	uid := uuid.NewUUID().String()
 	uid = strings.Replace(uid, "-", "", -1)
 
-	return &Localstore{storepath: storepath, cachepath: cachepath, Id: uid, Log: l}, nil
+	return &Localstore{
+		storepath:   storepath,
+		pathCleaned: pathCleaned,
+		cachepath:   cachepath,
+		Id:          uid,
+		Log:         l,
+	}, nil
 }
 
 func (l *Localstore) NewObject(objectname string) (Object, error) {
@@ -86,7 +95,7 @@ func (l *Localstore) List(query Query) (Objects, error) {
 			return err
 		}
 
-		obj := strings.Replace(fo, l.storepath, "", 1)
+		obj := strings.Replace(fo, l.pathCleaned, "", 1)
 
 		if f.IsDir() {
 			return nil
@@ -104,6 +113,7 @@ func (l *Localstore) List(query Query) (Objects, error) {
 			mdkey := strings.Replace(obj, ".metadata", "", 1)
 			metadatas[mdkey] = md
 		} else {
+
 			oname := strings.TrimPrefix(obj, "/")
 			objects[obj] = &localFSObject{
 				name:      oname,
