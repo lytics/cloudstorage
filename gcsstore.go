@@ -172,7 +172,9 @@ func (g *GcsFS) Folders(ctx context.Context, csq Query) ([]string, error) {
 		default:
 			o, err := iter.Next()
 			if err == nil {
-				folders = append(folders, o.Prefix)
+				if o.Prefix != "" {
+					folders = append(folders, o.Prefix)
+				}
 			} else if err == iterator.Done {
 				return folders, nil
 			} else if err == context.Canceled || err == context.DeadlineExceeded {
