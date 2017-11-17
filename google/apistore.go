@@ -1,6 +1,9 @@
-package cloudstorage
+package google
 
-import "google.golang.org/api/storage/v1"
+import (
+	"github.com/lytics/cloudstorage"
+	"google.golang.org/api/storage/v1"
+)
 
 // ApiStore a google api store
 type ApiStore struct {
@@ -8,7 +11,7 @@ type ApiStore struct {
 	project string
 }
 
-func NewApiStore(conf *Config) (*ApiStore, error) {
+func NewApiStore(conf *cloudstorage.Config) (*ApiStore, error) {
 	googleClient, err := NewGoogleClient(conf)
 	if err != nil {
 		return nil, err

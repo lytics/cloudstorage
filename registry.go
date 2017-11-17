@@ -13,7 +13,7 @@ var (
 )
 
 // StoreProvider a provider function for creating New Stores
-type StoreProvider func(Config) (Store, error)
+type StoreProvider func(*Config) (Store, error)
 
 // Register adds a store type provider.
 func Register(storeType string, provider StoreProvider) {

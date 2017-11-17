@@ -2,6 +2,7 @@ package cloudstorage
 
 import "sort"
 
+// Filter func type definition for filtering objects
 type Filter func(objects Objects) Objects
 
 // Query used to query the cloud source. The primary query is a prefix query like
@@ -19,7 +20,7 @@ func NewQuery(prefix string) Query {
 	}
 }
 
-// NewQuery create a query for finding Folders under given path
+// NewQueryForFolders create a query for finding Folders under given path
 func NewQueryForFolders(folderPath string) Query {
 	return Query{
 		Delimiter: "/",
@@ -45,7 +46,7 @@ func (q *Query) Sorted() *Query {
 }
 
 // applyFilters is called as the last step in store.List() to filter out the results before they are returned.
-func (q *Query) applyFilters(objects Objects) Objects {
+func (q *Query) ApplyFilters(objects Objects) Objects {
 	for _, f := range q.Filters {
 		objects = f(objects)
 	}

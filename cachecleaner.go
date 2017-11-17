@@ -9,7 +9,7 @@ import (
 	u "github.com/araddon/gou"
 )
 
-//CleanupCacheFiles: cleans up old store cache files
+// CleanupCacheFiles: cleans up old store cache files
 // if your process crashes all it's old cache files, the local copies of the cloudfiles,
 // will left behind.
 // This function is a convenience func to help clean up those old files.

@@ -1,4 +1,4 @@
-package cloudstorage
+package google
 
 import (
 	"fmt"
@@ -6,10 +6,22 @@ import (
 	"net/http"
 	"os"
 
+	"cloud.google.com/go/storage"
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
 	googleOauth2 "golang.org/x/oauth2/google"
 	"golang.org/x/oauth2/jwt"
+	"google.golang.org/api/option"
+
+	"github.com/lytics/cloudstorage"
+)
+
+const (
+	// Authentication Source
+	LyticsJWTKeySource   cloudstorage.TokenSource = "LyticsJWTkey"
+	GoogleJWTKeySource   cloudstorage.TokenSource = "GoogleJWTFile"
+	GCEMetaKeySource     cloudstorage.TokenSource = "gcemetadata"
+	GCEDefaultOAuthToken cloudstorage.TokenSource = "gcedefaulttoken"
 )
 
 // GoogleOAuthClient An interface so we can return any of the
@@ -25,8 +37,20 @@ func (g *gOAuthClient) Client() *http.Client {
 	return g.httpclient
 }
 
+func gcsCommonClient(client *http.Client, conf *cloudstorage.Config) (cloudstorage.Store, error) {
+	gcs, err := storage.NewClient(context.Background(), option.WithHTTPClient(client))
+	if err != nil {
+		return nil, err
+	}
+	store, err := NewGCSStore(gcs, conf.Bucket, conf.TmpDir, cloudstorage.MaxResults)
+	if err != nil {
+		return nil, err
+	}
+	return store, nil
+}
+
 // BuildGoogleJWTTransporter create a GoogleOAuthClient from jwt config.
-func BuildGoogleJWTTransporter(jwtConf *JwtConf) (GoogleOAuthClient, error) {
+func BuildGoogleJWTTransporter(jwtConf *cloudstorage.JwtConf) (GoogleOAuthClient, error) {
 	key, err := jwtConf.KeyBytes()
 	if err != nil {
 		return nil, err
@@ -120,7 +144,7 @@ func BuildDefaultGoogleTransporter(scope ...string) (GoogleOAuthClient, error) {
 }
 
 // NewGoogleClient create new Google Stoage Client.
-func NewGoogleClient(conf *Config) (client GoogleOAuthClient, err error) {
+func NewGoogleClient(conf *cloudstorage.Config) (client GoogleOAuthClient, err error) {
 
 	switch conf.TokenSource {
 	case GCEDefaultOAuthToken:

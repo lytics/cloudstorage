@@ -1,4 +1,4 @@
-package cloudstorage
+package google
 
 import (
 	"bufio"
@@ -15,16 +15,30 @@ import (
 	"github.com/pborman/uuid"
 	"golang.org/x/net/context"
 	"google.golang.org/api/iterator"
+
+	"github.com/lytics/cloudstorage"
 )
 
-const GCSFSStorageSource = "gcsFS"
+func init() {
+	cloudstorage.Register(GoogleStoreType, provider)
+}
+func provider(conf *cloudstorage.Config) (cloudstorage.Store, error) {
+	googleclient, err := NewGoogleClient(conf)
+	if err != nil {
+		return nil, err
+	}
+	return gcsCommonClient(googleclient.Client(), conf)
+}
+
+// GoogleStoreType = "gcs"
+const GoogleStoreType = "gcs"
 
 var (
 	// GCSRetries number of times to retry for GCS.
 	GCSRetries int = 55
 
 	// Ensure we implement ObjectIterator
-	_ ObjectIterator = (*GcsObjectIterator)(nil)
+	_ cloudstorage.ObjectIterator = (*GcsObjectIterator)(nil)
 )
 
 // GcsFS Simple wrapper for accessing smaller GCS files, it doesn't currently implement a
@@ -64,19 +78,19 @@ func (g *GcsFS) gcsb() *storage.BucketHandle {
 }
 
 // NewObject of Type GCS.
-func (g *GcsFS) NewObject(objectname string) (Object, error) {
+func (g *GcsFS) NewObject(objectname string) (cloudstorage.Object, error) {
 	obj, err := g.Get(objectname)
-	if err != nil && err != ErrObjectNotFound {
+	if err != nil && err != cloudstorage.ErrObjectNotFound {
 		return nil, err
 	} else if obj != nil {
-		return nil, ErrObjectExists
+		return nil, cloudstorage.ErrObjectExists
 	}
 
-	cf := cachepathObj(g.cachepath, objectname, g.Id)
+	cf := cloudstorage.CachePathObj(g.cachepath, objectname, g.Id)
 
 	return &gcsFSObject{
 		name:       objectname,
-		metadata:   map[string]string{ContextTypeKey: contentType(objectname)},
+		metadata:   map[string]string{cloudstorage.ContextTypeKey: cloudstorage.ContentType(objectname)},
 		gcsb:       g.gcsb(),
 		bucket:     g.bucket,
 		cachedcopy: nil,
@@ -85,25 +99,25 @@ func (g *GcsFS) NewObject(objectname string) (Object, error) {
 }
 
 // Get Gets a single File Object
-func (g *GcsFS) Get(objectpath string) (Object, error) {
+func (g *GcsFS) Get(objectpath string) (cloudstorage.Object, error) {
 
 	gobj, err := g.gcsb().Object(objectpath).Attrs(context.Background()) // .Objects(context.Background(), q)
 	if err != nil {
 		if strings.Contains(err.Error(), "doesn't exist") {
-			return nil, ErrObjectNotFound
+			return nil, cloudstorage.ErrObjectNotFound
 		}
 		return nil, err
 	}
 
 	if gobj == nil {
-		return nil, ErrObjectNotFound
+		return nil, cloudstorage.ErrObjectNotFound
 	}
 
 	return newObjectFromGcs(g, gobj), nil
 }
 
 // List objects from this store.
-func (g *GcsFS) List(query Query) (Objects, error) {
+func (g *GcsFS) List(query cloudstorage.Query) (cloudstorage.Objects, error) {
 
 	var q = &storage.Query{Prefix: query.Prefix}
 
@@ -113,28 +127,28 @@ func (g *GcsFS) List(query Query) (Objects, error) {
 	}
 
 	if res == nil {
-		return make(Objects, 0), nil
+		return make(cloudstorage.Objects, 0), nil
 	}
 
-	res = query.applyFilters(res)
+	res = query.ApplyFilters(res)
 
 	return res, nil
 }
 
 // Objects returns an iterator over the objects in the google bucket that match the Query q.
 // If q is nil, no filtering is done.
-func (g *GcsFS) Objects(ctx context.Context, csq Query) ObjectIterator {
+func (g *GcsFS) Objects(ctx context.Context, csq cloudstorage.Query) cloudstorage.ObjectIterator {
 	var q = &storage.Query{Prefix: csq.Prefix}
 	iter := g.gcsb().Objects(ctx, q)
 	return &GcsObjectIterator{g, ctx, iter}
 }
 
 // ListObjects iterates to find a list of objects
-func (g *GcsFS) listObjects(q *storage.Query, retries int) (Objects, error) {
+func (g *GcsFS) listObjects(q *storage.Query, retries int) (cloudstorage.Objects, error) {
 	var lasterr error = nil
 
 	for i := 0; i < retries; i++ {
-		objects := make(Objects, 0)
+		objects := make(cloudstorage.Objects, 0)
 		iter := g.gcsb().Objects(context.Background(), q)
 	iterLoop:
 		for {
@@ -155,7 +169,7 @@ func (g *GcsFS) listObjects(q *storage.Query, retries int) (Objects, error) {
 }
 
 // Folders get folders list.
-func (g *GcsFS) Folders(ctx context.Context, csq Query) ([]string, error) {
+func (g *GcsFS) Folders(ctx context.Context, csq cloudstorage.Query) ([]string, error) {
 	var q = &storage.Query{Delimiter: csq.Delimiter, Prefix: csq.Prefix}
 	iter := g.gcsb().Objects(ctx, q)
 	folders := make([]string, 0)
@@ -182,7 +196,7 @@ func (g *GcsFS) Folders(ctx context.Context, csq Query) ([]string, error) {
 }
 
 // Copy from src to destination
-func (g *GcsFS) Copy(ctx context.Context, src, des Object) error {
+func (g *GcsFS) Copy(ctx context.Context, src, des cloudstorage.Object) error {
 
 	srcgcs, ok := src.(*gcsFSObject)
 	if !ok {
@@ -200,6 +214,32 @@ func (g *GcsFS) Copy(ctx context.Context, src, des Object) error {
 	return err
 }
 
+// Move which is a Copy & Delete
+func (g *GcsFS) Move(ctx context.Context, src, des cloudstorage.Object) error {
+
+	srcgcs, ok := src.(*gcsFSObject)
+	if !ok {
+		return fmt.Errorf("Move source file expected GCS but got %T", src)
+	}
+	desgcs, ok := des.(*gcsFSObject)
+	if !ok {
+		return fmt.Errorf("Move destination expected GCS but got %T", des)
+	}
+
+	oh := srcgcs.gcsb.Object(srcgcs.name)
+	dh := desgcs.gcsb.Object(desgcs.name)
+
+	if _, err := dh.CopierFrom(oh).Run(ctx); err != nil {
+		return err
+	}
+
+	if err := oh.Delete(ctx); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // NewReader create GCS file reader.
 func (g *GcsFS) NewReader(o string) (io.ReadCloser, error) {
 	return g.NewReaderWithContext(context.Background(), o)
@@ -209,7 +249,7 @@ func (g *GcsFS) NewReader(o string) (io.ReadCloser, error) {
 func (g *GcsFS) NewReaderWithContext(ctx context.Context, o string) (io.ReadCloser, error) {
 	rc, err := g.gcsb().Object(o).NewReader(ctx)
 	if err == storage.ErrObjectNotExist {
-		return rc, ErrObjectNotFound
+		return rc, cloudstorage.ErrObjectNotFound
 	}
 	return rc, err
 }
@@ -225,7 +265,7 @@ func (g *GcsFS) NewWriterWithContext(ctx context.Context, o string, metadata map
 	if metadata != nil {
 		wc.Metadata = metadata
 		//contenttype is only used for viewing the file in a browser. (i.e. the GCS Object browser).
-		ctype := ensureContextType(o, metadata)
+		ctype := cloudstorage.EnsureContextType(o, metadata)
 		wc.ContentType = ctype
 	}
 	return wc, nil
@@ -249,7 +289,7 @@ type GcsObjectIterator struct {
 }
 
 // Next iterator to go to next object or else returns error for done.
-func (it *GcsObjectIterator) Next() (Object, error) {
+func (it *GcsObjectIterator) Next() (cloudstorage.Object, error) {
 	var lasterr error = nil
 	retryCt := 0
 
@@ -301,11 +341,11 @@ func newObjectFromGcs(g *GcsFS, o *storage.ObjectAttrs) *gcsFSObject {
 		metadata:  o.Metadata,
 		gcsb:      g.gcsb(),
 		bucket:    g.bucket,
-		cachepath: cachepathObj(g.cachepath, o.Name, g.Id),
+		cachepath: cloudstorage.CachePathObj(g.cachepath, o.Name, g.Id),
 	}
 }
 func (o *gcsFSObject) StorageSource() string {
-	return GCSFSStorageSource
+	return GoogleStoreType
 }
 func (o *gcsFSObject) Name() string {
 	return o.name
@@ -332,7 +372,7 @@ func (o *gcsFSObject) Delete() error {
 	return nil
 }
 
-func (o *gcsFSObject) Open(accesslevel AccessLevel) (*os.File, error) {
+func (o *gcsFSObject) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 	if o.opened {
 		return nil, fmt.Errorf("the store object is already opened. %s", o.name)
 	}
@@ -340,7 +380,7 @@ func (o *gcsFSObject) Open(accesslevel AccessLevel) (*os.File, error) {
 	var errs []error = make([]error, 0)
 	var cachedcopy *os.File = nil
 	var err error
-	var readonly = accesslevel == ReadOnly
+	var readonly = accesslevel == cloudstorage.ReadOnly
 
 	err = os.MkdirAll(path.Dir(o.cachepath), 0775)
 	if err != nil {
@@ -348,7 +388,7 @@ func (o *gcsFSObject) Open(accesslevel AccessLevel) (*os.File, error) {
 			o.cachepath, o.name, err)
 	}
 
-	err = ensureDir(o.cachepath)
+	err = cloudstorage.EnsureDir(o.cachepath)
 	if err != nil {
 		return nil, fmt.Errorf("error occurred creating cachedcopy's dir. cachepath=%s err=%v",
 			o.cachepath, err)
@@ -468,7 +508,7 @@ func (o *gcsFSObject) Sync() error {
 		if o.metadata != nil {
 			wc.Metadata = o.metadata
 			//contenttype is only used for viewing the file in a browser. (i.e. the GCS Object browser).
-			ctype := ensureContextType(o.name, o.metadata)
+			ctype := cloudstorage.EnsureContextType(o.name, o.metadata)
 			wc.ContentType = ctype
 		}
 

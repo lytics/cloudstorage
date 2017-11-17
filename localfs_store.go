@@ -17,13 +17,29 @@ import (
 	"google.golang.org/api/iterator"
 )
 
+func init() {
+	Register(LocalFSStorageSource, localProvider)
+}
+func localProvider(conf *Config) (Store, error) {
+	store, err := NewLocalStore(conf.LocalFS, conf.TmpDir)
+	if err != nil {
+		return nil, err
+	}
+	return store, nil
+}
+
 var (
 	// Ensure Our LocalStore implement CloudStorage interfaces
 	_ StoreReader = (*LocalStore)(nil)
 )
 
-// LocalFSStorageSource name of our Local Storage provider = "localFS"
-const LocalFSStorageSource = "localFS"
+const (
+	// LocalFileSource Authentication Source
+	LocalFileSource TokenSource = "localfiles"
+
+	// LocalFSStorageSource name of our Local Storage provider = "localfs"
+	LocalFSStorageSource = "localfs"
+)
 
 // LocalStore is client to local-filesystem store.
 type LocalStore struct {
@@ -72,12 +88,12 @@ func (l *LocalStore) NewObject(objectname string) (Object, error) {
 	}
 
 	of := path.Join(l.storepath, objectname)
-	err = ensureDir(of)
+	err = EnsureDir(of)
 	if err != nil {
 		return nil, err
 	}
 
-	cf := cachepathObj(l.cachepath, objectname, l.Id)
+	cf := CachePathObj(l.cachepath, objectname, l.Id)
 
 	return &localFSObject{
 		name:      objectname,
@@ -92,7 +108,7 @@ func (l *LocalStore) List(query Query) (Objects, error) {
 	metadatas := make(map[string]map[string]string)
 
 	spath := path.Join(l.storepath, query.Prefix)
-	if !exists(spath) {
+	if !Exists(spath) {
 		return make(Objects, 0), nil
 	}
 
@@ -125,7 +141,7 @@ func (l *LocalStore) List(query Query) (Objects, error) {
 				name:      oname,
 				updated:   f.ModTime(),
 				storepath: fo,
-				cachepath: cachepathObj(l.cachepath, oname, l.Id),
+				cachepath: CachePathObj(l.cachepath, oname, l.Id),
 			}
 		}
 		return err
@@ -144,7 +160,7 @@ func (l *LocalStore) List(query Query) (Objects, error) {
 		res = append(res, obj)
 	}
 
-	res = query.applyFilters(res)
+	res = query.ApplyFilters(res)
 
 	return res, nil
 }
@@ -160,7 +176,7 @@ func (l *LocalStore) Objects(ctx context.Context, csq Query) ObjectIterator {
 // Folders list of folders for given path query.
 func (l *LocalStore) Folders(ctx context.Context, csq Query) ([]string, error) {
 	spath := path.Join(l.storepath, csq.Prefix)
-	if !exists(spath) {
+	if !Exists(spath) {
 		return nil, fmt.Errorf("That folder %q does not exist", spath)
 	}
 
@@ -180,7 +196,7 @@ func (l *LocalStore) NewReader(o string) (io.ReadCloser, error) {
 }
 func (l *LocalStore) NewReaderWithContext(ctx context.Context, o string) (io.ReadCloser, error) {
 	fo := path.Join(l.storepath, o)
-	if !exists(fo) {
+	if !Exists(fo) {
 		return nil, ErrObjectNotFound
 	}
 	return csbufio.OpenReader(fo)
@@ -193,7 +209,7 @@ func (l *LocalStore) NewWriterWithContext(ctx context.Context, o string, metadat
 
 	fo := path.Join(l.storepath, o)
 
-	err := ensureDir(fo)
+	err := EnsureDir(fo)
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +229,7 @@ func (l *LocalStore) NewWriterWithContext(ctx context.Context, o string, metadat
 func (l *LocalStore) Get(o string) (Object, error) {
 	fo := path.Join(l.storepath, o)
 
-	if !exists(fo) {
+	if !Exists(fo) {
 		return nil, ErrObjectNotFound
 	}
 	var updated time.Time
@@ -225,7 +241,7 @@ func (l *LocalStore) Get(o string) (Object, error) {
 		name:      o,
 		updated:   updated,
 		storepath: fo,
-		cachepath: cachepathObj(l.cachepath, o, l.Id),
+		cachepath: CachePathObj(l.cachepath, o, l.Id),
 	}, nil
 }
 
@@ -233,7 +249,7 @@ func (l *LocalStore) Delete(obj string) error {
 	fo := path.Join(l.storepath, obj)
 	os.Remove(fo)
 	mf := fo + ".metadata"
-	if exists(mf) {
+	if Exists(mf) {
 		os.Remove(mf)
 	}
 	return nil
@@ -299,7 +315,7 @@ func (o *localFSObject) Delete() error {
 		return err
 	}
 	mf := o.storepath + ".metadata"
-	if exists(mf) {
+	if Exists(mf) {
 		if err := os.Remove(mf); err != nil {
 			return err
 		}
@@ -321,7 +337,7 @@ func (o *localFSObject) Open(accesslevel AccessLevel) (*os.File, error) {
 	}
 	defer storecopy.Close()
 
-	err = ensureDir(o.cachepath)
+	err = EnsureDir(o.cachepath)
 	if err != nil {
 		return nil, fmt.Errorf("localfile: error occurred creating cachedcopy's dir. cachepath=%s err=%v",
 			o.cachepath, err)
