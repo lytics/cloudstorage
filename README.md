@@ -4,7 +4,6 @@ It provides a unified api for local files and Google Cloud files that aids testi
 
 ### Similar/Related works
 * https://github.com/graymeta/stow
-* https://github.com/rook/rook
 * sync tool https://github.com/ncw/rclone
 
 
@@ -13,7 +12,8 @@ Note: For these examples Im ignoring all errors and using the `_` for them.
 
 ##### Creating a Store object:
 ```go
-// This is an example of a local storage object:  See(https://github.com/lytics/cloudstorage/blob/master/testutils/testutils.go#L30) for a GCS example:
+// This is an example of a local storage object:  
+// See(https://github.com/lytics/cloudstorage/blob/master/testutils/testutils.go#L30) for a GCS example:
 var config = &cloudstorage.CloudStoreContext{
 	LogggingContext: "unittest",
 	TokenSource:     cloudstorage.LocalFileSource,

@@ -2,13 +2,14 @@ package cloudstorage
 
 import "google.golang.org/api/storage/v1"
 
+// ApiStore a google api store
 type ApiStore struct {
 	service *storage.Service
 	project string
 }
 
-func NewApiStore(csctx *CloudStoreContext) (*ApiStore, error) {
-	googleClient, err := NewGoogleClient(csctx)
+func NewApiStore(conf *Config) (*ApiStore, error) {
+	googleClient, err := NewGoogleClient(conf)
 	if err != nil {
 		return nil, err
 	}
@@ -16,7 +17,7 @@ func NewApiStore(csctx *CloudStoreContext) (*ApiStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &ApiStore{service: service, project: csctx.Project}, nil
+	return &ApiStore{service: service, project: conf.Project}, nil
 }
 
 // BucketExists checks for the bucket name

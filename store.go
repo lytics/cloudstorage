@@ -14,77 +14,67 @@ import (
 	"strings"
 
 	"cloud.google.com/go/storage"
-	"github.com/lytics/cloudstorage/logging"
 	"golang.org/x/net/context"
 	"google.golang.org/api/option"
 )
 
-const StoreCacheFileExt = ".cache"
+const (
+	// StoreCacheFileExt = ".cache"
+	StoreCacheFileExt = ".cache"
+	// ContextTypeKey
+	ContextTypeKey = "content_type"
+	// maxResults default number of objects to retrieve during a list-objects request,
+	// if more objects exist, then they will need to be paged
+	maxResults = 3000
+)
 
-var ObjectNotFound = fmt.Errorf("object not found")
-var ObjectExists = fmt.Errorf("object already exists in backing store (use store.Get)")
+var (
+	// ErrObjectNotFound Error of not finding a file(object)
+	ErrObjectNotFound = fmt.Errorf("object not found")
+	// ErrObjectExists error trying to create an already existing file.
+	ErrObjectExists = fmt.Errorf("object already exists in backing store (use store.Get)")
+)
 
-var LogConstructor = func(prefix string) logging.Logger {
-	return logging.NewStdLogger(true, logging.DEBUG, prefix)
-}
+// NewStore create new Store from Storage Config/Context.
+func NewStore(conf *Config) (Store, error) {
 
-//maxResults default number of objects to retrieve during a list-objects request,
-// if more objects exist, then they will need to be paged
-const maxResults = 3000
-
-func NewStore(csctx *CloudStoreContext) (Store, error) {
-
-	if csctx.PageSize == 0 {
-		csctx.PageSize = maxResults
+	if conf.PageSize == 0 {
+		conf.PageSize = maxResults
 	}
 
-	if csctx.TmpDir == "" {
-		csctx.TmpDir = os.TempDir()
+	if conf.TmpDir == "" {
+		conf.TmpDir = os.TempDir()
 	}
 
-	switch csctx.TokenSource {
+	switch conf.TokenSource {
 	case GCEDefaultOAuthToken, GCEMetaKeySource, LyticsJWTKeySource, GoogleJWTKeySource:
-		googleclient, err := NewGoogleClient(csctx)
+		googleclient, err := NewGoogleClient(conf)
 		if err != nil {
 			return nil, err
 		}
-		return gcsCommonClient(googleclient.Client(), csctx)
+		return gcsCommonClient(googleclient.Client(), conf)
 	case LocalFileSource:
-		prefix := fmt.Sprintf("%s:", csctx.LogggingContext)
-		l := LogConstructor(prefix)
-
-		store, err := NewLocalStore(csctx.LocalFS, csctx.TmpDir, l)
+		store, err := NewLocalStore(conf.LocalFS, conf.TmpDir)
 		if err != nil {
-			l.Errorf("error creating the store. err=%v ", err)
 			return nil, err
 		}
 		return store, nil
 	default:
-		return nil, fmt.Errorf("bad sourcetype: %v", csctx.TokenSource)
+		return nil, fmt.Errorf("bad sourcetype: %v", conf.TokenSource)
 	}
 }
 
-func gcsCommonClient(client *http.Client, csctx *CloudStoreContext) (Store, error) {
-	project := csctx.Project
-	bucket := csctx.Bucket
-	prefix := fmt.Sprintf("%s:(project=%s bucket=%s)", csctx.LogggingContext, project, bucket)
-	l := LogConstructor(prefix)
-
+func gcsCommonClient(client *http.Client, conf *Config) (Store, error) {
 	gcs, err := storage.NewClient(context.Background(), option.WithHTTPClient(client))
 	if err != nil {
-		l.Errorf("%v error creating Google cloud storage client. project:%s gs://%s/ err:%v ",
-			csctx.LogggingContext, project, bucket, err)
 		return nil, err
 	}
-	store, err := NewGCSStore(gcs, bucket, csctx.TmpDir, maxResults, l)
+	store, err := NewGCSStore(gcs, conf.Bucket, conf.TmpDir, maxResults)
 	if err != nil {
-		l.Errorf("error creating the store. err=%v ", err)
 		return nil, err
 	}
 	return store, nil
 }
-
-const ContextTypeKey = "content_type"
 
 func contentType(name string) string {
 	contenttype := ""
@@ -152,23 +142,13 @@ func ensureDir(filename string) error {
 	return nil
 }
 
-func Copy(ctx context.Context, src, des Object) error {
-	//for GCS, take the fast path, and use the backend copier
-	if src.StorageSource() == GCSFSStorageSource && des.StorageSource() == GCSFSStorageSource {
-		srcgcs, ok := src.(*gcsFSObject)
-		if !ok {
-			return fmt.Errorf("error StoreageSource is declared as GCS, but cast failed???")
+// Copy source to destination.
+func Copy(s Store, ctx context.Context, src, des Object) error {
+	// for Providers that offer fast path, and use the backend copier
+	if src.StorageSource() == des.StorageSource() {
+		if cp, ok := s.(StoreCopy); ok {
+			return cp.Copy(ctx, src, des)
 		}
-		desgcs, ok := des.(*gcsFSObject)
-		if !ok {
-			return fmt.Errorf("error StoreageSource is declared as GCS, but cast failed???")
-		}
-
-		oh := srcgcs.gcsb.Object(srcgcs.name)
-		dh := desgcs.gcsb.Object(desgcs.name)
-
-		_, err := dh.CopierFrom(oh).Run(ctx)
-		return err
 	}
 
 	// Slow path, copy locally then up to des
@@ -186,6 +166,7 @@ func Copy(ctx context.Context, src, des Object) error {
 	return des.Close() //this will flush and sync the file.
 }
 
+// Move source object to destination.
 func Move(ctx context.Context, src, des Object) error {
 	//for GCS, take the fast path, and use the backend copier
 	if src.StorageSource() == GCSFSStorageSource && des.StorageSource() == GCSFSStorageSource {

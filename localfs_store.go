@@ -12,26 +12,32 @@ import (
 	"time"
 
 	"github.com/lytics/cloudstorage/csbufio"
-	"github.com/lytics/cloudstorage/logging"
 	"github.com/pborman/uuid"
 	"golang.org/x/net/context"
 	"google.golang.org/api/iterator"
 )
 
+var (
+	// Ensure Our LocalStore implement CloudStorage interfaces
+	_ StoreReader = (*LocalStore)(nil)
+)
+
+// LocalFSStorageSource name of our Local Storage provider = "localFS"
 const LocalFSStorageSource = "localFS"
 
-type Localstore struct {
-	Log         logging.Logger
+// LocalStore is client to local-filesystem store.
+type LocalStore struct {
 	storepath   string // possibly is relative  ./tables
 	pathCleaned string // cleaned removing  ./ = "tables"
 	cachepath   string
 	Id          string
 }
 
-func NewLocalStore(storepath, cachepath string, l logging.Logger) (*Localstore, error) {
+// NewLocalStore create local store from storage path on local filesystem, and cachepath.
+func NewLocalStore(storepath, cachepath string) (*LocalStore, error) {
 
 	if storepath == cachepath {
-		return nil, fmt.Errorf("storepath cannot be the same as cachepath")
+		return nil, fmt.Errorf("storepath=%q cannot be the same as cachepath=%q", storepath, cachepath)
 	}
 
 	pathCleaned := strings.TrimPrefix(storepath, "./")
@@ -49,21 +55,20 @@ func NewLocalStore(storepath, cachepath string, l logging.Logger) (*Localstore, 
 	uid := uuid.NewUUID().String()
 	uid = strings.Replace(uid, "-", "", -1)
 
-	return &Localstore{
+	return &LocalStore{
 		storepath:   storepath,
 		pathCleaned: pathCleaned,
 		cachepath:   cachepath,
 		Id:          uid,
-		Log:         l,
 	}, nil
 }
 
-func (l *Localstore) NewObject(objectname string) (Object, error) {
+func (l *LocalStore) NewObject(objectname string) (Object, error) {
 	obj, err := l.Get(objectname)
-	if err != nil && err != ObjectNotFound {
+	if err != nil && err != ErrObjectNotFound {
 		return nil, err
 	} else if obj != nil {
-		return nil, ObjectExists
+		return nil, ErrObjectExists
 	}
 
 	of := path.Join(l.storepath, objectname)
@@ -81,7 +86,8 @@ func (l *Localstore) NewObject(objectname string) (Object, error) {
 	}, nil
 }
 
-func (l *Localstore) List(query Query) (Objects, error) {
+// List objects at Query location.
+func (l *LocalStore) List(query Query) (Objects, error) {
 	objects := make(map[string]*localFSObject)
 	metadatas := make(map[string]map[string]string)
 
@@ -145,14 +151,14 @@ func (l *Localstore) List(query Query) (Objects, error) {
 
 // Objects returns an iterator over the objects in the google bucket that match the Query q.
 // If q is nil, no filtering is done.
-func (l *Localstore) Objects(ctx context.Context, csq Query) ObjectIterator {
+func (l *LocalStore) Objects(ctx context.Context, csq Query) ObjectIterator {
 	objects, err := l.List(csq)
 
 	return &localObjectIterator{objects: objects, err: err}
 }
 
-// Folders
-func (l *Localstore) Folders(ctx context.Context, csq Query) ([]string, error) {
+// Folders list of folders for given path query.
+func (l *LocalStore) Folders(ctx context.Context, csq Query) ([]string, error) {
 	spath := path.Join(l.storepath, csq.Prefix)
 	if !exists(spath) {
 		return nil, fmt.Errorf("That folder %q does not exist", spath)
@@ -168,21 +174,22 @@ func (l *Localstore) Folders(ctx context.Context, csq Query) ([]string, error) {
 	return folders, nil
 }
 
-func (l *Localstore) NewReader(o string) (io.ReadCloser, error) {
+// NewReader create local file-system store reader.
+func (l *LocalStore) NewReader(o string) (io.ReadCloser, error) {
 	return l.NewReaderWithContext(context.Background(), o)
 }
-func (l *Localstore) NewReaderWithContext(ctx context.Context, o string) (io.ReadCloser, error) {
+func (l *LocalStore) NewReaderWithContext(ctx context.Context, o string) (io.ReadCloser, error) {
 	fo := path.Join(l.storepath, o)
 	if !exists(fo) {
-		return nil, ObjectNotFound
+		return nil, ErrObjectNotFound
 	}
 	return csbufio.OpenReader(fo)
 }
 
-func (l *Localstore) NewWriter(o string, metadata map[string]string) (io.WriteCloser, error) {
+func (l *LocalStore) NewWriter(o string, metadata map[string]string) (io.WriteCloser, error) {
 	return l.NewWriterWithContext(context.Background(), o, metadata)
 }
-func (l *Localstore) NewWriterWithContext(ctx context.Context, o string, metadata map[string]string) (io.WriteCloser, error) {
+func (l *LocalStore) NewWriterWithContext(ctx context.Context, o string, metadata map[string]string) (io.WriteCloser, error) {
 
 	fo := path.Join(l.storepath, o)
 
@@ -203,11 +210,11 @@ func (l *Localstore) NewWriterWithContext(ctx context.Context, o string, metadat
 	return csbufio.OpenWriter(fo)
 }
 
-func (l *Localstore) Get(o string) (Object, error) {
+func (l *LocalStore) Get(o string) (Object, error) {
 	fo := path.Join(l.storepath, o)
 
 	if !exists(fo) {
-		return nil, ObjectNotFound
+		return nil, ErrObjectNotFound
 	}
 	var updated time.Time
 	if stat, err := os.Stat(fo); err == nil {
@@ -222,7 +229,7 @@ func (l *Localstore) Get(o string) (Object, error) {
 	}, nil
 }
 
-func (l *Localstore) Delete(obj string) error {
+func (l *LocalStore) Delete(obj string) error {
 	fo := path.Join(l.storepath, obj)
 	os.Remove(fo)
 	mf := fo + ".metadata"
@@ -232,7 +239,7 @@ func (l *Localstore) Delete(obj string) error {
 	return nil
 }
 
-func (l *Localstore) String() string {
+func (l *LocalStore) String() string {
 	return fmt.Sprintf("[id:%s file://%s/]", l.Id, l.storepath)
 }
 

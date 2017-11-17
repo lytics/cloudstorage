@@ -5,31 +5,19 @@ import (
 	"time"
 
 	"github.com/lytics/cloudstorage"
-	"github.com/lytics/cloudstorage/logging"
 )
 
-const (
-	NOLOGGING = -1
-	FATAL     = 0
-	ERROR     = 1
-	WARN      = 2
-	INFO      = 3
-	DEBUG     = 4
-)
-
-var localconfig = &cloudstorage.CloudStoreContext{
-	LogggingContext: "unittest",
-	TokenSource:     cloudstorage.LocalFileSource,
-	LocalFS:         "/tmp/mockcloud",
-	TmpDir:          "/tmp/localcache",
+var localconfig = &cloudstorage.Config{
+	TokenSource: cloudstorage.LocalFileSource,
+	LocalFS:     "/tmp/mockcloud",
+	TmpDir:      "/tmp/localcache",
 }
 
-var gcsIntconfig = &cloudstorage.CloudStoreContext{
-	LogggingContext: "integration-test",
-	TokenSource:     cloudstorage.GCEDefaultOAuthToken,
-	Project:         "lyticsstaging",
-	Bucket:          "cloudstore-tests",
-	TmpDir:          "/tmp/localcache",
+var gcsIntconfig = &cloudstorage.Config{
+	TokenSource: cloudstorage.GCEDefaultOAuthToken,
+	Project:     "lyticsstaging",
+	Bucket:      "cloudstore-tests",
+	TmpDir:      "/tmp/localcache",
 }
 
 type TestingTB interface {
@@ -40,12 +28,7 @@ type TestingTB interface {
 
 func CreateStore(t TestingTB) cloudstorage.Store {
 
-	cloudstorage.LogConstructor = func(prefix string) logging.Logger {
-		return logging.NewStdLogger(true, logging.DEBUG, prefix)
-		//return testutils.NewStdLogger(t, prefix)
-	}
-
-	var config *cloudstorage.CloudStoreContext
+	var config *cloudstorage.Config
 	if os.Getenv("TESTINT") == "" {
 		config = localconfig
 	} else {
