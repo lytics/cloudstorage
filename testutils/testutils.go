@@ -339,7 +339,7 @@ func NewObjectWithExisting(t TestingT, store cloudstorage.Store) {
 	// because the object exits.
 	obj2, err := store.NewObject("test.csv")
 	assert.Equal(t, cloudstorage.ErrObjectExists, err, "error.")
-	assert.Equal(t, nil, obj2, "object shoudl be nil.")
+	assert.Equal(t, nil, obj2, "object should be nil.")
 
 	// Read the object back out of the cloud storage.
 	obj3, err := store.Get("test.csv")

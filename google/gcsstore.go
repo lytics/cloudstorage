@@ -51,6 +51,7 @@ type GcsFS struct {
 	Id        string
 }
 
+// NewGCSStore Create Google Cloud Storage Store.
 func NewGCSStore(gcs *storage.Client, bucket, cachepath string, pagesize int) (*GcsFS, error) {
 	err := os.MkdirAll(path.Dir(cachepath), 0775)
 	if err != nil {
@@ -148,7 +149,7 @@ func (g *GcsFS) Objects(ctx context.Context, csq cloudstorage.Query) cloudstorag
 
 // ListObjects iterates to find a list of objects
 func (g *GcsFS) listObjects(q *storage.Query, retries int) (cloudstorage.Objects, error) {
-	var lasterr error = nil
+	var lasterr error
 
 	for i := 0; i < retries; i++ {
 		objects := make(cloudstorage.Objects, 0)
@@ -236,11 +237,7 @@ func (g *GcsFS) Move(ctx context.Context, src, des cloudstorage.Object) error {
 		return err
 	}
 
-	if err := oh.Delete(ctx); err != nil {
-		return err
-	}
-
-	return nil
+	return oh.Delete(ctx)
 }
 
 // NewReader create GCS file reader.
@@ -368,11 +365,7 @@ func (o *gcsFSObject) SetMetaData(meta map[string]string) {
 
 func (o *gcsFSObject) Delete() error {
 	o.Release()
-	err := o.gcsb.Object(o.name).Delete(context.Background())
-	if err != nil {
-		return err
-	}
-	return nil
+	return o.gcsb.Object(o.name).Delete(context.Background())
 }
 
 func (o *gcsFSObject) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
