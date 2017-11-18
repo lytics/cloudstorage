@@ -9,7 +9,7 @@ import (
 	u "github.com/araddon/gou"
 )
 
-//CleanupCacheFiles: cleans up old store cache files
+// CleanupCacheFiles cleans up old store cache files
 // if your process crashes all it's old cache files, the local copies of the cloudfiles,
 // will left behind.
 // This function is a convenience func to help clean up those old files.
@@ -27,7 +27,7 @@ func CleanupCacheFiles(maxage time.Duration, TmpDir string) {
 	cleanoldfiles := func(path string, f os.FileInfo, err error) (e error) {
 		if filepath.Ext(path) == StoreCacheFileExt {
 			if f.ModTime().Before(time.Now().Add(-(maxage))) {
-				//delete if the files is older than 1 day
+				// delete if the files is older than 1 day
 				err := os.Remove(path)
 				if err != nil {
 					u.Errorf("CleanupOldStoreCacheFiles error removing an old files: %v", err)

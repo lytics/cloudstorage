@@ -2,9 +2,14 @@
 Cloudstorage is an abstraction layer for Google's Cloud Storage and Local Files.  
 It provides a unified api for local files and Google Cloud files that aids testing.
 
+[![Code Coverage](https://codecov.io/gh/lytics/cloudstorage/branch/master/graph/badge.svg)](https://codecov.io/gh/lytics/cloudstorage)
+[![GoDoc](https://godoc.org/github.com/lytics/cloudstorage?status.svg)](http://godoc.org/github.com/lytics/cloudstorage)
+[![Build Status](https://travis-ci.org/lytics/cloudstorage.svg?branch=master)](https://travis-ci.org/lytics/cloudstorage)
+[![Go ReportCard](https://goreportcard.com/badge/lytics/cloudstorage)](https://goreportcard.com/report/lytics/cloudstorage)
+
+
 ### Similar/Related works
 * https://github.com/graymeta/stow
-* https://github.com/rook/rook
 * sync tool https://github.com/ncw/rclone
 
 
@@ -13,7 +18,8 @@ Note: For these examples Im ignoring all errors and using the `_` for them.
 
 ##### Creating a Store object:
 ```go
-// This is an example of a local storage object:  See(https://github.com/lytics/cloudstorage/blob/master/testutils/testutils.go#L30) for a GCS example:
+// This is an example of a local storage object:  
+// See(https://github.com/lytics/cloudstorage/blob/master/testutils/testutils.go#L30) for a GCS example:
 var config = &cloudstorage.CloudStoreContext{
 	LogggingContext: "unittest",
 	TokenSource:     cloudstorage.LocalFileSource,
