@@ -9,7 +9,9 @@ import (
 	"strings"
 )
 
-// ContentType check content type
+// ContentType check content type of file by looking
+// at extension  (.html, .png) uses package mime for global types.
+// Use mime.AddExtensionType to add new global types.
 func ContentType(name string) string {
 	contenttype := ""
 	ext := filepath.Ext(name)

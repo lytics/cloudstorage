@@ -2,6 +2,12 @@
 Cloudstorage is an abstraction layer for Google's Cloud Storage and Local Files.  
 It provides a unified api for local files and Google Cloud files that aids testing.
 
+[![Code Coverage](https://codecov.io/gh/lytics/cloudstorage/branch/master/graph/badge.svg)](https://codecov.io/gh/lytics/cloudstorage)
+[![GoDoc](https://godoc.org/github.com/lytics/cloudstorage?status.svg)](http://godoc.org/github.com/lytics/cloudstorage)
+[![Build Status](https://travis-ci.org/lytics/cloudstorage.svg?branch=master)](https://travis-ci.org/lytics/cloudstorage)
+[![Go ReportCard](https://goreportcard.com/badge/lytics/cloudstorage)](https://goreportcard.com/report/lytics/cloudstorage)
+
+
 ### Similar/Related works
 * https://github.com/graymeta/stow
 * sync tool https://github.com/ncw/rclone

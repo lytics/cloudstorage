@@ -1,4 +1,4 @@
-package cloudstorage
+package localfs
 
 import (
 	"encoding/json"
@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lytics/cloudstorage"
 	"github.com/lytics/cloudstorage/csbufio"
 	"github.com/pborman/uuid"
 	"golang.org/x/net/context"
@@ -18,9 +19,9 @@ import (
 )
 
 func init() {
-	Register(LocalFSStorageSource, localProvider)
+	cloudstorage.Register(LocalFSStorageSource, localProvider)
 }
-func localProvider(conf *Config) (Store, error) {
+func localProvider(conf *cloudstorage.Config) (cloudstorage.Store, error) {
 	store, err := NewLocalStore(conf.LocalFS, conf.TmpDir)
 	if err != nil {
 		return nil, err
@@ -30,12 +31,12 @@ func localProvider(conf *Config) (Store, error) {
 
 var (
 	// Ensure Our LocalStore implement CloudStorage interfaces
-	_ StoreReader = (*LocalStore)(nil)
+	_ cloudstorage.StoreReader = (*LocalStore)(nil)
 )
 
 const (
 	// LocalFileSource Authentication Source
-	LocalFileSource TokenSource = "localfiles"
+	LocalFileSource cloudstorage.TokenSource = "localfiles"
 
 	// LocalFSStorageSource name of our Local Storage provider = "localfs"
 	LocalFSStorageSource = "localfs"
@@ -79,21 +80,21 @@ func NewLocalStore(storepath, cachepath string) (*LocalStore, error) {
 	}, nil
 }
 
-func (l *LocalStore) NewObject(objectname string) (Object, error) {
+func (l *LocalStore) NewObject(objectname string) (cloudstorage.Object, error) {
 	obj, err := l.Get(objectname)
-	if err != nil && err != ErrObjectNotFound {
+	if err != nil && err != cloudstorage.ErrObjectNotFound {
 		return nil, err
 	} else if obj != nil {
-		return nil, ErrObjectExists
+		return nil, cloudstorage.ErrObjectExists
 	}
 
 	of := path.Join(l.storepath, objectname)
-	err = EnsureDir(of)
+	err = cloudstorage.EnsureDir(of)
 	if err != nil {
 		return nil, err
 	}
 
-	cf := CachePathObj(l.cachepath, objectname, l.Id)
+	cf := cloudstorage.CachePathObj(l.cachepath, objectname, l.Id)
 
 	return &localFSObject{
 		name:      objectname,
@@ -103,13 +104,13 @@ func (l *LocalStore) NewObject(objectname string) (Object, error) {
 }
 
 // List objects at Query location.
-func (l *LocalStore) List(query Query) (Objects, error) {
+func (l *LocalStore) List(query cloudstorage.Query) (cloudstorage.Objects, error) {
 	objects := make(map[string]*localFSObject)
 	metadatas := make(map[string]map[string]string)
 
 	spath := path.Join(l.storepath, query.Prefix)
-	if !Exists(spath) {
-		return make(Objects, 0), nil
+	if !cloudstorage.Exists(spath) {
+		return make(cloudstorage.Objects, 0), nil
 	}
 
 	err := filepath.Walk(spath, func(fo string, f os.FileInfo, err error) error {
@@ -141,7 +142,7 @@ func (l *LocalStore) List(query Query) (Objects, error) {
 				name:      oname,
 				updated:   f.ModTime(),
 				storepath: fo,
-				cachepath: CachePathObj(l.cachepath, oname, l.Id),
+				cachepath: cloudstorage.CachePathObj(l.cachepath, oname, l.Id),
 			}
 		}
 		return err
@@ -151,7 +152,7 @@ func (l *LocalStore) List(query Query) (Objects, error) {
 		return nil, fmt.Errorf("localfile: error occurred listing files. searchpath=%v err=%v", spath, err)
 	}
 
-	res := make(Objects, 0)
+	res := make(cloudstorage.Objects, 0)
 
 	for objname, obj := range objects {
 		if md, ok := metadatas[objname]; ok {
@@ -167,16 +168,16 @@ func (l *LocalStore) List(query Query) (Objects, error) {
 
 // Objects returns an iterator over the objects in the google bucket that match the Query q.
 // If q is nil, no filtering is done.
-func (l *LocalStore) Objects(ctx context.Context, csq Query) ObjectIterator {
+func (l *LocalStore) Objects(ctx context.Context, csq cloudstorage.Query) cloudstorage.ObjectIterator {
 	objects, err := l.List(csq)
 
 	return &localObjectIterator{objects: objects, err: err}
 }
 
 // Folders list of folders for given path query.
-func (l *LocalStore) Folders(ctx context.Context, csq Query) ([]string, error) {
+func (l *LocalStore) Folders(ctx context.Context, csq cloudstorage.Query) ([]string, error) {
 	spath := path.Join(l.storepath, csq.Prefix)
-	if !Exists(spath) {
+	if !cloudstorage.Exists(spath) {
 		return nil, fmt.Errorf("That folder %q does not exist", spath)
 	}
 
@@ -196,8 +197,8 @@ func (l *LocalStore) NewReader(o string) (io.ReadCloser, error) {
 }
 func (l *LocalStore) NewReaderWithContext(ctx context.Context, o string) (io.ReadCloser, error) {
 	fo := path.Join(l.storepath, o)
-	if !Exists(fo) {
-		return nil, ErrObjectNotFound
+	if !cloudstorage.Exists(fo) {
+		return nil, cloudstorage.ErrObjectNotFound
 	}
 	return csbufio.OpenReader(fo)
 }
@@ -209,7 +210,7 @@ func (l *LocalStore) NewWriterWithContext(ctx context.Context, o string, metadat
 
 	fo := path.Join(l.storepath, o)
 
-	err := EnsureDir(fo)
+	err := cloudstorage.EnsureDir(fo)
 	if err != nil {
 		return nil, err
 	}
@@ -226,11 +227,11 @@ func (l *LocalStore) NewWriterWithContext(ctx context.Context, o string, metadat
 	return csbufio.OpenWriter(fo)
 }
 
-func (l *LocalStore) Get(o string) (Object, error) {
+func (l *LocalStore) Get(o string) (cloudstorage.Object, error) {
 	fo := path.Join(l.storepath, o)
 
-	if !Exists(fo) {
-		return nil, ErrObjectNotFound
+	if !cloudstorage.Exists(fo) {
+		return nil, cloudstorage.ErrObjectNotFound
 	}
 	var updated time.Time
 	if stat, err := os.Stat(fo); err == nil {
@@ -241,7 +242,7 @@ func (l *LocalStore) Get(o string) (Object, error) {
 		name:      o,
 		updated:   updated,
 		storepath: fo,
-		cachepath: CachePathObj(l.cachepath, o, l.Id),
+		cachepath: cloudstorage.CachePathObj(l.cachepath, o, l.Id),
 	}, nil
 }
 
@@ -249,7 +250,7 @@ func (l *LocalStore) Delete(obj string) error {
 	fo := path.Join(l.storepath, obj)
 	os.Remove(fo)
 	mf := fo + ".metadata"
-	if Exists(mf) {
+	if cloudstorage.Exists(mf) {
 		os.Remove(mf)
 	}
 	return nil
@@ -260,12 +261,12 @@ func (l *LocalStore) String() string {
 }
 
 type localObjectIterator struct {
-	objects Objects
+	objects cloudstorage.Objects
 	err     error
 	cursor  int
 }
 
-func (l *localObjectIterator) Next() (Object, error) {
+func (l *localObjectIterator) Next() (cloudstorage.Object, error) {
 	if l.err != nil {
 		return nil, l.err
 	}
@@ -315,7 +316,7 @@ func (o *localFSObject) Delete() error {
 		return err
 	}
 	mf := o.storepath + ".metadata"
-	if Exists(mf) {
+	if cloudstorage.Exists(mf) {
 		if err := os.Remove(mf); err != nil {
 			return err
 		}
@@ -323,12 +324,12 @@ func (o *localFSObject) Delete() error {
 	return nil
 }
 
-func (o *localFSObject) Open(accesslevel AccessLevel) (*os.File, error) {
+func (o *localFSObject) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 	if o.opened {
 		return nil, fmt.Errorf("the store object is already opened. %s", o.storepath)
 	}
 
-	var readonly = accesslevel == ReadOnly
+	var readonly = accesslevel == cloudstorage.ReadOnly
 
 	storecopy, err := os.OpenFile(o.storepath, os.O_RDWR|os.O_CREATE, 0665)
 	if err != nil {
@@ -337,7 +338,7 @@ func (o *localFSObject) Open(accesslevel AccessLevel) (*os.File, error) {
 	}
 	defer storecopy.Close()
 
-	err = EnsureDir(o.cachepath)
+	err = cloudstorage.EnsureDir(o.cachepath)
 	if err != nil {
 		return nil, fmt.Errorf("localfile: error occurred creating cachedcopy's dir. cachepath=%s err=%v",
 			o.cachepath, err)

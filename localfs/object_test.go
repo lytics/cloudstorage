@@ -1,15 +1,16 @@
-package cloudstorage_test
+package localfs_test
 
 import (
 	"testing"
 
 	"github.com/lytics/cloudstorage"
+	"github.com/lytics/cloudstorage/localfs"
 	"github.com/lytics/cloudstorage/testutils"
 )
 
 var config = &cloudstorage.Config{
 	Type:        "localfs",
-	TokenSource: cloudstorage.LocalFileSource,
+	TokenSource: localfs.LocalFileSource,
 	LocalFS:     "/tmp/mockcloud",
 	TmpDir:      "/tmp/localcache",
 }
