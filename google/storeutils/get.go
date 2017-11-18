@@ -10,13 +10,13 @@ import (
 	"github.com/lytics/cloudstorage"
 )
 
-// Gets a single object's bytes based on bucket and name parameters
+// GetObject Gets a single object's bytes based on bucket and name parameters
 func GetObject(gc *storage.Client, bucket, name string) (*bytes.Buffer, error) {
 
 	rc, err := gc.Bucket(bucket).Object(name).NewReader(context.Background())
 	if err != nil {
 		if err == storage.ErrObjectNotExist {
-			return nil, cloudstorage.ObjectNotFound
+			return nil, cloudstorage.ErrObjectNotFound
 		}
 		return nil, err
 	}

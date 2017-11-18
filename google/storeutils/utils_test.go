@@ -4,11 +4,12 @@ import (
 	"os"
 	"testing"
 
-	"github.com/lytics/cloudstorage"
-
 	"cloud.google.com/go/storage"
 	"golang.org/x/net/context"
 	"google.golang.org/api/option"
+
+	"github.com/lytics/cloudstorage"
+	"github.com/lytics/cloudstorage/google"
 )
 
 var testBucket = os.Getenv("TESTBUCKET")
@@ -20,15 +21,15 @@ func Setup(t *testing.T) *storage.Client {
 		t.Skip("TESTPROJECT, and TESTBUCKET EnvVars must be set to perform integration test")
 	}
 
-	gcsctx := &cloudstorage.CloudStoreContext{
-		LogggingContext: "testing-config",
-		TokenSource:     cloudstorage.GCEDefaultOAuthToken,
-		Project:         testProject,
-		Bucket:          testBucket,
+	conf := &cloudstorage.Config{
+		Type:        google.GoogleStoreType,
+		TokenSource: google.GCEDefaultOAuthToken,
+		Project:     testProject,
+		Bucket:      testBucket,
 	}
 
 	// Create http client with Google context auth
-	googleClient, err := cloudstorage.NewGoogleClient(gcsctx)
+	googleClient, err := google.NewGoogleClient(conf)
 	if err != nil {
 		t.Errorf("Failed to create Google Client: %v\n", err)
 	}
@@ -36,7 +37,7 @@ func Setup(t *testing.T) *storage.Client {
 	gsc, err := storage.NewClient(context.Background(), option.WithHTTPClient(googleClient.Client()))
 	if err != nil {
 		t.Errorf("Error creating Google cloud storage client. project:%s gs://%s/ err:%v\n",
-			gcsctx.Project, gcsctx.Bucket, err)
+			conf.Project, conf.Bucket, err)
 
 	}
 	if gsc == nil {
