@@ -69,6 +69,9 @@ func NewGCSStore(gcs *storage.Client, bucket, cachepath string, pagesize int) (*
 	}, nil
 }
 
+func (g *GcsFS) Type() string {
+	return GoogleStoreType
+}
 func (g *GcsFS) String() string {
 	return fmt.Sprintf("gs://%s/", g.bucket)
 }

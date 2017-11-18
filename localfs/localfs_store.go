@@ -79,7 +79,9 @@ func NewLocalStore(storepath, cachepath string) (*LocalStore, error) {
 		Id:          uid,
 	}, nil
 }
-
+func (l *LocalStore) Type() string {
+	return LocalFSStorageSource
+}
 func (l *LocalStore) NewObject(objectname string) (cloudstorage.Object, error) {
 	obj, err := l.Get(objectname)
 	if err != nil && err != cloudstorage.ErrObjectNotFound {

@@ -34,7 +34,7 @@ func Clearstore(t TestingT, store cloudstorage.Store) {
 		store.Delete(o.Name())
 	}
 
-	if os.Getenv("TESTGOOGLE") != "" {
+	if store.Type() == "google" && os.Getenv("TESTGOOGLE") != "" {
 		// GCS is lazy about deletes...
 		time.Sleep(15 * time.Second)
 	}
