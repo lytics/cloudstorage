@@ -20,11 +20,11 @@ export TESTGOOGLE=1
 */
 
 var config = &cloudstorage.Config{
-	Type:        "gcs",
-	TokenSource: google.GCEDefaultOAuthToken,
-	Project:     "lyticsstaging",
-	Bucket:      "cloudstore-tests",
-	TmpDir:      "/tmp/localcache",
+	Type:       google.StoreType,
+	AuthMethod: google.AuthGCEDefaultOAuthToken,
+	Project:    "lyticsstaging",
+	Bucket:     "cloudstore-tests",
+	TmpDir:     "/tmp/localcache",
 }
 
 func TestAll(t *testing.T) {

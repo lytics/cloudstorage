@@ -22,10 +22,10 @@ func Setup(t *testing.T) *storage.Client {
 	}
 
 	conf := &cloudstorage.Config{
-		Type:        google.StoreType,
-		TokenSource: google.GCEDefaultOAuthToken,
-		Project:     testProject,
-		Bucket:      testBucket,
+		Type:       google.StoreType,
+		AuthMethod: google.AuthGCEDefaultOAuthToken,
+		Project:    testProject,
+		Bucket:     testBucket,
 	}
 
 	// Create http client with Google context auth

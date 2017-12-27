@@ -18,10 +18,10 @@ import (
 
 const (
 	// Authentication Source
-	LyticsJWTKeySource   cloudstorage.TokenSource = "LyticsJWTkey"
-	GoogleJWTKeySource   cloudstorage.TokenSource = "GoogleJWTFile"
-	GCEMetaKeySource     cloudstorage.TokenSource = "gcemetadata"
-	GCEDefaultOAuthToken cloudstorage.TokenSource = "gcedefaulttoken"
+	AuthJWTKeySource         cloudstorage.AuthMethod = "LyticsJWTkey"
+	AuthGoogleJWTKeySource   cloudstorage.AuthMethod = "GoogleJWTFile"
+	AuthGCEMetaKeySource     cloudstorage.AuthMethod = "gcemetadata"
+	AuthGCEDefaultOAuthToken cloudstorage.AuthMethod = "gcedefaulttoken"
 )
 
 // GoogleOAuthClient An interface so we can return any of the
@@ -146,32 +146,32 @@ func BuildDefaultGoogleTransporter(scope ...string) (GoogleOAuthClient, error) {
 // NewGoogleClient create new Google Stoage Client.
 func NewGoogleClient(conf *cloudstorage.Config) (client GoogleOAuthClient, err error) {
 
-	switch conf.TokenSource {
-	case GCEDefaultOAuthToken:
-		//   This token method uses the default OAuth token with GCS created by tools like gsutils, gcloud, etc...
-		//   See github.com/lytics/lio/src/ext_svcs/google/google_transporter.go : BuildDefaultGoogleTransporter
+	switch conf.AuthMethod {
+	case AuthGCEDefaultOAuthToken:
+		// This token method uses the default OAuth token with GCS created by tools like gsutils, gcloud, etc...
+		// See github.com/lytics/lio/src/ext_svcs/google/google_transporter.go : BuildDefaultGoogleTransporter
 		client, err = BuildDefaultGoogleTransporter("")
 		if err != nil {
 			return nil, err
 		}
-	case GCEMetaKeySource:
+	case AuthGCEMetaKeySource:
 		client, err = BuildGCEMetadatTransporter("")
 		if err != nil {
 			return nil, err
 		}
-	case LyticsJWTKeySource:
-		//used because our internal configs aren't stored as JSON.
+	case AuthJWTKeySource:
+		// used if you aren't storing entire json
 		client, err = BuildGoogleJWTTransporter(conf.JwtConf)
 		if err != nil {
 			return nil, err
 		}
-	case GoogleJWTKeySource:
+	case AuthGoogleJWTKeySource:
 		client, err = BuildGoogleFileJWTTransporter(conf.JwtFile, conf.Scope)
 		if err != nil {
 			return nil, err
 		}
 	default:
-		return nil, fmt.Errorf("bad sourcetype: %v", conf.TokenSource)
+		return nil, fmt.Errorf("bad AuthMethod: %v", conf.AuthMethod)
 	}
 
 	return client, err

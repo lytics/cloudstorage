@@ -139,8 +139,8 @@ type (
 	// Used as the results for store.List commands.
 	Objects []Object
 
-	// TokenSource Is the source/location/type of token
-	TokenSource string
+	// AuthMethod Is the source/location/type of auth token
+	AuthMethod string
 
 	// AccessLevel is the level of permissions on files
 	AccessLevel int
@@ -149,12 +149,13 @@ type (
 	Config struct {
 		// StoreType [gcs,localfs,s3,azure]
 		Type string
-		// the methods of accessing the event archive.
-		// valid options are the xxxSource const above.
-		TokenSource TokenSource
-		// GCS Settings (project, bucket)
+		// AuthMethod the methods of authenticating store.  Ie, where/how to
+		// find auth tokens.
+		AuthMethod AuthMethod
+		// Cloud Bucket Project
 		Project string
-		Bucket  string
+		// Bucket is the "path" or named bucket in cloud
+		Bucket string
 		// the page size to use with google api requests (default 1000)
 		PageSize int
 		// used by LyticsJWTKeySource

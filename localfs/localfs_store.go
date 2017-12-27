@@ -35,8 +35,8 @@ var (
 )
 
 const (
-	// LocalFileSource Authentication Source
-	LocalFileSource cloudstorage.TokenSource = "localfiles"
+	// AuthFileSystem Authentication Method
+	AuthFileSystem cloudstorage.AuthMethod = "localfiles"
 
 	// StoreType name of our Local Storage provider = "localfs"
 	StoreType = "localfs"

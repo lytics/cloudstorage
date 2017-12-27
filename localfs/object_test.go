@@ -9,10 +9,10 @@ import (
 )
 
 var config = &cloudstorage.Config{
-	Type:        "localfs",
-	TokenSource: localfs.LocalFileSource,
-	LocalFS:     "/tmp/mockcloud",
-	TmpDir:      "/tmp/localcache",
+	Type:       "localfs",
+	AuthMethod: localfs.AuthFileSystem,
+	LocalFS:    "/tmp/mockcloud",
+	TmpDir:     "/tmp/localcache",
 }
 
 func TestAll(t *testing.T) {
