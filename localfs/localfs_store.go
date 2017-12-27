@@ -19,7 +19,7 @@ import (
 )
 
 func init() {
-	cloudstorage.Register(LocalFSStorageSource, localProvider)
+	cloudstorage.Register(StoreType, localProvider)
 }
 func localProvider(conf *cloudstorage.Config) (cloudstorage.Store, error) {
 	store, err := NewLocalStore(conf.LocalFS, conf.TmpDir)
@@ -38,8 +38,8 @@ const (
 	// LocalFileSource Authentication Source
 	LocalFileSource cloudstorage.TokenSource = "localfiles"
 
-	// LocalFSStorageSource name of our Local Storage provider = "localfs"
-	LocalFSStorageSource = "localfs"
+	// StoreType name of our Local Storage provider = "localfs"
+	StoreType = "localfs"
 )
 
 // LocalStore is client to local-filesystem store.
@@ -82,7 +82,7 @@ func NewLocalStore(storepath, cachepath string) (*LocalStore, error) {
 
 // Type is store type = "localfs"
 func (l *LocalStore) Type() string {
-	return LocalFSStorageSource
+	return StoreType
 }
 func (l *LocalStore) Client() interface{} {
 	return nil
@@ -300,7 +300,7 @@ type localFSObject struct {
 }
 
 func (o *localFSObject) StorageSource() string {
-	return LocalFSStorageSource
+	return StoreType
 }
 func (o *localFSObject) Name() string {
 	return o.name

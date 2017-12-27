@@ -20,7 +20,7 @@ import (
 )
 
 func init() {
-	cloudstorage.Register(GoogleStoreType, provider)
+	cloudstorage.Register(StoreType, provider)
 }
 func provider(conf *cloudstorage.Config) (cloudstorage.Store, error) {
 	googleclient, err := NewGoogleClient(conf)
@@ -30,8 +30,8 @@ func provider(conf *cloudstorage.Config) (cloudstorage.Store, error) {
 	return gcsCommonClient(googleclient.Client(), conf)
 }
 
-// GoogleStoreType = "gcs"
-const GoogleStoreType = "gcs"
+// StoreType = "gcs"
+const StoreType = "gcs"
 
 var (
 	// GCSRetries number of times to retry for GCS.
@@ -70,9 +70,9 @@ func NewGCSStore(gcs *storage.Client, bucket, cachepath string, pagesize int) (*
 	}, nil
 }
 
-// Type of store = "google"
+// Type of store = "gcs"
 func (g *GcsFS) Type() string {
-	return GoogleStoreType
+	return StoreType
 }
 
 // Client gets access to the underlying google cloud storage client.
@@ -352,7 +352,7 @@ func newObjectFromGcs(g *GcsFS, o *storage.ObjectAttrs) *gcsFSObject {
 	}
 }
 func (o *gcsFSObject) StorageSource() string {
-	return GoogleStoreType
+	return StoreType
 }
 func (o *gcsFSObject) Name() string {
 	return o.name
