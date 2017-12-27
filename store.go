@@ -38,9 +38,11 @@ type (
 	// StoreReader interface to define the Storage Interface abstracting
 	// the GCS, S3, LocalFile, etc interfaces
 	StoreReader interface {
-		// The Store Type
+		// Type is he Store Type [google, s3, azure, localfs, etc]
 		Type() string
-		// Get returns the object from the cloud store.   The object
+		// Client gets access to the underlying native Client for Google, S3, etc
+		Client() interface{}
+		// Get returns an object (file) from the cloud store. The object
 		// isn't opened already, see Object.Open()
 		// ObjectNotFound will be returned if the object is not found.
 		Get(o string) (Object, error)

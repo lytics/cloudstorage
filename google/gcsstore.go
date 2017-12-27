@@ -70,9 +70,16 @@ func NewGCSStore(gcs *storage.Client, bucket, cachepath string, pagesize int) (*
 	}, nil
 }
 
+// Type of store = "google"
 func (g *GcsFS) Type() string {
 	return GoogleStoreType
 }
+
+// Client gets access to the underlying google cloud storage client.
+func (g *GcsFS) Client() interface{} {
+	return g.gcs
+}
+
 func (g *GcsFS) String() string {
 	return fmt.Sprintf("gs://%s/", g.bucket)
 }
