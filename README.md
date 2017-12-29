@@ -22,7 +22,7 @@ Note: For these examples Im ignoring all errors and using the `_` for them.
 // See(https://github.com/lytics/cloudstorage/blob/master/google/google_test.go) for a GCS example:
 config := &cloudstorage.Config{
 	Type: localfs.StoreType,
-	TokenSource:     localfs.AuthFileSystem,
+	AuthMethod:     localfs.AuthFileSystem,
 	LocalFS:         "/tmp/mockcloud",
 	TmpDir:          "/tmp/localcache",
 }
