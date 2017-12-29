@@ -203,7 +203,6 @@ func (g *GcsFS) Folders(ctx context.Context, csq cloudstorage.Query) ([]string, 
 			}
 		}
 	}
-	panic("unreacheable")
 }
 
 // Copy from src to destination
@@ -297,9 +296,7 @@ type GcsObjectIterator struct {
 
 // Next iterator to go to next object or else returns error for done.
 func (it *GcsObjectIterator) Next() (cloudstorage.Object, error) {
-	var lasterr error = nil
 	retryCt := 0
-
 	for {
 		select {
 		case <-it.ctx.Done():
@@ -315,7 +312,6 @@ func (it *GcsObjectIterator) Next() (cloudstorage.Object, error) {
 				// Return to user
 				return nil, err
 			}
-			lasterr = err
 			if retryCt < 5 {
 				backoff(retryCt)
 			} else {
@@ -324,8 +320,6 @@ func (it *GcsObjectIterator) Next() (cloudstorage.Object, error) {
 			retryCt++
 		}
 	}
-
-	return nil, lasterr
 }
 
 type gcsFSObject struct {

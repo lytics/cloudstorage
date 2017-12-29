@@ -135,7 +135,7 @@ func BuildDefaultGoogleTransporter(scope ...string) (GoogleOAuthClient, error) {
 
 	client, err := googleOauth2.DefaultClient(context.Background(), scope...)
 	if err != nil {
-		fmt.Errorf("Creating http client: %v", err)
+		return nil, err
 	}
 
 	return &gOAuthClient{
