@@ -29,6 +29,27 @@ config := &cloudstorage.Config{
 store, _ := cloudstorage.NewStore(config)
 ```
 
+##### Listing Objects:
+
+See go Iterator pattern doc for api-design:
+https://github.com/GoogleCloudPlatform/google-cloud-go/wiki/Iterator-Guidelines
+```go
+// From a store that has been created
+
+// Create a query
+q := cloudstorage.NewQuery("list-test/")
+// Create an Iterator
+iter := store.Objects(context.Background(), q)
+
+for {
+	o, err := iter.Next()
+	if err == iterator.Done {
+		break
+	}
+	log.Println("found object %v", o.Name())
+}
+```
+
 ##### Writing an object :
 ```go
 obj, _ := store.NewObject("prefix/test.csv")

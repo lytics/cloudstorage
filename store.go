@@ -131,6 +131,7 @@ type (
 	}
 
 	// ObjectIterator interface to page through objects
+	// See go doc for examples https://github.com/GoogleCloudPlatform/google-cloud-go/wiki/Iterator-Guidelines
 	ObjectIterator interface {
 		Next() (Object, error)
 	}
