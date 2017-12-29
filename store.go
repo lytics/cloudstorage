@@ -63,7 +63,7 @@ type (
 	}
 
 	// StoreCopy Optional interface to fast path copy.  Many of the cloud providers
-	// don't actually copy bytes.
+	// don't actually copy bytes.  Rather they allow a "pointer" that is a fast copy.
 	StoreCopy interface {
 		// Copy from object, to object
 		Copy(ctx context.Context, src, dst Object) error
@@ -194,7 +194,7 @@ func NewStore(conf *Config) (Store, error) {
 	st, ok := storeProviders[conf.Type]
 	registryMu.RUnlock()
 	if !ok {
-		return nil, fmt.Errorf("%q Store Type was not found", conf.Type)
+		return nil, fmt.Errorf("config.Type=%q was not found", conf.Type)
 	}
 
 	if conf.PageSize == 0 {

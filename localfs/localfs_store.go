@@ -53,6 +53,10 @@ type LocalStore struct {
 // NewLocalStore create local store from storage path on local filesystem, and cachepath.
 func NewLocalStore(storepath, cachepath string) (*LocalStore, error) {
 
+	if storepath == "" {
+		return nil, fmt.Errorf("storepath=%q cannot be empty", storepath)
+	}
+
 	if storepath == cachepath {
 		return nil, fmt.Errorf("storepath=%q cannot be the same as cachepath=%q", storepath, cachepath)
 	}
