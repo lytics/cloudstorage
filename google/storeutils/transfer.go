@@ -20,7 +20,7 @@ const (
 )
 
 var (
-	// MaxPrefix is the maximum number of prefix filters allowed when transfering files in GCS buckets
+	// MaxPrefix is the maximum number of prefix filters allowed when transferring files in GCS buckets
 	MaxPrefix = 20
 
 	ErrBadFilter = errors.New("too many inclusion/exclusion prefixes")

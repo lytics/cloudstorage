@@ -1,4 +1,4 @@
-package cloudstorage
+package google
 
 import (
 	"fmt"
@@ -6,13 +6,26 @@ import (
 	"net/http"
 	"os"
 
+	"cloud.google.com/go/storage"
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
 	googleOauth2 "golang.org/x/oauth2/google"
 	"golang.org/x/oauth2/jwt"
+	"google.golang.org/api/option"
+
+	"github.com/lytics/cloudstorage"
 )
 
-//An interface so we can return any of the 3 Google transporter wrapper as a single interface.
+const (
+	// Authentication Source
+	AuthJWTKeySource         cloudstorage.AuthMethod = "LyticsJWTkey"
+	AuthGoogleJWTKeySource   cloudstorage.AuthMethod = "GoogleJWTFile"
+	AuthGCEMetaKeySource     cloudstorage.AuthMethod = "gcemetadata"
+	AuthGCEDefaultOAuthToken cloudstorage.AuthMethod = "gcedefaulttoken"
+)
+
+// GoogleOAuthClient An interface so we can return any of the
+// 3 Google transporter wrapper as a single interface.
 type GoogleOAuthClient interface {
 	Client() *http.Client
 }
@@ -24,15 +37,27 @@ func (g *gOAuthClient) Client() *http.Client {
 	return g.httpclient
 }
 
-func BuildLyticsJWTTransporter(jwtConf *JwtConf) (GoogleOAuthClient, error) {
+func gcsCommonClient(client *http.Client, conf *cloudstorage.Config) (cloudstorage.Store, error) {
+	gcs, err := storage.NewClient(context.Background(), option.WithHTTPClient(client))
+	if err != nil {
+		return nil, err
+	}
+	store, err := NewGCSStore(gcs, conf.Bucket, conf.TmpDir, cloudstorage.MaxResults)
+	if err != nil {
+		return nil, err
+	}
+	return store, nil
+}
+
+// BuildGoogleJWTTransporter create a GoogleOAuthClient from jwt config.
+func BuildGoogleJWTTransporter(jwtConf *cloudstorage.JwtConf) (GoogleOAuthClient, error) {
 	key, err := jwtConf.KeyBytes()
 	if err != nil {
 		return nil, err
 	}
 
 	conf := &jwt.Config{
-		Email: jwtConf.Client_email,
-
+		Email:      jwtConf.ClientEmail,
 		PrivateKey: key,
 		Scopes:     jwtConf.Scopes,
 		TokenURL:   googleOauth2.JWTTokenURL,
@@ -45,7 +70,9 @@ func BuildLyticsJWTTransporter(jwtConf *JwtConf) (GoogleOAuthClient, error) {
 	}, nil
 }
 
-func BuildGoogleJWTTransporter(keyPath string, scope string) (GoogleOAuthClient, error) {
+// BuildGoogleFileJWTTransporter Build a Google Storage Client from a path to
+// a json file that has JWT.
+func BuildGoogleFileJWTTransporter(keyPath string, scope string) (GoogleOAuthClient, error) {
 	jsonKey, err := ioutil.ReadFile(os.ExpandEnv(keyPath))
 	if err != nil {
 		return nil, err
@@ -116,46 +143,35 @@ func BuildDefaultGoogleTransporter(scope ...string) (GoogleOAuthClient, error) {
 	}, nil
 }
 
-func NewGoogleClient(csctx *CloudStoreContext) (client GoogleOAuthClient, err error) {
-	switch csctx.TokenSource {
+// NewGoogleClient create new Google Stoage Client.
+func NewGoogleClient(conf *cloudstorage.Config) (client GoogleOAuthClient, err error) {
 
-	case GCEDefaultOAuthToken:
-		//   This token method uses the default OAuth token with GCS created by tools like gsutils, gcloud, etc...
-		//   See github.com/lytics/lio/src/ext_svcs/google/google_transporter.go : BuildDefaultGoogleTransporter
+	switch conf.AuthMethod {
+	case AuthGCEDefaultOAuthToken:
+		// This token method uses the default OAuth token with GCS created by tools like gsutils, gcloud, etc...
+		// See github.com/lytics/lio/src/ext_svcs/google/google_transporter.go : BuildDefaultGoogleTransporter
 		client, err = BuildDefaultGoogleTransporter("")
 		if err != nil {
-			l := LogConstructor(fmt.Sprintf("%s:(project=%s bucket=%s)", csctx.LogggingContext, csctx.Project, csctx.Bucket))
-			l.Errorf("error creating the GCEMetadataTransport and HTTP client. project=%s gs://%s/ err=%v ",
-				csctx.Project, csctx.Bucket, err)
 			return nil, err
 		}
-	case GCEMetaKeySource:
+	case AuthGCEMetaKeySource:
 		client, err = BuildGCEMetadatTransporter("")
 		if err != nil {
-			l := LogConstructor(fmt.Sprintf("%s:(project=%s bucket=%s)", csctx.LogggingContext, csctx.Project, csctx.Bucket))
-			l.Errorf("error creating the GCEMetadataTransport and HTTP client. project=%s gs://%s/ err=%v ",
-				csctx.Project, csctx.Bucket, err)
 			return nil, err
 		}
-	case LyticsJWTKeySource:
-		//used because our internal configs aren't stored as JSON.
-		client, err = BuildLyticsJWTTransporter(csctx.JwtConf)
+	case AuthJWTKeySource:
+		// used if you aren't storing entire json
+		client, err = BuildGoogleJWTTransporter(conf.JwtConf)
 		if err != nil {
-			l := LogConstructor(fmt.Sprintf("%s:(project=%s bucket=%s)", csctx.LogggingContext, csctx.Project, csctx.Bucket))
-			l.Errorf("error creating the JWTTransport and HTTP client. project=%s gs://%s/ keylen:%d err=%v ",
-				csctx.Project, csctx.Bucket, len(csctx.JwtConf.Private_keybase64), err)
 			return nil, err
 		}
-	case GoogleJWTKeySource:
-		client, err = BuildGoogleJWTTransporter(csctx.JwtFile, csctx.Scope)
+	case AuthGoogleJWTKeySource:
+		client, err = BuildGoogleFileJWTTransporter(conf.JwtFile, conf.Scope)
 		if err != nil {
-			l := LogConstructor(fmt.Sprintf("%s:(project=%s bucket=%s)", csctx.LogggingContext, csctx.Project, csctx.Bucket))
-			l.Errorf("error creating the JWTTransport and HTTP client. project=%s gs://%s/ keylen:%d err=%v ",
-				csctx.Project, csctx.Bucket, len(csctx.JwtConf.Private_keybase64), err)
 			return nil, err
 		}
 	default:
-		return nil, fmt.Errorf("bad sourcetype: %v", csctx.TokenSource)
+		return nil, fmt.Errorf("bad AuthMethod: %v", conf.AuthMethod)
 	}
 
 	return client, err

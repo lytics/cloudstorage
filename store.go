@@ -1,174 +1,219 @@
-// Cloud Storage interface to make Local, Google, s3 file storage
+// Package cloudstorage is an interface to make Local, Google, s3 file storage
 // share a common interface to aid testing local as well as
-// running in the cloud
+// running in the cloud.
 package cloudstorage
 
 import (
+	"encoding/base64"
 	"fmt"
 	"io"
-	"mime"
-	"net/http"
 	"os"
-	"path"
-	"path/filepath"
-	"strings"
+	"time"
 
-	"cloud.google.com/go/storage"
-	"github.com/lytics/cloudstorage/logging"
 	"golang.org/x/net/context"
-	"google.golang.org/api/option"
 )
 
-const StoreCacheFileExt = ".cache"
+const (
+	// StoreCacheFileExt = ".cache"
+	StoreCacheFileExt = ".cache"
+	// ContextTypeKey
+	ContextTypeKey = "content_type"
+	// MaxResults default number of objects to retrieve during a list-objects request,
+	// if more objects exist, then they will need to be paged
+	MaxResults = 3000
 
-var ObjectNotFound = fmt.Errorf("object not found")
-var ObjectExists = fmt.Errorf("object already exists in backing store (use store.Get)")
+	// ReadOnly File Permissions Levels
+	ReadOnly  AccessLevel = 0
+	ReadWrite AccessLevel = 1
+)
 
-var LogConstructor = func(prefix string) logging.Logger {
-	return logging.NewStdLogger(true, logging.DEBUG, prefix)
-}
+var (
+	// ErrObjectNotFound Error of not finding a file(object)
+	ErrObjectNotFound = fmt.Errorf("object not found")
+	// ErrObjectExists error trying to create an already existing file.
+	ErrObjectExists = fmt.Errorf("object already exists in backing store (use store.Get)")
+)
 
-//maxResults default number of objects to retrieve during a list-objects request,
-// if more objects exist, then they will need to be paged
-const maxResults = 3000
+type (
+	// StoreReader interface to define the Storage Interface abstracting
+	// the GCS, S3, LocalFile, etc interfaces
+	StoreReader interface {
+		// Type is he Store Type [google, s3, azure, localfs, etc]
+		Type() string
+		// Client gets access to the underlying native Client for Google, S3, etc
+		Client() interface{}
+		// Get returns an object (file) from the cloud store. The object
+		// isn't opened already, see Object.Open()
+		// ObjectNotFound will be returned if the object is not found.
+		Get(o string) (Object, error)
+		// List takes a prefix query and returns an array of unopened objects
+		// that have the given prefix.
+		List(query Query) (Objects, error)
+		// Iterator based api to get Objects
+		Objects(ctx context.Context, q Query) ObjectIterator
+		// Folders creates list of folders
+		Folders(ctx context.Context, q Query) ([]string, error)
 
-func NewStore(csctx *CloudStoreContext) (Store, error) {
+		// NewReader creates a new Reader to read the contents of the object.
+		// ObjectNotFound will be returned if the object is not found.
+		NewReader(o string) (io.ReadCloser, error)
+		NewReaderWithContext(ctx context.Context, o string) (io.ReadCloser, error)
 
-	if csctx.PageSize == 0 {
-		csctx.PageSize = maxResults
+		String() string
 	}
 
-	if csctx.TmpDir == "" {
-		csctx.TmpDir = os.TempDir()
+	// StoreCopy Optional interface to fast path copy.  Many of the cloud providers
+	// don't actually copy bytes.
+	StoreCopy interface {
+		// Copy from object, to object
+		Copy(ctx context.Context, src, dst Object) error
 	}
 
-	switch csctx.TokenSource {
-	case GCEDefaultOAuthToken, GCEMetaKeySource, LyticsJWTKeySource, GoogleJWTKeySource:
-		googleclient, err := NewGoogleClient(csctx)
-		if err != nil {
-			return nil, err
-		}
-		return gcsCommonClient(googleclient.Client(), csctx)
-	case LocalFileSource:
-		prefix := fmt.Sprintf("%s:", csctx.LogggingContext)
-		l := LogConstructor(prefix)
-
-		store, err := NewLocalStore(csctx.LocalFS, csctx.TmpDir, l)
-		if err != nil {
-			l.Errorf("error creating the store. err=%v ", err)
-			return nil, err
-		}
-		return store, nil
-	default:
-		return nil, fmt.Errorf("bad sourcetype: %v", csctx.TokenSource)
+	// StoreMove Optional interface to fast path move.  Many of the cloud providers
+	// don't actually copy bytes.
+	StoreMove interface {
+		// Move from object location, to object location.
+		Move(ctx context.Context, src, dst Object) error
 	}
-}
 
-func gcsCommonClient(client *http.Client, csctx *CloudStoreContext) (Store, error) {
-	project := csctx.Project
-	bucket := csctx.Bucket
-	prefix := fmt.Sprintf("%s:(project=%s bucket=%s)", csctx.LogggingContext, project, bucket)
-	l := LogConstructor(prefix)
+	// Store interface to define the Storage Interface abstracting
+	// the GCS, S3, LocalFile interfaces
+	Store interface {
+		StoreReader
 
-	gcs, err := storage.NewClient(context.Background(), option.WithHTTPClient(client))
-	if err != nil {
-		l.Errorf("%v error creating Google cloud storage client. project:%s gs://%s/ err:%v ",
-			csctx.LogggingContext, project, bucket, err)
-		return nil, err
+		// NewWriter returns a io.Writer that writes to a Cloud object
+		// associated with this backing Store object.
+		//
+		// A new object will be created if an object with this name already exists.
+		// Otherwise any previous object with the same name will be replaced.
+		// The object will not be available (and any previous object will remain)
+		// until Close has been called
+		NewWriter(o string, metadata map[string]string) (io.WriteCloser, error)
+		NewWriterWithContext(ctx context.Context, o string, metadata map[string]string) (io.WriteCloser, error)
+
+		// NewObject creates a new empty object backed by the cloud store
+		// This new object isn't' synced/created in the backing store
+		// until the object is Closed/Sync'ed.
+		NewObject(o string) (Object, error)
+
+		// Delete removes the object from the cloud store.
+		Delete(o string) error
 	}
-	store, err := NewGCSStore(gcs, bucket, csctx.TmpDir, maxResults, l)
-	if err != nil {
-		l.Errorf("error creating the store. err=%v ", err)
-		return nil, err
+
+	// Object is a handle to a cloud stored file/object.  Calling Open will pull the remote file onto
+	// your local filesystem for reading/writing.  Calling Sync/Close will push the local copy
+	// backup to the cloud store.
+	Object interface {
+		Name() string
+		String() string
+		Updated() time.Time
+		MetaData() map[string]string
+		SetMetaData(meta map[string]string)
+		// StorageSource is the type of store.
+		StorageSource() string
+		// Open copies the remote file to a local cache and opens the cached version
+		// for read/writing.  Calling Close/Sync will push the copy back to the
+		// backing store.
+		Open(readonly AccessLevel) (*os.File, error)
+		// Release will remove the locally cached copy of the file.  You most call Close
+		// before releasing.  Release will call os.Remove(local_copy_file) so opened
+		// filehandles need to be closed.
+		Release() error
+		// Implement io.ReadWriteCloser Open most be called before using these
+		// functions.
+		Read(p []byte) (n int, err error)
+		Write(p []byte) (n int, err error)
+		Sync() error
+		Close() error
+
+		// Delete removes the object from the cloud store.
+		Delete() error
 	}
-	return store, nil
-}
 
-const ContextTypeKey = "content_type"
-
-func contentType(name string) string {
-	contenttype := ""
-	ext := filepath.Ext(name)
-	if contenttype == "" {
-		contenttype = mime.TypeByExtension(ext)
-		if contenttype == "" {
-			contenttype = "application/octet-stream"
-		}
+	// ObjectIterator interface to page through objects
+	ObjectIterator interface {
+		Next() (Object, error)
 	}
-	return contenttype
-}
 
-func ensureContextType(o string, md map[string]string) string {
-	ctype, ok := md[ContextTypeKey]
+	// Objects are just a collection of Object(s).
+	// Used as the results for store.List commands.
+	Objects []Object
+
+	// AuthMethod Is the source/location/type of auth token
+	AuthMethod string
+
+	// AccessLevel is the level of permissions on files
+	AccessLevel int
+
+	// Config the cloud store config parameters
+	Config struct {
+		// StoreType [gcs,localfs,s3,azure]
+		Type string
+		// AuthMethod the methods of authenticating store.  Ie, where/how to
+		// find auth tokens.
+		AuthMethod AuthMethod
+		// Cloud Bucket Project
+		Project string
+		// Bucket is the "path" or named bucket in cloud
+		Bucket string
+		// the page size to use with google api requests (default 1000)
+		PageSize int
+		// used by LyticsJWTKeySource
+		JwtConf *JwtConf
+		// used by GoogleJWTKeySource
+		JwtFile string
+		// Permissions scope
+		Scope string
+		// LocalFS Archive
+		LocalFS string // The location to use for archived events
+		// The location to save locally cached seq files.
+		TmpDir string
+	}
+
+	// JwtConf For use with google/google_jwttransporter.go
+	// Which can be used by the google go sdk's
+	JwtConf struct {
+		PrivateKeyID     string `json:"private_key_id,omitempty"`
+		PrivateKeyBase64 string `json:"private_key,omitempty"`
+		ClientEmail      string `json:"client_email,omitempty"`
+		ClientID         string `json:"client_id,omitempty"`
+		Keytype          string `json:"type,omitempty"`
+		// what scope to use when the token is created.
+		// for example https://github.com/google/google-api-go-client/blob/0d3983fb069cb6651353fc44c5cb604e263f2a93/storage/v1/storage-gen.go#L54
+		Scopes []string
+	}
+)
+
+// NewStore create new Store from Storage Config/Context.
+func NewStore(conf *Config) (Store, error) {
+
+	if conf.Type == "" {
+		return nil, fmt.Errorf("Type is required on Config")
+	}
+	registryMu.RLock()
+	st, ok := storeProviders[conf.Type]
+	registryMu.RUnlock()
 	if !ok {
-		ext := filepath.Ext(o)
-		if ctype == "" {
-			ctype = mime.TypeByExtension(ext)
-			if ctype == "" {
-				ctype = "application/octet-stream"
-			}
-		}
-		md[ContextTypeKey] = ctype
+		return nil, fmt.Errorf("%q Store Type was not found", conf.Type)
 	}
-	return ctype
+
+	if conf.PageSize == 0 {
+		conf.PageSize = MaxResults
+	}
+
+	if conf.TmpDir == "" {
+		conf.TmpDir = os.TempDir()
+	}
+	return st(conf)
 }
 
-func exists(filename string) bool {
-	if _, err := os.Stat(filename); os.IsNotExist(err) {
-		return false
-	}
-	return true
-}
-
-func cachepathObj(cachepath, oname, storeid string) string {
-	obase := path.Base(oname)
-	opath := path.Dir(oname)
-	ext := path.Ext(oname)
-	ext2 := fmt.Sprintf("%s.%s%s", ext, storeid, StoreCacheFileExt)
-	var obase2 string
-	if ext == "" {
-		obase2 = obase + ext2
-	} else {
-		obase2 = strings.Replace(obase, ext, ext2, 1)
-	}
-	return path.Join(cachepath, opath, obase2)
-}
-
-func ensureDir(filename string) error {
-	fdir := path.Dir(filename)
-	if fdir != "" && fdir != filename {
-		d, err := os.Stat(fdir)
-		if err == nil {
-			if !d.IsDir() {
-				return fmt.Errorf("filename's dir exists but isn't' a directory: filename:%v dir:%v", filename, fdir)
-			}
-		} else if os.IsNotExist(err) {
-			err := os.MkdirAll(fdir, 0775)
-			if err != nil {
-				return fmt.Errorf("unable to create path. : filename:%v dir:%v err:%v", filename, fdir, err)
-			}
+// Copy source to destination.
+func Copy(ctx context.Context, s Store, src, des Object) error {
+	// for Providers that offer fast path, and use the backend copier
+	if src.StorageSource() == des.StorageSource() {
+		if cp, ok := s.(StoreCopy); ok {
+			return cp.Copy(ctx, src, des)
 		}
-	}
-	return nil
-}
-
-func Copy(ctx context.Context, src, des Object) error {
-	//for GCS, take the fast path, and use the backend copier
-	if src.StorageSource() == GCSFSStorageSource && des.StorageSource() == GCSFSStorageSource {
-		srcgcs, ok := src.(*gcsFSObject)
-		if !ok {
-			return fmt.Errorf("error StoreageSource is declared as GCS, but cast failed???")
-		}
-		desgcs, ok := des.(*gcsFSObject)
-		if !ok {
-			return fmt.Errorf("error StoreageSource is declared as GCS, but cast failed???")
-		}
-
-		oh := srcgcs.gcsb.Object(srcgcs.name)
-		dh := desgcs.gcsb.Object(desgcs.name)
-
-		_, err := dh.CopierFrom(oh).Run(ctx)
-		return err
 	}
 
 	// Slow path, copy locally then up to des
@@ -186,30 +231,13 @@ func Copy(ctx context.Context, src, des Object) error {
 	return des.Close() //this will flush and sync the file.
 }
 
-func Move(ctx context.Context, src, des Object) error {
-	//for GCS, take the fast path, and use the backend copier
-	if src.StorageSource() == GCSFSStorageSource && des.StorageSource() == GCSFSStorageSource {
-		srcgcs, ok := src.(*gcsFSObject)
-		if !ok {
-			return fmt.Errorf("error StoreageSource is declared as GCS, but cast failed???")
+// Move source object to destination.
+func Move(ctx context.Context, s Store, src, des Object) error {
+	// take the fast path, and use the store provided mover if available
+	if src.StorageSource() == des.StorageSource() {
+		if sm, ok := s.(StoreMove); ok {
+			return sm.Move(ctx, src, des)
 		}
-		desgcs, ok := des.(*gcsFSObject)
-		if !ok {
-			return fmt.Errorf("error StoreageSource is declared as GCS, but cast failed???")
-		}
-
-		oh := srcgcs.gcsb.Object(srcgcs.name)
-		dh := desgcs.gcsb.Object(desgcs.name)
-
-		if _, err := dh.CopierFrom(oh).Run(ctx); err != nil {
-			return err
-		}
-
-		if err := oh.Delete(ctx); err != nil {
-			return err
-		}
-
-		return nil
 	}
 
 	// Slow path, copy locally then up to des
@@ -230,4 +258,21 @@ func Move(ctx context.Context, src, des Object) error {
 	}
 
 	return des.Close() //this will flush and sync the file.
+}
+
+func (o Objects) Len() int           { return len(o) }
+func (o Objects) Less(i, j int) bool { return o[i].Name() < o[j].Name() }
+func (o Objects) Swap(i, j int)      { o[i], o[j] = o[j], o[i] }
+
+// Validate that this is a valid jwt conf set of tokens
+func (j *JwtConf) Validate() error {
+	_, err := j.KeyBytes()
+	if err != nil {
+		return fmt.Errorf("Invalid JwtConf.PrivateKeyBase64  (error trying to decode base64 err: %v", err)
+	}
+	return nil
+}
+
+func (j *JwtConf) KeyBytes() ([]byte, error) {
+	return base64.StdEncoding.DecodeString(j.PrivateKeyBase64)
 }
