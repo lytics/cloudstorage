@@ -17,10 +17,16 @@ import (
 )
 
 const (
-	// Authentication Source
-	AuthJWTKeySource         cloudstorage.AuthMethod = "LyticsJWTkey"
-	AuthGoogleJWTKeySource   cloudstorage.AuthMethod = "GoogleJWTFile"
-	AuthGCEMetaKeySource     cloudstorage.AuthMethod = "gcemetadata"
+	// Authentication Source's
+
+	// AuthJWTKeySource is for a complete string representing json of JWT
+	AuthJWTKeySource cloudstorage.AuthMethod = "LyticsJWTkey"
+	// AuthGoogleJWTKeySource is a string representing path to a file of JWT
+	AuthGoogleJWTKeySource cloudstorage.AuthMethod = "GoogleJWTFile"
+	// AuthGCEMetaKeySource is flag saying to use gcemetadata
+	AuthGCEMetaKeySource cloudstorage.AuthMethod = "gcemetadata"
+	// AuthGCEDefaultOAuthToken means use local auth where it (google client)
+	// checks variety of locations for local auth tokens.
 	AuthGCEDefaultOAuthToken cloudstorage.AuthMethod = "gcedefaulttoken"
 )
 
@@ -143,7 +149,7 @@ func BuildDefaultGoogleTransporter(scope ...string) (GoogleOAuthClient, error) {
 	}, nil
 }
 
-// NewGoogleClient create new Google Stoage Client.
+// NewGoogleClient create new Google Storage Client.
 func NewGoogleClient(conf *cloudstorage.Config) (client GoogleOAuthClient, err error) {
 
 	switch conf.AuthMethod {
@@ -160,7 +166,7 @@ func NewGoogleClient(conf *cloudstorage.Config) (client GoogleOAuthClient, err e
 			return nil, err
 		}
 	case AuthJWTKeySource:
-		// used if you aren't storing entire json
+		// used if you are providing string of json
 		client, err = BuildGoogleJWTTransporter(conf.JwtConf)
 		if err != nil {
 			return nil, err
