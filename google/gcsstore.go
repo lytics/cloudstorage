@@ -47,7 +47,7 @@ type GcsFS struct {
 	gcs       *storage.Client
 	bucket    string
 	cachepath string
-	PageSize  int //TODO pipe this in from eventstore
+	PageSize  int
 	Id        string
 }
 
@@ -80,6 +80,7 @@ func (g *GcsFS) Client() interface{} {
 	return g.gcs
 }
 
+// String function to provide gs://..../file   path
 func (g *GcsFS) String() string {
 	return fmt.Sprintf("gs://%s/", g.bucket)
 }
