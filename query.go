@@ -6,10 +6,11 @@ import "sort"
 type Filter func(objects Objects) Objects
 
 // Query used to query the cloud source. The primary query is a prefix query like
-// `ls /evt-store/aid-123/*`.
+// `ls /my-csv-files/baseball/*`.
 type Query struct {
-	Delimiter string
+	Delimiter string   // Delimiter is most likely "/"
 	Prefix    string   // prefix (directory) to search for or object name if one file
+	Start     string   // Start is needed for api's that are paged.  Kind of a cursor.
 	Filters   []Filter // Applied to the result sets to filter out Objects (i.e. remove objects by extension)
 }
 
@@ -45,7 +46,7 @@ func (q *Query) Sorted() *Query {
 	return q
 }
 
-// applyFilters is called as the last step in store.List() to filter out the results before they are returned.
+// ApplyFilters is called as the last step in store.List() to filter out the results before they are returned.
 func (q *Query) ApplyFilters(objects Objects) Objects {
 	for _, f := range q.Filters {
 		objects = f(objects)

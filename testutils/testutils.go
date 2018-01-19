@@ -23,7 +23,7 @@ type TestingT interface {
 
 func Clearstore(t TestingT, store cloudstorage.Store) {
 	t.Logf("----------------Clearstore-----------------\n")
-	q := cloudstorage.Query{"", "", nil}
+	q := cloudstorage.Query{Delimiter: "", Prefix: ""}
 	q.Sorted()
 	objs, err := store.List(q)
 	if err != nil {

@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/araddon/gou"
 	"golang.org/x/net/context"
 )
 
@@ -18,7 +19,12 @@ const (
 	// MaxResults default number of objects to retrieve during a list-objects request,
 	// if more objects exist, then they will need to be paged
 	MaxResults = 3000
+)
 
+// AccessLevel is the level of permissions on files
+type AccessLevel int
+
+const (
 	// ReadOnly File Permissions Levels
 	ReadOnly  AccessLevel = 0
 	ReadWrite AccessLevel = 1
@@ -50,12 +56,12 @@ type (
 		Objects(ctx context.Context, q Query) ObjectIterator
 		// Folders creates list of folders
 		Folders(ctx context.Context, q Query) ([]string, error)
-
 		// NewReader creates a new Reader to read the contents of the object.
-		// ObjectNotFound will be returned if the object is not found.
+		// ErrObjectNotFound will be returned if the object is not found.
 		NewReader(o string) (io.ReadCloser, error)
+		// NewReader with context (for cancelation, etc)
 		NewReaderWithContext(ctx context.Context, o string) (io.ReadCloser, error)
-
+		// String default descriptor.
 		String() string
 	}
 
@@ -86,6 +92,7 @@ type (
 		// The object will not be available (and any previous object will remain)
 		// until Close has been called
 		NewWriter(o string, metadata map[string]string) (io.WriteCloser, error)
+		// NewWriter but with context.
 		NewWriterWithContext(ctx context.Context, o string, metadata map[string]string) (io.WriteCloser, error)
 
 		// NewObject creates a new empty object backed by the cloud store
@@ -101,10 +108,15 @@ type (
 	// your local filesystem for reading/writing.  Calling Sync/Close will push the local copy
 	// backup to the cloud store.
 	Object interface {
+		// Name of object/file.
 		Name() string
+		// String is default descriptor.
 		String() string
+		// Updated timestamp.
 		Updated() time.Time
+		// MetaData is map of arbitrary name/value pairs about object.
 		MetaData() map[string]string
+		// SetMetaData allows you to set key/value pairs.
 		SetMetaData(meta map[string]string)
 		// StorageSource is the type of store.
 		StorageSource() string
@@ -140,32 +152,38 @@ type (
 	// AuthMethod Is the source/location/type of auth token
 	AuthMethod string
 
-	// AccessLevel is the level of permissions on files
-	AccessLevel int
-
-	// Config the cloud store config parameters
+	// Config the cloud store config settings.
 	Config struct {
-		// StoreType [gcs,localfs,s3,azure]
+		// Type is StoreType [gcs,localfs,s3,azure]
 		Type string
 		// AuthMethod the methods of authenticating store.  Ie, where/how to
 		// find auth tokens.
 		AuthMethod AuthMethod
 		// Cloud Bucket Project
 		Project string
+		// Region is the cloud region
+		Region string
 		// Bucket is the "path" or named bucket in cloud
 		Bucket string
-		// the page size to use with google api requests (default 1000)
+		// the page size to use with api requests (default 1000)
 		PageSize int
-		// used by LyticsJWTKeySource
+		// used by JWTKeySource
 		JwtConf *JwtConf
-		// used by GoogleJWTKeySource
+		// JwtFile is the file-path to local auth-token file.
 		JwtFile string
+		// BaseUrl is the base-url path for customizing regions etc.  IE
+		// AWS has different url paths per region on some situations.
+		BaseUrl string
 		// Permissions scope
 		Scope string
-		// LocalFS Archive
-		LocalFS string // The location to use for archived events
-		// The location to save locally cached seq files.
-		TmpDir string
+		// LocalFS is filesystem path to use for the local files
+		// for Type=localfs
+		LocalFS string
+		// The filesystem path to save locally cached files as they are
+		// being read/written from cloud and need a staging area.
+		TmpDir string `json:"tmpdir,omitempty"`
+		// Settings are catch-all-bag to allow per-implementation over-rides
+		Settings gou.JsonHelper `json:"settings,omitempty"`
 	}
 
 	// JwtConf For use with google/google_jwttransporter.go
