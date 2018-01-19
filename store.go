@@ -170,15 +170,15 @@ type (
 		// used by JWTKeySource
 		JwtConf *JwtConf
 		// JwtFile is the file-path to local auth-token file.
-		JwtFile string
+		JwtFile string `json:"jwtfile,omitempty"`
 		// BaseUrl is the base-url path for customizing regions etc.  IE
 		// AWS has different url paths per region on some situations.
-		BaseUrl string
+		BaseUrl string `json:"baseurl,omitempty"`
 		// Permissions scope
-		Scope string
+		Scope string `json:"scope,omitempty"`
 		// LocalFS is filesystem path to use for the local files
 		// for Type=localfs
-		LocalFS string
+		LocalFS string `json:"localfs,omitempty"`
 		// The filesystem path to save locally cached files as they are
 		// being read/written from cloud and need a staging area.
 		TmpDir string `json:"tmpdir,omitempty"`

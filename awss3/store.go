@@ -6,6 +6,7 @@ import (
 	"io"
 	"math"
 	"math/rand"
+	"net/http"
 	"os"
 	"path"
 	"strings"
@@ -45,6 +46,10 @@ var (
 
 	// ErrNoS3Session no valid session
 	ErrNoS3Session = fmt.Errorf("no valid aws session was created")
+	// ErrNoAccessKey
+	ErrNoAccessKey = fmt.Errorf("no settings.access_key")
+	// ErrNoAccessSecret
+	ErrNoAccessSecret = fmt.Errorf("no settings.access_secret")
 )
 
 func init() {
@@ -53,7 +58,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return NewStore(client, bucket, cachepath, pagesize)
+		return NewStore(client, conf)
 	})
 }
 
@@ -74,7 +79,15 @@ func NewClient(conf *cloudstorage.Config) (client *s3.S3, err error) {
 	}
 
 	if conf.AuthMethod == AuthAccessKey {
-		awsConf.WithCredentials(credentials.NewStaticCredentials(accessKeyID, secretKey, ""))
+		accessKey := conf.Settings.String(ConfKeyAccessKey)
+		if accessKey == "" {
+			return nil, ErrNoAccessKey
+		}
+		secretKey := conf.Settings.String(ConfKeyAccessSecret)
+		if secretKey == "" {
+			return nil, ErrNoAccessSecret
+		}
+		awsConf.WithCredentials(credentials.NewStaticCredentials(accessKey, secretKey, ""))
 	}
 
 	if conf.BaseUrl != "" {
@@ -88,7 +101,7 @@ func NewClient(conf *cloudstorage.Config) (client *s3.S3, err error) {
 
 	sess := session.New(awsConf)
 	if sess == nil {
-		return nil, "", errors.New("creating the S3 session")
+		return nil, ErrNoS3Session
 	}
 
 	s3Client := s3.New(sess)
@@ -108,10 +121,16 @@ type FS struct {
 }
 
 // NewStore Create AWS S3 storage client.
-func NewStore(c *s3.S3, bucket, cachepath string, pagesize int) (*FS, error) {
-	err := os.MkdirAll(path.Dir(cachepath), 0775)
+func NewStore(c *s3.S3, conf *cloudstorage.Config) (*FS, error) {
+
+	// , bucket, cachepath string, pagesize int
+	// conf.Bucket, conf.TmpDir, cloudstorage.MaxResults
+	if conf.TmpDir == "" {
+		return nil, fmt.Errorf("unable to create cachepath. config.tmpdir=%q", conf.TmpDir)
+	}
+	err := os.MkdirAll(path.Dir(conf.TmpDir), 0775)
 	if err != nil {
-		return nil, fmt.Errorf("unable to create path. path=%s err=%v", cachepath, err)
+		return nil, fmt.Errorf("unable to create cachepath. config.tmpdir=%q err=%v", conf.TmpDir, err)
 	}
 
 	uid := uuid.NewUUID().String()
@@ -119,10 +138,10 @@ func NewStore(c *s3.S3, bucket, cachepath string, pagesize int) (*FS, error) {
 
 	return &FS{
 		client:    c,
-		bucket:    bucket,
-		cachepath: cachepath,
+		bucket:    conf.Bucket,
+		cachepath: conf.TmpDir,
 		Id:        uid,
-		PageSize:  pagesize,
+		PageSize:  cloudstorage.MaxResults,
 	}, nil
 }
 
