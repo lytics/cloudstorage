@@ -142,7 +142,10 @@ type (
 	// ObjectIterator interface to page through objects
 	// See go doc for examples https://github.com/GoogleCloudPlatform/google-cloud-go/wiki/Iterator-Guidelines
 	ObjectIterator interface {
+		// Next gets next object, returns google.golang.org/api/iterator iterator.Done error.
 		Next() (Object, error)
+		// Close this down (and or context.Close)
+		Close()
 	}
 
 	// Objects are just a collection of Object(s).

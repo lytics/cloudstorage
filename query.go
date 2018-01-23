@@ -10,7 +10,7 @@ type Filter func(objects Objects) Objects
 type Query struct {
 	Delimiter string   // Delimiter is most likely "/"
 	Prefix    string   // prefix (directory) to search for or object name if one file
-	Start     string   // Start is needed for api's that are paged.  Kind of a cursor.
+	Cursor    string   // Cursor if provided is a start next page fetch bookmark.
 	Filters   []Filter // Applied to the result sets to filter out Objects (i.e. remove objects by extension)
 }
 

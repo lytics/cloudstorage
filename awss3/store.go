@@ -227,11 +227,12 @@ func (f *FS) getObject(objectname string) (*object, error) {
 	obj := &object{
 		name:       objectname,
 		metadata:   map[string]string{cloudstorage.ContextTypeKey: cloudstorage.ContentType(objectname)},
-		gcsb:       g.gcsb(),
 		bucket:     f.bucket,
 		cachedcopy: nil,
-		cachepath:  cf,
-		client:     c.client,
+		cachepath:  cloudstorage.CachePathObj(f.cachepath, objectname, f.Id),
+		fs:         f,
+	}
+	/*
 		properties: properties{
 			ETag:         &etag,
 			Key:          &id,
@@ -241,15 +242,19 @@ func (f *FS) getObject(objectname string) (*object, error) {
 			StorageClass: res.StorageClass,
 			Metadata:     md,
 		},
-	}
-
-	return i, nil
+	*/
+	return obj, nil
 }
 
 func convertMetaData(m map[string]*string) (map[string]string, error) {
 	result := make(map[string]string, len(m))
 	for key, value := range m {
-		result[strings.ToLower(key)] = value
+		if value != nil {
+			result[strings.ToLower(key)] = *value
+		} else {
+			result[strings.ToLower(key)] = ""
+		}
+
 	}
 	return result, nil
 }
@@ -266,16 +271,16 @@ func (f *FS) List(q cloudstorage.Query) (cloudstorage.Objects, error) {
 		return make(cloudstorage.Objects, 0), nil
 	}
 
-	res = query.ApplyFilters(res)
+	res = q.ApplyFilters(res)
 
 	return res, nil
 }
 
 // Objects returns an iterator over the objects in the google bucket that match the Query q.
 // If q is nil, no filtering is done.
-func (f *FS) Objects(ctx context.Context, csq cloudstorage.Query) cloudstorage.ObjectIterator {
-	var q = &storage.Query{Prefix: csq.Prefix}
-	iter := f.b().Objects(ctx, q)
+func (f *FS) Objects(ctx context.Context, q cloudstorage.Query) cloudstorage.ObjectIterator {
+	qry := &storage.Query{Prefix: q.Prefix}
+	iter := f.b().Objects(ctx, qry)
 	return &ObjectIterator{f, ctx, iter}
 }
 
@@ -412,48 +417,11 @@ func (f *FS) Delete(obj string) error {
 	return nil
 }
 
-// ObjectIterator iterator to match store interface for iterating
-// through all Objects that matched query.
-type ObjectIterator struct {
-	f   *FS
-	ctx context.Context
-}
-
-// Next iterator to go to next object or else returns error for done.
-func (it *ObjectIterator) Next() (cloudstorage.Object, error) {
-	return nil, fmt.Errorf("Not implemented")
-	/*
-		retryCt := 0
-		for {
-			select {
-			case <-it.ctx.Done():
-				// If has been closed
-				return nil, it.ctx.Err()
-			default:
-				o, err := it.iter.Next()
-				if err == nil {
-					return newObject(it.f, o), nil
-				} else if err == iterator.Done {
-					return nil, err
-				} else if err == context.Canceled || err == context.DeadlineExceeded {
-					// Return to user
-					return nil, err
-				}
-				if retryCt < 5 {
-					backoff(retryCt)
-				} else {
-					return nil, err
-				}
-				retryCt++
-			}
-		}
-	*/
-}
-
 type object struct {
 	name       string
 	updated    time.Time
 	metadata   map[string]string
+	fs         *FS
 	o          *s3.Object
 	bucket     string
 	cachedcopy *os.File
