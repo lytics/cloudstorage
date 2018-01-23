@@ -50,6 +50,8 @@ var (
 	ErrNoAccessKey = fmt.Errorf("no settings.access_key")
 	// ErrNoAccessSecret
 	ErrNoAccessSecret = fmt.Errorf("no settings.access_secret")
+	// ErrNoAuth
+	ErrNoAuth = fmt.Errorf("No auth provided")
 )
 
 func init() {
@@ -78,7 +80,8 @@ func NewClient(conf *cloudstorage.Config) (client *s3.S3, err error) {
 		awsConf.WithRegion("us-east-1")
 	}
 
-	if conf.AuthMethod == AuthAccessKey {
+	switch conf.AuthMethod {
+	case AuthAccessKey:
 		accessKey := conf.Settings.String(ConfKeyAccessKey)
 		if accessKey == "" {
 			return nil, ErrNoAccessKey
@@ -88,6 +91,8 @@ func NewClient(conf *cloudstorage.Config) (client *s3.S3, err error) {
 			return nil, ErrNoAccessSecret
 		}
 		awsConf.WithCredentials(credentials.NewStaticCredentials(accessKey, secretKey, ""))
+	default:
+		return nil, ErrNoAuth
 	}
 
 	if conf.BaseUrl != "" {
@@ -160,10 +165,11 @@ func (f *FS) String() string {
 	return fmt.Sprintf("s3://%s/", f.bucket)
 }
 
+/*
 func (f *FS) b() *s3.Bucket {
 	return f.client.Bucket(f.bucket)
 }
-
+*/
 // NewObject of Type s3.
 func (f *FS) NewObject(objectname string) (cloudstorage.Object, error) {
 	obj, err := f.Get(objectname)
@@ -178,7 +184,6 @@ func (f *FS) NewObject(objectname string) (cloudstorage.Object, error) {
 	return &object{
 		name:       objectname,
 		metadata:   map[string]string{cloudstorage.ContextTypeKey: cloudstorage.ContentType(objectname)},
-		b:          f.b(),
 		bucket:     f.bucket,
 		cachedcopy: nil,
 		cachepath:  cf,
@@ -188,7 +193,7 @@ func (f *FS) NewObject(objectname string) (cloudstorage.Object, error) {
 // Get Gets a single File Object
 func (f *FS) Get(objectpath string) (cloudstorage.Object, error) {
 
-	gobj, err := f.b().Object(objectpath).Attrs(context.Background()) // .Objects(context.Background(), q)
+	obj, err := f.getObject(objectpath)
 	if err != nil {
 		if strings.Contains(err.Error(), "doesn't exist") {
 			return nil, cloudstorage.ErrObjectNotFound
@@ -196,11 +201,57 @@ func (f *FS) Get(objectpath string) (cloudstorage.Object, error) {
 		return nil, err
 	}
 
-	if gobj == nil {
+	if obj == nil {
 		return nil, cloudstorage.ErrObjectNotFound
 	}
 
-	return newObject(f, gobj), nil
+	return newObject(f, obj), nil
+}
+
+// get single object
+func (f *FS) getObject(objectname string) (*object, error) {
+
+	res, err := f.client.GetObject(&s3.GetObjectInput{
+		Key:    aws.String(objectname),
+		Bucket: aws.String(f.bucket),
+	})
+	if err != nil {
+		// translate the string error to typed error
+		if strings.Contains(err.Error(), "NoSuchKey") {
+			return nil, cloudstorage.ErrObjectNotFound
+		}
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	obj := &object{
+		name:       objectname,
+		metadata:   map[string]string{cloudstorage.ContextTypeKey: cloudstorage.ContentType(objectname)},
+		gcsb:       g.gcsb(),
+		bucket:     f.bucket,
+		cachedcopy: nil,
+		cachepath:  cf,
+		client:     c.client,
+		properties: properties{
+			ETag:         &etag,
+			Key:          &id,
+			LastModified: res.LastModified,
+			Owner:        nil,
+			Size:         res.ContentLength,
+			StorageClass: res.StorageClass,
+			Metadata:     md,
+		},
+	}
+
+	return i, nil
+}
+
+func convertMetaData(m map[string]*string) (map[string]string, error) {
+	result := make(map[string]string, len(m))
+	for key, value := range m {
+		result[strings.ToLower(key)] = value
+	}
+	return result, nil
 }
 
 // List objects from this store.
@@ -404,7 +455,6 @@ type object struct {
 	updated    time.Time
 	metadata   map[string]string
 	o          *s3.Object
-	b          *s3.Bucket
 	bucket     string
 	cachedcopy *os.File
 	readonly   bool
@@ -412,14 +462,13 @@ type object struct {
 	cachepath  string
 }
 
-func newObject(f *FS, o *storage.ObjectAttrs) *object {
+func newObject(f *FS, bucket string, o *storage.ObjectAttrs) *object {
 	return &object{
 		name:      o.Name,
 		updated:   o.Updated,
 		metadata:  o.Metadata,
-		b:         g.b(),
-		bucket:    g.bucket,
-		cachepath: cloudstorage.CachePathObj(g.cachepath, o.Name, g.Id),
+		bucket:    bucket,
+		cachepath: cloudstorage.CachePathObj(f.cachepath, o.Name, f.Id),
 	}
 }
 func (o *object) StorageSource() string {
