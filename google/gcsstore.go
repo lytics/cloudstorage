@@ -36,7 +36,7 @@ var (
 	GCSRetries int = 55
 
 	// Ensure we implement ObjectIterator
-	_ cloudstorage.ObjectIterator = (*GcsObjectIterator)(nil)
+	_ cloudstorage.ObjectIterator = (*objectIterator)(nil)
 )
 
 // GcsFS Simple wrapper for accessing smaller GCS files, it doesn't currently implement a
@@ -89,7 +89,7 @@ func (g *GcsFS) gcsb() *storage.BucketHandle {
 
 // NewObject of Type GCS.
 func (g *GcsFS) NewObject(objectname string) (cloudstorage.Object, error) {
-	obj, err := g.Get(objectname)
+	obj, err := g.Get(context.Background(), objectname)
 	if err != nil && err != cloudstorage.ErrObjectNotFound {
 		return nil, err
 	} else if obj != nil {
@@ -109,7 +109,7 @@ func (g *GcsFS) NewObject(objectname string) (cloudstorage.Object, error) {
 }
 
 // Get Gets a single File Object
-func (g *GcsFS) Get(objectpath string) (cloudstorage.Object, error) {
+func (g *GcsFS) Get(ctx context.Context, objectpath string) (cloudstorage.Object, error) {
 
 	gobj, err := g.gcsb().Object(objectpath).Attrs(context.Background()) // .Objects(context.Background(), q)
 	if err != nil {
@@ -128,38 +128,12 @@ func (g *GcsFS) Get(objectpath string) (cloudstorage.Object, error) {
 
 // Objects returns an iterator over the objects in the google bucket that match the Query q.
 // If q is nil, no filtering is done.
-func (g *GcsFS) Objects(ctx context.Context, csq cloudstorage.Query) cloudstorage.ObjectIterator {
+func (g *GcsFS) Objects(ctx context.Context, csq cloudstorage.Query) (cloudstorage.ObjectIterator, error) {
 	var q = &storage.Query{Prefix: csq.Prefix}
 	iter := g.gcsb().Objects(ctx, q)
-	return &GcsObjectIterator{g, ctx, iter}
+	return &objectIterator{g, ctx, iter}, nil
 }
 
-/*
-// ListObjects iterates to find a list of objects
-func (g *GcsFS) listObjects(q *storage.Query, retries int) (cloudstorage.Objects, error) {
-	var lasterr error
-
-	for i := 0; i < retries; i++ {
-		objects := make(cloudstorage.Objects, 0)
-		iter := g.gcsb().Objects(context.Background(), q)
-	iterLoop:
-		for {
-			oa, err := iter.Next()
-			switch err {
-			case nil:
-				objects = append(objects, newObjectFromGcs(g, oa))
-			case iterator.Done:
-				return objects, nil
-			default:
-				lasterr = err
-				cloudstorage.Backoff(i)
-				break iterLoop
-			}
-		}
-	}
-	return nil, lasterr
-}
-*/
 // Folders get folders list.
 func (g *GcsFS) Folders(ctx context.Context, csq cloudstorage.Query) ([]string, error) {
 	var q = &storage.Query{Delimiter: csq.Delimiter, Prefix: csq.Prefix}
@@ -267,18 +241,18 @@ func (g *GcsFS) Delete(obj string) error {
 	return nil
 }
 
-// GcsObjectIterator iterator to match store interface for iterating
+// objectIterator iterator to match store interface for iterating
 // through all GcsObjects that matched query.
-type GcsObjectIterator struct {
+type objectIterator struct {
 	g    *GcsFS
 	ctx  context.Context
 	iter *storage.ObjectIterator
 }
 
-func (*GcsObjectIterator) Close() {}
+func (*objectIterator) Close() {}
 
 // Next iterator to go to next object or else returns error for done.
-func (it *GcsObjectIterator) Next() (cloudstorage.Object, error) {
+func (it *objectIterator) Next() (cloudstorage.Object, error) {
 	retryCt := 0
 	for {
 		select {

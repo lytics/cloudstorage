@@ -72,23 +72,7 @@ type (
 		PageSize  int
 		Id        string
 	}
-	/*
-		object struct {
-			//container *container
-			// A client is needed to make requests.
-			client *s3.S3
 
-			Key          *string    `min:"1" type:"string"`
-			LastModified *time.Time `type:"timestamp" timestampFormat:"iso8601"`
-			Owner        *s3.Owner  `type:"structure"`
-			Size         *int64     `type:"integer"`
-			StorageClass *string    `type:"string" enum:"ObjectStorageClass"`
-			Metadata     map[string]interface{}
-
-			infoOnce sync.Once
-			infoErr  error
-		}
-	*/
 	object struct {
 		// A client is needed to make requests.
 		client *s3.S3
@@ -199,14 +183,9 @@ func (f *FS) String() string {
 	return fmt.Sprintf("s3://%s/", f.bucket)
 }
 
-/*
-func (f *FS) b() *s3.Bucket {
-	return f.client.Bucket(f.bucket)
-}
-*/
 // NewObject of Type s3.
 func (f *FS) NewObject(objectname string) (cloudstorage.Object, error) {
-	obj, err := f.Get(objectname)
+	obj, err := f.Get(context.Background(), objectname)
 	if err != nil && err != cloudstorage.ErrObjectNotFound {
 		return nil, err
 	} else if obj != nil {
@@ -225,13 +204,10 @@ func (f *FS) NewObject(objectname string) (cloudstorage.Object, error) {
 }
 
 // Get Gets a single File Object
-func (f *FS) Get(objectpath string) (cloudstorage.Object, error) {
+func (f *FS) Get(ctx context.Context, objectpath string) (cloudstorage.Object, error) {
 
-	obj, err := f.getObject(objectpath)
+	obj, err := f.getObject(ctx, objectpath)
 	if err != nil {
-		if strings.Contains(err.Error(), "doesn't exist") {
-			return nil, cloudstorage.ErrObjectNotFound
-		}
 		return nil, err
 	} else if obj == nil {
 		return nil, cloudstorage.ErrObjectNotFound
@@ -241,9 +217,9 @@ func (f *FS) Get(objectpath string) (cloudstorage.Object, error) {
 }
 
 // get single object
-func (f *FS) getObject(objectname string) (*object, error) {
+func (f *FS) getObject(ctx context.Context, objectname string) (*object, error) {
 
-	res, err := f.client.GetObject(&s3.GetObjectInput{
+	res, err := f.client.GetObjectWithContext(ctx, &s3.GetObjectInput{
 		Key:    aws.String(objectname),
 		Bucket: aws.String(f.bucket),
 	})
@@ -314,8 +290,8 @@ func (f *FS) List(ctx context.Context, q cloudstorage.Query) (*cloudstorage.Obje
 
 // Objects returns an iterator over the objects in the google bucket that match the Query q.
 // If q is nil, no filtering is done.
-func (f *FS) Objects(ctx context.Context, q cloudstorage.Query) cloudstorage.ObjectIterator {
-	return cloudstorage.NewObjectPageIterator(ctx, f, q)
+func (f *FS) Objects(ctx context.Context, q cloudstorage.Query) (cloudstorage.ObjectIterator, error) {
+	return cloudstorage.NewObjectPageIterator(ctx, f, q), nil
 }
 
 // Folders get folders list.
@@ -405,12 +381,19 @@ func (f *FS) NewReader(o string) (io.ReadCloser, error) {
 }
 
 // NewReaderWithContext create new GCS File reader with context.
-func (f *FS) NewReaderWithContext(ctx context.Context, o string) (io.ReadCloser, error) {
-	rc, err := f.gcsb().Object(o).NewReader(ctx)
-	if err == storage.ErrObjectNotExist {
-		return rc, cloudstorage.ErrObjectNotFound
+func (f *FS) NewReaderWithContext(ctx context.Context, objectname string) (io.ReadCloser, error) {
+	res, err := f.client.GetObjectWithContext(ctx, &s3.GetObjectInput{
+		Key:    aws.String(objectname),
+		Bucket: aws.String(f.bucket),
+	})
+	if err != nil {
+		// translate the string error to typed error
+		if strings.Contains(err.Error(), "NoSuchKey") {
+			return nil, cloudstorage.ErrObjectNotFound
+		}
+		return nil, err
 	}
-	return rc, err
+	return res.Body, nil
 }
 
 // NewWriter create GCS Object Writer.
@@ -432,7 +415,7 @@ func (f *FS) NewWriterWithContext(ctx context.Context, o string, metadata map[st
 
 // Delete requested object path string.
 func (f *FS) Delete(obj string) error {
-	err := f.gcsb().Object(obj).Delete(context.Background())
+	err := f.Object(obj).Delete(context.Background())
 	if err != nil {
 		return err
 	}

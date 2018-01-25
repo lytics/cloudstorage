@@ -48,11 +48,11 @@ type (
 		// Get returns an object (file) from the cloud store. The object
 		// isn't opened already, see Object.Open()
 		// ObjectNotFound will be returned if the object is not found.
-		Get(o string) (Object, error)
+		Get(ctx context.Context, o string) (Object, error)
 		// Objects returns an object Iterator to allow paging through object
 		// which keeps track of page cursors.  Query defines the specific set
 		// of filters to apply to request.
-		Objects(ctx context.Context, q Query) ObjectIterator
+		Objects(ctx context.Context, q Query) (ObjectIterator, error)
 		// Folders creates list of folders
 		Folders(ctx context.Context, q Query) ([]string, error)
 		// NewReader creates a new Reader to read the contents of the object.
