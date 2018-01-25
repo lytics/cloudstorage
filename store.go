@@ -49,10 +49,9 @@ type (
 		// isn't opened already, see Object.Open()
 		// ObjectNotFound will be returned if the object is not found.
 		Get(o string) (Object, error)
-		// List takes a prefix query and returns an array of unopened objects
-		// that have the given prefix.
-		List(query Query) (Objects, error)
-		// Iterator based api to get Objects
+		// Objects returns an object Iterator to allow paging through object
+		// which keeps track of page cursors.  Query defines the specific set
+		// of filters to apply to request.
 		Objects(ctx context.Context, q Query) ObjectIterator
 		// Folders creates list of folders
 		Folders(ctx context.Context, q Query) ([]string, error)
@@ -63,6 +62,13 @@ type (
 		NewReaderWithContext(ctx context.Context, o string) (io.ReadCloser, error)
 		// String default descriptor.
 		String() string
+	}
+
+	// StoreList not all api's support iteration, so if they support List based
+	// paged requests we will wrap the List with ObjectIterator.
+	StoreList interface {
+		// List file/objects filter by given query.
+		List(ctx context.Context, q Query) (*ObjectsResponse, error)
 	}
 
 	// StoreCopy Optional interface to fast path copy.  Many of the cloud providers
@@ -148,6 +154,11 @@ type (
 		Close()
 	}
 
+	// ObjectsResponse for paged object apis.
+	ObjectsResponse struct {
+		Objects    Objects
+		NextMarker string
+	}
 	// Objects are just a collection of Object(s).
 	// Used as the results for store.List commands.
 	Objects []Object
@@ -280,6 +291,11 @@ func Move(ctx context.Context, s Store, src, des Object) error {
 	return des.Close() //this will flush and sync the file.
 }
 
+func NewObjectsResponse() *ObjectsResponse {
+	return &ObjectsResponse{
+		Objects: make(Objects, 0),
+	}
+}
 func (o Objects) Len() int           { return len(o) }
 func (o Objects) Less(i, j int) bool { return o[i].Name() < o[j].Name() }
 func (o Objects) Swap(i, j int)      { o[i], o[j] = o[j], o[i] }

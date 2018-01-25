@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -18,7 +19,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/pborman/uuid"
 	"golang.org/x/net/context"
-	"google.golang.org/api/iterator"
 
 	"github.com/lytics/cloudstorage"
 )
@@ -41,9 +41,6 @@ var (
 	// Retries number of times to retry.
 	Retries int = 55
 
-	// Ensure we implement ObjectIterator
-	_ cloudstorage.ObjectIterator = (*ObjectIterator)(nil)
-
 	// ErrNoS3Session no valid session
 	ErrNoS3Session = fmt.Errorf("no valid aws session was created")
 	// ErrNoAccessKey
@@ -63,6 +60,54 @@ func init() {
 		return NewStore(client, conf)
 	})
 }
+
+type (
+	// FS Simple wrapper for accessing s3 files, it doesn't currently implement a
+	// Reader/Writer interface so not useful for stream reading of large files yet.
+	FS struct {
+		client    *s3.S3
+		endpoint  string
+		bucket    string
+		cachepath string
+		PageSize  int
+		Id        string
+	}
+	/*
+		object struct {
+			//container *container
+			// A client is needed to make requests.
+			client *s3.S3
+
+			Key          *string    `min:"1" type:"string"`
+			LastModified *time.Time `type:"timestamp" timestampFormat:"iso8601"`
+			Owner        *s3.Owner  `type:"structure"`
+			Size         *int64     `type:"integer"`
+			StorageClass *string    `type:"string" enum:"ObjectStorageClass"`
+			Metadata     map[string]interface{}
+
+			infoOnce sync.Once
+			infoErr  error
+		}
+	*/
+	object struct {
+		// A client is needed to make requests.
+		client *s3.S3
+
+		name       string
+		updated    time.Time
+		metadata   map[string]string
+		fs         *FS
+		o          *s3.Object
+		bucket     string
+		cachedcopy *os.File
+		readonly   bool
+		opened     bool
+		cachepath  string
+
+		infoOnce sync.Once
+		infoErr  error
+	}
+)
 
 // NewClient create new AWS s3 Client.
 func NewClient(conf *cloudstorage.Config) (client *s3.S3, err error) {
@@ -112,17 +157,6 @@ func NewClient(conf *cloudstorage.Config) (client *s3.S3, err error) {
 	s3Client := s3.New(sess)
 
 	return s3Client, nil
-}
-
-// FS Simple wrapper for accessing s3 files, it doesn't currently implement a
-// Reader/Writer interface so not useful for stream reading of large files yet.
-type FS struct {
-	client    *s3.S3
-	endpoint  string
-	bucket    string
-	cachepath string
-	PageSize  int
-	Id        string
 }
 
 // NewStore Create AWS S3 storage client.
@@ -199,13 +233,11 @@ func (f *FS) Get(objectpath string) (cloudstorage.Object, error) {
 			return nil, cloudstorage.ErrObjectNotFound
 		}
 		return nil, err
-	}
-
-	if obj == nil {
+	} else if obj == nil {
 		return nil, cloudstorage.ErrObjectNotFound
 	}
 
-	return newObject(f, obj), nil
+	return obj, nil
 }
 
 // get single object
@@ -232,17 +264,6 @@ func (f *FS) getObject(objectname string) (*object, error) {
 		cachepath:  cloudstorage.CachePathObj(f.cachepath, objectname, f.Id),
 		fs:         f,
 	}
-	/*
-		properties: properties{
-			ETag:         &etag,
-			Key:          &id,
-			LastModified: res.LastModified,
-			Owner:        nil,
-			Size:         res.ContentLength,
-			StorageClass: res.StorageClass,
-			Metadata:     md,
-		},
-	*/
 	return obj, nil
 }
 
@@ -260,76 +281,77 @@ func convertMetaData(m map[string]*string) (map[string]string, error) {
 }
 
 // List objects from this store.
-func (f *FS) List(q cloudstorage.Query) (cloudstorage.Objects, error) {
+func (f *FS) List(ctx context.Context, q cloudstorage.Query) (*cloudstorage.ObjectsResponse, error) {
 
-	res, err := f.listObjects(q, Retries)
+	itemLimit := int64(q.PageSize)
+
+	params := &s3.ListObjectsInput{
+		Bucket:  aws.String(f.bucket),
+		Marker:  &q.Marker,
+		MaxKeys: &itemLimit,
+		Prefix:  &q.Prefix,
+	}
+
+	resp, err := f.client.ListObjects(params)
 	if err != nil {
 		return nil, err
 	}
 
-	if res == nil {
-		return make(cloudstorage.Objects, 0), nil
+	objResp := &cloudstorage.ObjectsResponse{
+		Objects: make(cloudstorage.Objects, len(resp.Contents)),
 	}
 
-	res = q.ApplyFilters(res)
+	for i, o := range resp.Contents {
+		objResp.Objects[i] = newObject(f, o)
+	}
 
-	return res, nil
+	if *resp.IsTruncated {
+		q.Marker = *resp.Contents[len(resp.Contents)-1].Key
+	}
+
+	return objResp, nil
 }
 
 // Objects returns an iterator over the objects in the google bucket that match the Query q.
 // If q is nil, no filtering is done.
 func (f *FS) Objects(ctx context.Context, q cloudstorage.Query) cloudstorage.ObjectIterator {
-	qry := &storage.Query{Prefix: q.Prefix}
-	iter := f.b().Objects(ctx, qry)
-	return &ObjectIterator{f, ctx, iter}
-}
-
-// ListObjects iterates to find a list of objects
-func (f *FS) listObjects(q cloudstorage.Query, retries int) (cloudstorage.Objects, error) {
-	var lasterr error
-
-	for i := 0; i < retries; i++ {
-		objects := make(cloudstorage.Objects, 0)
-		iter := f.b().Objects(context.Background(), q)
-	iterLoop:
-		for {
-			oa, err := iter.Next()
-			switch err {
-			case nil:
-				objects = append(objects, newObject(f, oa))
-			case iterator.Done:
-				return objects, nil
-			default:
-				lasterr = err
-				backoff(i)
-				break iterLoop
-			}
-		}
-	}
-	return nil, lasterr
+	return cloudstorage.NewObjectPageIterator(ctx, f, q)
 }
 
 // Folders get folders list.
-func (f *FS) Folders(ctx context.Context, csq cloudstorage.Query) ([]string, error) {
-	var q = &storage.Query{Delimiter: csq.Delimiter, Prefix: csq.Prefix}
-	iter := f.b().Objects(ctx, q)
+func (f *FS) Folders(ctx context.Context, q cloudstorage.Query) ([]string, error) {
+	q.Prefix = "/"
+
+	itemLimit := int64(q.PageSize)
+
+	params := &s3.ListObjectsInput{
+		Bucket:  aws.String(f.bucket),
+		MaxKeys: &itemLimit,
+		Prefix:  &q.Prefix,
+	}
+
 	folders := make([]string, 0)
+
 	for {
 		select {
 		case <-ctx.Done():
 			// If has been closed
 			return folders, ctx.Err()
 		default:
-			o, err := iter.Next()
-			if err == nil {
-				if o.Prefix != "" {
-					folders = append(folders, o.Prefix)
-				}
-			} else if err == iterator.Done {
-				return folders, nil
-			} else if err == context.Canceled || err == context.DeadlineExceeded {
-				// Return to user
+			if q.Marker != "" {
+				params.Marker = &q.Marker
+			}
+			resp, err := f.client.ListObjects(params)
+			if err != nil {
 				return nil, err
+			}
+			for _, o := range resp.Contents {
+				folders = append(folders, strings.Trim(*o.Key, `/`))
+			}
+			if *resp.IsTruncated {
+				q.Marker = *resp.Contents[len(resp.Contents)-1].Key
+			} else {
+				return folders, nil
 			}
 		}
 	}
@@ -417,20 +439,7 @@ func (f *FS) Delete(obj string) error {
 	return nil
 }
 
-type object struct {
-	name       string
-	updated    time.Time
-	metadata   map[string]string
-	fs         *FS
-	o          *s3.Object
-	bucket     string
-	cachedcopy *os.File
-	readonly   bool
-	opened     bool
-	cachepath  string
-}
-
-func newObject(f *FS, bucket string, o *storage.ObjectAttrs) *object {
+func newObject(f *FS, o *s3.Object) *object {
 	return &object{
 		name:      o.Name,
 		updated:   o.Updated,

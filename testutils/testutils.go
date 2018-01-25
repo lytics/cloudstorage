@@ -10,6 +10,7 @@ import (
 	"sort"
 	"time"
 
+	u "github.com/araddon/gou"
 	"github.com/lytics/cloudstorage"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/api/iterator"
@@ -23,9 +24,10 @@ type TestingT interface {
 
 func Clearstore(t TestingT, store cloudstorage.Store) {
 	t.Logf("----------------Clearstore-----------------\n")
-	q := cloudstorage.Query{Delimiter: "", Prefix: ""}
+	q := cloudstorage.NewQueryAll()
 	q.Sorted()
-	objs, err := store.List(q)
+	iter := store.Objects(context.Background(), q)
+	objs, err := cloudstorage.ObjectsAll(iter)
 	if err != nil {
 		t.Fatalf("Could not list store %v", err)
 	}
@@ -192,13 +194,38 @@ func ListObjsAndFolders(t TestingT, store cloudstorage.Store) {
 
 	q := cloudstorage.NewQuery("list-test/")
 	q.Sorted()
-	objs, err := store.List(q)
+	iter := store.Objects(context.Background(), q)
+	objs, err := cloudstorage.ObjectsAll(iter)
 	assert.Equal(t, nil, err)
 	assert.Equal(t, 15, len(objs), "incorrect list len. wanted 15 got %d", len(objs))
 
+	// Now we are going to re-run this test using an Object Iterator
+	q = cloudstorage.NewQuery("list-test/")
+	q.Sorted()
+	if listStore, ok := store.(cloudstorage.StoreList); ok {
+		iter = cloudstorage.NewObjectPageIterator(context.Background(), listStore, q)
+		objs = make(cloudstorage.Objects, 0)
+		i := 0
+		for {
+			o, err := iter.Next()
+			if err == iterator.Done {
+				break
+			}
+			objs = append(objs, o)
+			u.Debugf("iter i=%d  len names=%v", i, len(names))
+			u.Infof("2 %d found %v expect %v", i, o.Name(), names[i])
+			assert.Equal(t, names[i], o.Name(), "unexpected name.")
+			i++
+		}
+		assert.Equal(t, 15, len(objs), "incorrect list len. wanted 15 got %d", len(objs))
+	} else {
+		u.Warnf("does not implement List %T", store)
+	}
+
 	q = cloudstorage.NewQuery("list-test/b")
 	q.Sorted()
-	objs, err = store.List(q)
+	iter = store.Objects(context.Background(), q)
+	objs, err = cloudstorage.ObjectsAll(iter)
 	assert.Equal(t, nil, err)
 	assert.Equal(t, 5, len(objs), "incorrect list len. wanted 5 got %d", len(objs))
 
@@ -207,9 +234,8 @@ func ListObjsAndFolders(t TestingT, store cloudstorage.Store) {
 		assert.Equal(t, names[i+5], o.Name(), "unexpected name.")
 	}
 
-	// Now with iterator
-	iter := store.Objects(context.Background(), q)
-
+	// test with iterator
+	iter = store.Objects(context.Background(), q)
 	objs = make(cloudstorage.Objects, 0)
 	i := 0
 	for {

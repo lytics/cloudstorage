@@ -32,6 +32,7 @@ func localProvider(conf *cloudstorage.Config) (cloudstorage.Store, error) {
 var (
 	// Ensure Our LocalStore implement CloudStorage interfaces
 	_ cloudstorage.StoreReader = (*LocalStore)(nil)
+	_ cloudstorage.StoreList   = (*LocalStore)(nil)
 )
 
 const (
@@ -116,13 +117,15 @@ func (l *LocalStore) NewObject(objectname string) (cloudstorage.Object, error) {
 }
 
 // List objects at Query location.
-func (l *LocalStore) List(query cloudstorage.Query) (cloudstorage.Objects, error) {
+func (l *LocalStore) List(ctx context.Context, query cloudstorage.Query) (*cloudstorage.ObjectsResponse, error) {
+
+	resp := cloudstorage.NewObjectsResponse()
 	objects := make(map[string]*localFSObject)
 	metadatas := make(map[string]map[string]string)
 
 	spath := path.Join(l.storepath, query.Prefix)
 	if !cloudstorage.Exists(spath) {
-		return make(cloudstorage.Objects, 0), nil
+		return resp, nil
 	}
 
 	err := filepath.Walk(spath, func(fo string, f os.FileInfo, err error) error {
@@ -164,26 +167,23 @@ func (l *LocalStore) List(query cloudstorage.Query) (cloudstorage.Objects, error
 		return nil, fmt.Errorf("localfile: error occurred listing files. searchpath=%v err=%v", spath, err)
 	}
 
-	res := make(cloudstorage.Objects, 0)
-
 	for objname, obj := range objects {
 		if md, ok := metadatas[objname]; ok {
 			obj.metadata = md
 		}
-		res = append(res, obj)
+		resp.Objects = append(resp.Objects, obj)
 	}
 
-	res = query.ApplyFilters(res)
+	resp.Objects = query.ApplyFilters(resp.Objects)
 
-	return res, nil
+	return resp, nil
 }
 
 // Objects returns an iterator over the objects in the google bucket that match the Query q.
 // If q is nil, no filtering is done.
 func (l *LocalStore) Objects(ctx context.Context, csq cloudstorage.Query) cloudstorage.ObjectIterator {
-	objects, err := l.List(csq)
-
-	return &localObjectIterator{objects: objects, err: err}
+	resp, err := l.List(ctx, csq)
+	return &localObjectIterator{objects: resp.Objects, err: err}
 }
 
 // Folders list of folders for given path query.
@@ -289,6 +289,7 @@ func (l *localObjectIterator) Next() (cloudstorage.Object, error) {
 	l.cursor++
 	return o, nil
 }
+func (l *localObjectIterator) Close() {}
 
 type localFSObject struct {
 	name     string
