@@ -13,24 +13,36 @@ import (
 	"sync"
 	"time"
 
+	u "github.com/araddon/gou"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/pborman/uuid"
 	"golang.org/x/net/context"
 
 	"github.com/lytics/cloudstorage"
+	"github.com/lytics/cloudstorage/csbufio"
 )
 
 const (
-	// StoreType = "s3"
+	// StoreType = "s3" this is used to define the storage type to create
+	// from cloudstorage.NewStore(config)
 	StoreType = "s3"
 
-	ConfKeyAccessKey    = "access_key"
+	// Configuration Keys.  These are the names of keys
+	// to look for in the json map[string]string to extract for config.
+
+	// ConfKeyAccessKey config key name of the aws access_key(id) for auth
+	ConfKeyAccessKey = "access_key"
+	// ConfKeyAccessSecret config key name of the aws acccess secret
 	ConfKeyAccessSecret = "access_secret"
-	ConfKeyARN          = "arn"
-	ConfKeyDisableSSL   = "disable_ssl"
+	// ConfKeyARN config key name of the aws ARN name of user
+	ConfKeyARN = "arn"
+	// ConfKeyDisableSSL config key name of disabling ssl flag
+	ConfKeyDisableSSL = "disable_ssl"
 	// Authentication Source's
 
 	// AuthAccessKey is for using aws access key/secret pairs
@@ -38,26 +50,27 @@ const (
 )
 
 var (
-	// Retries number of times to retry.
-	Retries int = 55
+	// Retries number of times to retry upon failures.
+	Retries = 55
 
 	// ErrNoS3Session no valid session
 	ErrNoS3Session = fmt.Errorf("no valid aws session was created")
-	// ErrNoAccessKey
+	// ErrNoAccessKey error for no access_key
 	ErrNoAccessKey = fmt.Errorf("no settings.access_key")
-	// ErrNoAccessSecret
+	// ErrNoAccessSecret error for no settings.access_secret
 	ErrNoAccessSecret = fmt.Errorf("no settings.access_secret")
-	// ErrNoAuth
+	// ErrNoAuth error for no findable auth
 	ErrNoAuth = fmt.Errorf("No auth provided")
 )
 
 func init() {
+	// Register this Driver (s3) in cloudstorage driver registry.
 	cloudstorage.Register(StoreType, func(conf *cloudstorage.Config) (cloudstorage.Store, error) {
-		client, err := NewClient(conf)
+		client, sess, err := NewClient(conf)
 		if err != nil {
 			return nil, err
 		}
-		return NewStore(client, conf)
+		return NewStore(client, sess, conf)
 	})
 }
 
@@ -65,12 +78,13 @@ type (
 	// FS Simple wrapper for accessing s3 files, it doesn't currently implement a
 	// Reader/Writer interface so not useful for stream reading of large files yet.
 	FS struct {
+		PageSize  int
+		ID        string
 		client    *s3.S3
+		sess      *session.Session
 		endpoint  string
 		bucket    string
 		cachepath string
-		PageSize  int
-		Id        string
 	}
 
 	object struct {
@@ -93,8 +107,9 @@ type (
 	}
 )
 
-// NewClient create new AWS s3 Client.
-func NewClient(conf *cloudstorage.Config) (client *s3.S3, err error) {
+// NewClient create new AWS s3 Client.  Uses cloudstorage.Config to read
+// necessary config settings such as bucket, region, auth.
+func NewClient(conf *cloudstorage.Config) (*s3.S3, *session.Session, error) {
 
 	awsConf := aws.NewConfig().
 		WithHTTPClient(http.DefaultClient).
@@ -113,15 +128,15 @@ func NewClient(conf *cloudstorage.Config) (client *s3.S3, err error) {
 	case AuthAccessKey:
 		accessKey := conf.Settings.String(ConfKeyAccessKey)
 		if accessKey == "" {
-			return nil, ErrNoAccessKey
+			return nil, nil, ErrNoAccessKey
 		}
 		secretKey := conf.Settings.String(ConfKeyAccessSecret)
 		if secretKey == "" {
-			return nil, ErrNoAccessSecret
+			return nil, nil, ErrNoAccessSecret
 		}
 		awsConf.WithCredentials(credentials.NewStaticCredentials(accessKey, secretKey, ""))
 	default:
-		return nil, ErrNoAuth
+		return nil, nil, ErrNoAuth
 	}
 
 	if conf.BaseUrl != "" {
@@ -135,16 +150,16 @@ func NewClient(conf *cloudstorage.Config) (client *s3.S3, err error) {
 
 	sess := session.New(awsConf)
 	if sess == nil {
-		return nil, ErrNoS3Session
+		return nil, nil, ErrNoS3Session
 	}
 
 	s3Client := s3.New(sess)
 
-	return s3Client, nil
+	return s3Client, sess, nil
 }
 
-// NewStore Create AWS S3 storage client.
-func NewStore(c *s3.S3, conf *cloudstorage.Config) (*FS, error) {
+// NewStore Create AWS S3 storage client of type cloudstorage.Store
+func NewStore(c *s3.S3, sess *session.Session, conf *cloudstorage.Config) (*FS, error) {
 
 	// , bucket, cachepath string, pagesize int
 	// conf.Bucket, conf.TmpDir, cloudstorage.MaxResults
@@ -161,9 +176,10 @@ func NewStore(c *s3.S3, conf *cloudstorage.Config) (*FS, error) {
 
 	return &FS{
 		client:    c,
+		sess:      sess,
 		bucket:    conf.Bucket,
 		cachepath: conf.TmpDir,
-		Id:        uid,
+		ID:        uid,
 		PageSize:  cloudstorage.MaxResults,
 	}, nil
 }
@@ -192,7 +208,7 @@ func (f *FS) NewObject(objectname string) (cloudstorage.Object, error) {
 		return nil, cloudstorage.ErrObjectExists
 	}
 
-	cf := cloudstorage.CachePathObj(f.cachepath, objectname, f.Id)
+	cf := cloudstorage.CachePathObj(f.cachepath, objectname, f.ID)
 
 	return &object{
 		name:       objectname,
@@ -203,7 +219,7 @@ func (f *FS) NewObject(objectname string) (cloudstorage.Object, error) {
 	}, nil
 }
 
-// Get Gets a single File Object
+// Get a single File Object
 func (f *FS) Get(ctx context.Context, objectpath string) (cloudstorage.Object, error) {
 
 	obj, err := f.getObject(ctx, objectpath)
@@ -237,7 +253,7 @@ func (f *FS) getObject(ctx context.Context, objectname string) (*object, error) 
 		metadata:   map[string]string{cloudstorage.ContextTypeKey: cloudstorage.ContentType(objectname)},
 		bucket:     f.bucket,
 		cachedcopy: nil,
-		cachepath:  cloudstorage.CachePathObj(f.cachepath, objectname, f.Id),
+		cachepath:  cloudstorage.CachePathObj(f.cachepath, objectname, f.ID),
 		fs:         f,
 	}
 	return obj, nil
@@ -396,21 +412,31 @@ func (f *FS) NewReaderWithContext(ctx context.Context, objectname string) (io.Re
 	return res.Body, nil
 }
 
-// NewWriter create GCS Object Writer.
-func (f *FS) NewWriter(o string, metadata map[string]string) (io.WriteCloser, error) {
-	return f.NewWriterWithContext(context.Background(), o, metadata)
+// NewWriter create Object Writer.
+func (f *FS) NewWriter(objectName string, metadata map[string]string) (io.WriteCloser, error) {
+	return f.NewWriterWithContext(context.Background(), objectName, metadata)
 }
 
 // NewWriterWithContext create writer with provided context and metadata.
-func (f *FS) NewWriterWithContext(ctx context.Context, o string, metadata map[string]string) (io.WriteCloser, error) {
-	wc := f.gcsb().Object(o).NewWriter(ctx)
-	if metadata != nil {
-		wc.Metadata = metadata
-		//contenttype is only used for viewing the file in a browser. (i.e. the GCS Object browser).
-		ctype := cloudstorage.EnsureContextType(o, metadata)
-		wc.ContentType = ctype
+func (f *FS) NewWriterWithContext(ctx context.Context, objectName string, metadata map[string]string) (io.WriteCloser, error) {
+
+	// Create an uploader with the session and default options
+	uploader := s3manager.NewUploader(f.sess)
+
+	pw := csbufio.NewReadWriter()
+
+	// Upload the file to S3.
+	result, err := uploader.Upload(&s3manager.UploadInput{
+		Bucket: aws.String(f.bucket),
+		Key:    aws.String(objectName),
+		Body:   pw,
+	})
+	if err != nil {
+		u.Warnf("could not uplaod %v", err)
+		return nil, fmt.Errorf("failed to upload file, %v", err)
 	}
-	return wc, nil
+
+	return pw, nil
 }
 
 // Delete requested object path string.
