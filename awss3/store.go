@@ -149,6 +149,7 @@ func NewClient(conf *cloudstorage.Config) (*s3.S3, *session.Session, error) {
 
 	sess := session.New(awsConf)
 	if sess == nil {
+		u.Errorf("no session")
 		return nil, nil, ErrNoS3Session
 	}
 
