@@ -1,7 +1,6 @@
 package awss3
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"math"
@@ -89,18 +88,18 @@ type (
 
 	object struct {
 		// A client is needed to make requests.
-		client *s3.S3
-
-		name       string
-		updated    time.Time
-		metadata   map[string]string
+		client     *s3.S3
 		fs         *FS
-		o          *s3.Object
-		bucket     string
+		o          *s3.GetObjectOutput
 		cachedcopy *os.File
-		readonly   bool
-		opened     bool
-		cachepath  string
+
+		name      string    // aka "key" in s3
+		updated   time.Time // LastModifyied in s3
+		metadata  map[string]string
+		bucket    string
+		readonly  bool
+		opened    bool
+		cachepath string
 
 		infoOnce sync.Once
 		infoErr  error
@@ -212,7 +211,7 @@ func (f *FS) NewObject(objectname string) (cloudstorage.Object, error) {
 
 	return &object{
 		name:       objectname,
-		metadata:   map[string]string{cloudstorage.ContextTypeKey: cloudstorage.ContentType(objectname)},
+		metadata:   map[string]string{cloudstorage.ContentTypeKey: cloudstorage.ContentType(objectname)},
 		bucket:     f.bucket,
 		cachedcopy: nil,
 		cachepath:  cf,
@@ -246,17 +245,30 @@ func (f *FS) getObject(ctx context.Context, objectname string) (*object, error) 
 		}
 		return nil, err
 	}
-	defer res.Body.Close()
+	// TODO:  this is messed up, we need to leave it open for some?
+	// should we not even have a helper function?
+	res.Body.Close()
 
-	obj := &object{
-		name:       objectname,
-		metadata:   map[string]string{cloudstorage.ContextTypeKey: cloudstorage.ContentType(objectname)},
-		bucket:     f.bucket,
-		cachedcopy: nil,
-		cachepath:  cloudstorage.CachePathObj(f.cachepath, objectname, f.ID),
-		fs:         f,
+	return newObjectFromResponse(f, objectname, res), nil
+}
+
+func (f *FS) getS3OpenObject(ctx context.Context, objectname string) (*s3.GetObjectOutput, error) {
+
+	res, err := f.client.GetObjectWithContext(ctx, &s3.GetObjectInput{
+		Key:    aws.String(objectname),
+		Bucket: aws.String(f.bucket),
+	})
+	if err != nil {
+		// translate the string error to typed error
+		if strings.Contains(err.Error(), "NoSuchKey") {
+			return nil, cloudstorage.ErrObjectNotFound
+		}
+		return nil, err
 	}
-	return obj, nil
+	// NOTE:  caller must close
+	//res.Body.Close()
+
+	return res, nil
 }
 
 func convertMetaData(m map[string]*string) (map[string]string, error) {
@@ -435,13 +447,18 @@ func (f *FS) NewWriterWithContext(ctx context.Context, objectName string, metada
 		u.Warnf("could not uplaod %v", err)
 		return nil, fmt.Errorf("failed to upload file, %v", err)
 	}
-
+	u.Debugf("result: %#v", result)
 	return pw, nil
 }
 
 // Delete requested object path string.
 func (f *FS) Delete(obj string) error {
-	err := f.Object(obj).Delete(context.Background())
+	params := &s3.DeleteObjectInput{
+		Bucket: aws.String(f.bucket),
+		Key:    aws.String(obj),
+	}
+
+	_, err := f.client.DeleteObject(params)
 	if err != nil {
 		return err
 	}
@@ -449,14 +466,42 @@ func (f *FS) Delete(obj string) error {
 }
 
 func newObject(f *FS, o *s3.Object) *object {
-	return &object{
-		name:      o.Name,
-		updated:   o.Updated,
-		metadata:  o.Metadata,
-		bucket:    bucket,
-		cachepath: cloudstorage.CachePathObj(f.cachepath, o.Name, f.Id),
+	obj := &object{
+		name:      *o.Key,
+		bucket:    f.bucket,
+		cachepath: cloudstorage.CachePathObj(f.cachepath, *o.Key, f.ID),
 	}
+	if o.LastModified != nil {
+		obj.updated = *o.LastModified
+	}
+	// metadata?
+	//obj.metadata, _ = convertMetaData(o.)
+	/*
+	   obj := &object{
+	   	name:       objectname,
+	   	metadata:   map[string]string{cloudstorage.ContentTypeKey: cloudstorage.ContentType(objectname)},
+	   	bucket:     f.bucket,
+	   	cachedcopy: nil,
+	   	cachepath:  cloudstorage.CachePathObj(f.cachepath, objectname, f.ID),
+	   	fs:         f,
+	   }
+	*/
+	return obj
 }
+func newObjectFromResponse(f *FS, name string, o *s3.GetObjectOutput) *object {
+	obj := &object{
+		name:      name,
+		bucket:    f.bucket,
+		cachepath: cloudstorage.CachePathObj(f.cachepath, name, f.ID),
+	}
+	if o.LastModified != nil {
+		obj.updated = *o.LastModified
+	}
+	// metadata?
+	obj.metadata, _ = convertMetaData(o.Metadata)
+	return obj
+}
+
 func (o *object) StorageSource() string {
 	return StoreType
 }
@@ -477,8 +522,7 @@ func (o *object) SetMetaData(meta map[string]string) {
 }
 
 func (o *object) Delete() error {
-	o.Release()
-	return o.b.Object(o.name).Delete(context.Background())
+	return o.fs.Delete(o.name)
 }
 
 func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
@@ -493,55 +537,47 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 
 	err = os.MkdirAll(path.Dir(o.cachepath), 0775)
 	if err != nil {
-		return nil, fmt.Errorf("error occurred creating cachedcopy dir. cachepath=%s object=%s err=%v",
-			o.cachepath, o.name, err)
+		return nil, fmt.Errorf("error occurred creating cachedcopy dir. cachepath=%s object=%s err=%v", o.cachepath, o.name, err)
 	}
 
 	err = cloudstorage.EnsureDir(o.cachepath)
 	if err != nil {
-		return nil, fmt.Errorf("error occurred creating cachedcopy's dir. cachepath=%s err=%v",
-			o.cachepath, err)
+		return nil, fmt.Errorf("error occurred creating cachedcopy's dir. cachepath=%s err=%v", o.cachepath, err)
 	}
 
 	cachedcopy, err = os.Create(o.cachepath)
 	if err != nil {
-		return nil, fmt.Errorf("error occurred creating file. local=%s err=%v",
-			o.cachepath, err)
+		return nil, fmt.Errorf("error occurred creating file. local=%s err=%v", o.cachepath, err)
 	}
 
-	for try := 0; try < GCSRetries; try++ {
-		if o.googleObject == nil {
-			gobj, err := o.gcsb.Object(o.name).Attrs(context.Background())
+	for try := 0; try < Retries; try++ {
+		if o.o == nil {
+			obj, err := o.fs.getS3OpenObject(context.Background(), o.name)
 			if err != nil {
-				if strings.Contains(err.Error(), "doesn't exist") {
+				if err == cloudstorage.ErrObjectNotFound {
 					// New, this is fine
 				} else {
-					errs = append(errs, fmt.Errorf("error storage.NewReader err=%v", err))
+					// lets re-try
+					errs = append(errs, fmt.Errorf("error getting object err=%v", err))
 					backoff(try)
 					continue
 				}
 			}
 
-			if gobj != nil {
-				o.googleObject = gobj
+			if obj != nil {
+				o.o = obj
 			}
 		}
 
-		if o.googleObject != nil {
-			//we have a preexisting object, so lets download it..
-			rc, err := o.gcsb.Object(o.name).NewReader(context.Background())
-			if err != nil {
-				errs = append(errs, fmt.Errorf("error storage.NewReader err=%v", err))
-				backoff(try)
-				continue
-			}
-			defer rc.Close()
+		if o.o != nil {
+			// we have a preexisting object, so lets download it..
+			defer o.o.Body.Close()
 
 			if _, err := cachedcopy.Seek(0, os.SEEK_SET); err != nil {
 				return nil, fmt.Errorf("error seeking to start of cachedcopy err=%v", err) //don't retry on local fs errors
 			}
 
-			_, err = io.Copy(cachedcopy, rc)
+			_, err = io.Copy(cachedcopy, o.o.Body)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error coping bytes. err=%v", err))
 				//recreate the cachedcopy file incase it has incomplete data
@@ -589,6 +625,11 @@ func (o *object) Write(p []byte) (n int, err error) {
 }
 
 func (o *object) Sync() error {
+	return cloudstorage.ErrNotImplemented
+}
+
+/*
+func (o *object) Sync() error {
 
 	if !o.opened {
 		return fmt.Errorf("object isn't opened object:%s", o.name)
@@ -606,7 +647,7 @@ func (o *object) Sync() error {
 	}
 	defer cachedcopy.Close()
 
-	for try := 0; try < GCSRetries; try++ {
+	for try := 0; try < Retries; try++ {
 		if _, err := cachedcopy.Seek(0, os.SEEK_SET); err != nil {
 			return fmt.Errorf("error seeking to start of cachedcopy err=%v", err) //don't retry on local filesystem errors
 		}
@@ -643,6 +684,7 @@ func (o *object) Sync() error {
 	errmsg := strings.Join(errs, ",")
 	return fmt.Errorf("S3 sync error after retry: (oname=%s cpath:%v) errors[%v]", o.name, o.cachepath, errmsg)
 }
+*/
 
 func (o *object) Close() error {
 	if !o.opened {

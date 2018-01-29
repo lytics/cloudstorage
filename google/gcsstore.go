@@ -100,7 +100,7 @@ func (g *GcsFS) NewObject(objectname string) (cloudstorage.Object, error) {
 
 	return &object{
 		name:       objectname,
-		metadata:   map[string]string{cloudstorage.ContextTypeKey: cloudstorage.ContentType(objectname)},
+		metadata:   map[string]string{cloudstorage.ContentTypeKey: cloudstorage.ContentType(objectname)},
 		gcsb:       g.gcsb(),
 		bucket:     g.bucket,
 		cachedcopy: nil,

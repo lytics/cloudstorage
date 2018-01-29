@@ -26,7 +26,7 @@ func ContentType(name string) string {
 
 // EnsureContextType read Type of metadata
 func EnsureContextType(o string, md map[string]string) string {
-	ctype, ok := md[ContextTypeKey]
+	ctype, ok := md[ContentTypeKey]
 	if !ok {
 		ext := filepath.Ext(o)
 		if ctype == "" {
@@ -35,7 +35,7 @@ func EnsureContextType(o string, md map[string]string) string {
 				ctype = "application/octet-stream"
 			}
 		}
-		md[ContextTypeKey] = ctype
+		md[ContentTypeKey] = ctype
 	}
 	return ctype
 }

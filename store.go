@@ -14,8 +14,8 @@ import (
 const (
 	// StoreCacheFileExt = ".cache"
 	StoreCacheFileExt = ".cache"
-	// ContextTypeKey
-	ContextTypeKey = "content_type"
+	// ContentTypeKey
+	ContentTypeKey = "content_type"
 	// MaxResults default number of objects to retrieve during a list-objects request,
 	// if more objects exist, then they will need to be paged
 	MaxResults = 3000
@@ -35,6 +35,8 @@ var (
 	ErrObjectNotFound = fmt.Errorf("object not found")
 	// ErrObjectExists error trying to create an already existing file.
 	ErrObjectExists = fmt.Errorf("object already exists in backing store (use store.Get)")
+	// ErrNotImplemented this feature is not implemented for this store
+	ErrNotImplemented = fmt.Errorf("Not implemented")
 )
 
 type (
