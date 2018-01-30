@@ -4,9 +4,13 @@ import (
 	"bufio"
 	"io"
 	"os"
+
+	u "github.com/araddon/gou"
 )
 
 var (
+	_ = u.EMPTY
+
 // Ensure we implement io.ReadWriteCloser
 //_ io.ReadWriteCloser = (*pipeWriter)(nil)
 )
@@ -85,10 +89,11 @@ func (w *pipeWriter) Close() error {
 	if !w.opened {
 		w.open()
 	}
+
 	if err := w.pw.Close(); err != nil {
 		return err
 	}
-	<-w.donec
+	//<-w.donec
 	return w.err
 }
 

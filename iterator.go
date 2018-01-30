@@ -53,7 +53,7 @@ func NewObjectPageIterator(ctx context.Context, s StoreList, q Query) ObjectIter
 	}
 }
 func (it *ObjectPageIterator) returnPageNext() (Object, error) {
-	u.Debugf("iter.next() %d   cursor: %d", len(it.page), it.cursor)
+	//u.Debugf("iter.next() %d   cursor: %d", len(it.page), it.cursor)
 	it.cursor++
 	return it.page[it.cursor-1], nil
 }
@@ -77,7 +77,7 @@ func (it *ObjectPageIterator) Next() (Object, error) {
 		// If iterator has been closed
 		return nil, it.ctx.Err()
 	default:
-		u.Infof("hello  page-size: %d   cursor: %d", len(it.page), it.cursor)
+		//u.Infof("hello  page-size: %d   cursor: %d", len(it.page), it.cursor)
 		if it.cursor < len(it.page) {
 			return it.returnPageNext()
 		} else if it.cursor > 0 && it.q.Marker == "" {

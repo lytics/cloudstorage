@@ -51,6 +51,8 @@ const (
 var (
 	// Retries number of times to retry upon failures.
 	Retries = 55
+	// PageSize is default page size
+	PageSize = 2000
 
 	// ErrNoS3Session no valid session
 	ErrNoS3Session = fmt.Errorf("no valid aws session was created")
@@ -87,8 +89,6 @@ type (
 	}
 
 	object struct {
-		// A client is needed to make requests.
-		client     *s3.S3
 		fs         *FS
 		o          *s3.GetObjectOutput
 		cachedcopy *os.File
@@ -211,6 +211,7 @@ func (f *FS) NewObject(objectname string) (cloudstorage.Object, error) {
 	cf := cloudstorage.CachePathObj(f.cachepath, objectname, f.ID)
 
 	return &object{
+		fs:         f,
 		name:       objectname,
 		metadata:   map[string]string{cloudstorage.ContentTypeKey: cloudstorage.ContentType(objectname)},
 		bucket:     f.bucket,
@@ -255,6 +256,10 @@ func (f *FS) getObject(ctx context.Context, objectname string) (*object, error) 
 
 func (f *FS) getS3OpenObject(ctx context.Context, objectname string) (*s3.GetObjectOutput, error) {
 
+	if f == nil {
+		u.WarnT(10)
+	}
+	//u.Infof("%T get object bucket=%q object=%q", f, f.bucket, objectname)
 	res, err := f.client.GetObjectWithContext(ctx, &s3.GetObjectInput{
 		Key:    aws.String(objectname),
 		Bucket: aws.String(f.bucket),
@@ -268,6 +273,7 @@ func (f *FS) getS3OpenObject(ctx context.Context, objectname string) (*s3.GetObj
 	}
 	// NOTE:  caller must close
 	//res.Body.Close()
+	//u.Infof("result %#v", res)
 
 	return res, nil
 }
@@ -288,7 +294,12 @@ func convertMetaData(m map[string]*string) (map[string]string, error) {
 // List objects from this store.
 func (f *FS) List(ctx context.Context, q cloudstorage.Query) (*cloudstorage.ObjectsResponse, error) {
 
-	itemLimit := int64(q.PageSize)
+	itemLimit := int64(f.PageSize)
+	if q.PageSize > 0 {
+		itemLimit = int64(q.PageSize)
+	}
+
+	//u.Infof("List bucket=%q marker=%q prefix=%q pageSize=%d", f.bucket, q.Marker, q.Prefix, itemLimit)
 
 	params := &s3.ListObjectsInput{
 		Bucket:  aws.String(f.bucket),
@@ -299,8 +310,10 @@ func (f *FS) List(ctx context.Context, q cloudstorage.Query) (*cloudstorage.Obje
 
 	resp, err := f.client.ListObjects(params)
 	if err != nil {
+		u.Warnf("err = %v", err)
 		return nil, err
 	}
+	//u.Debugf("got contents %v", len(resp.Contents))
 
 	objResp := &cloudstorage.ObjectsResponse{
 		Objects: make(cloudstorage.Objects, len(resp.Contents)),
@@ -436,19 +449,23 @@ func (f *FS) NewWriterWithContext(ctx context.Context, objectName string, metada
 	// Create an uploader with the session and default options
 	uploader := s3manager.NewUploader(f.sess)
 
+	u.Infof("about to open csbufio new read-writer")
 	pw := csbufio.NewReadWriter()
+	u.Infof("after read writer")
 
-	// Upload the file to S3.
-	result, err := uploader.Upload(&s3manager.UploadInput{
-		Bucket: aws.String(f.bucket),
-		Key:    aws.String(objectName),
-		Body:   pw,
-	})
-	if err != nil {
-		u.Warnf("could not uplaod %v", err)
-		return nil, fmt.Errorf("failed to upload file, %v", err)
-	}
-	u.Debugf("result: %#v", result)
+	go func() {
+		// Upload the file to S3.
+		result, err := uploader.Upload(&s3manager.UploadInput{
+			Bucket: aws.String(f.bucket),
+			Key:    aws.String(objectName),
+			Body:   pw,
+		})
+		if err != nil {
+			u.Warnf("could not upload %v", err)
+		}
+		u.Debugf("result: %#v", result)
+	}()
+
 	return pw, nil
 }
 
@@ -468,6 +485,7 @@ func (f *FS) Delete(obj string) error {
 
 func newObject(f *FS, o *s3.Object) *object {
 	obj := &object{
+		fs:        f,
 		name:      *o.Key,
 		bucket:    f.bucket,
 		cachepath: cloudstorage.CachePathObj(f.cachepath, *o.Key, f.ID),
@@ -491,6 +509,7 @@ func newObject(f *FS, o *s3.Object) *object {
 }
 func newObjectFromResponse(f *FS, name string, o *s3.GetObjectOutput) *object {
 	obj := &object{
+		fs:        f,
 		name:      name,
 		bucket:    f.bucket,
 		cachepath: cloudstorage.CachePathObj(f.cachepath, name, f.ID),
@@ -625,11 +644,14 @@ func (o *object) Write(p []byte) (n int, err error) {
 	return o.cachedcopy.Write(p)
 }
 
+/*
 func (o *object) Sync() error {
+	u.Warnf("Could not sync")
+	u.WarnT(12)
 	return cloudstorage.ErrNotImplemented
 }
+*/
 
-/*
 func (o *object) Sync() error {
 
 	if !o.opened {
@@ -639,53 +661,45 @@ func (o *object) Sync() error {
 		return fmt.Errorf("trying to Sync a readonly object:%s", o.name)
 	}
 
-	var errs = make([]string, 0)
-
 	cachedcopy, err := os.OpenFile(o.cachepath, os.O_RDWR, 0664)
 	if err != nil {
-		return fmt.Errorf("couldn't open localfile for sync'ing. local=%s err=%v",
-			o.cachepath, err)
+		return fmt.Errorf("couldn't open localfile for sync'ing. local=%s err=%v", o.cachepath, err)
 	}
 	defer cachedcopy.Close()
 
-	for try := 0; try < Retries; try++ {
-		if _, err := cachedcopy.Seek(0, os.SEEK_SET); err != nil {
-			return fmt.Errorf("error seeking to start of cachedcopy err=%v", err) //don't retry on local filesystem errors
-		}
-		rd := bufio.NewReader(cachedcopy)
+	// Create an uploader with the session and default options
+	uploader := s3manager.NewUploader(o.fs.sess)
 
-		wc := o.gcsb.Object(o.name).NewWriter(context.Background())
-
-		if o.metadata != nil {
-			wc.Metadata = o.metadata
-			//contenttype is only used for viewing the file in a browser. (i.e. the GCS Object browser).
-			ctype := cloudstorage.EnsureContextType(o.name, o.metadata)
-			wc.ContentType = ctype
-		}
-
-		if _, err = io.Copy(wc, rd); err != nil {
-			errs = append(errs, fmt.Sprintf("copy to remote object error:%v", err))
-			err2 := wc.CloseWithError(err)
-			if err2 != nil {
-				errs = append(errs, fmt.Sprintf("CloseWithError error:%v", err2))
-			}
-			backoff(try)
-			continue
-		}
-
-		if err = wc.Close(); err != nil {
-			errs = append(errs, fmt.Sprintf("close gcs writer error:%v", err))
-			backoff(try)
-			continue
-		}
-
-		return nil
+	if _, err := cachedcopy.Seek(0, os.SEEK_SET); err != nil {
+		return fmt.Errorf("error seeking to start of cachedcopy err=%v", err) //don't retry on local filesystem errors
 	}
 
-	errmsg := strings.Join(errs, ",")
-	return fmt.Errorf("S3 sync error after retry: (oname=%s cpath:%v) errors[%v]", o.name, o.cachepath, errmsg)
+	// Upload the file to S3.
+	_, err = uploader.Upload(&s3manager.UploadInput{
+		Bucket: aws.String(o.fs.bucket),
+		Key:    aws.String(o.name),
+		Body:   cachedcopy,
+	})
+	if err != nil {
+		u.Warnf("could not upload %v", err)
+		return fmt.Errorf("failed to upload file, %v", err)
+	}
+	//u.Debugf("result: %#v", result)
+
+	// if o.metadata != nil {
+	// 	wc.Metadata = o.metadata
+	// 	// contenttype is only used for viewing the file in a browser. (i.e. the GCS Object browser).
+	// 	ctype := cloudstorage.EnsureContextType(o.name, o.metadata)
+	// 	wc.ContentType = ctype
+	// }
+
+	// if err = wc.Close(); err != nil {
+	// 	errs = append(errs, fmt.Sprintf("close gcs writer error:%v", err))
+	// 	backoff(try)
+	// 	continue
+	// }
+	return nil
 }
-*/
 
 func (o *object) Close() error {
 	if !o.opened {

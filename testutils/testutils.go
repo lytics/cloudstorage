@@ -24,6 +24,7 @@ type TestingT interface {
 
 func Clearstore(t TestingT, store cloudstorage.Store) {
 	t.Logf("----------------Clearstore-----------------\n")
+	u.Infof("clearstore")
 	q := cloudstorage.NewQueryAll()
 	q.Sorted()
 	iter, _ := store.Objects(context.Background(), q)
@@ -41,21 +42,28 @@ func Clearstore(t TestingT, store cloudstorage.Store) {
 		fmt.Println("doing GCS delete sleep 15")
 		time.Sleep(15 * time.Second)
 	}
+	u.Infof("leaving clearstore")
 }
 
 func RunTests(t TestingT, s cloudstorage.Store) {
 	t.Logf("running basic rw")
 	BasicRW(t, s)
+	u.Debugf("finished basicrw")
 	t.Logf("running Append")
 	Append(t, s)
+	u.Debugf("finished append")
 	t.Logf("running ListObjsAndFolders")
 	ListObjsAndFolders(t, s)
+	u.Debugf("finished ListObjsAndFolders")
 	t.Logf("running Truncate")
 	Truncate(t, s)
+	u.Debugf("finished Truncate")
 	t.Logf("running NewObjectWithExisting")
 	NewObjectWithExisting(t, s)
+	u.Debugf("finished NewObjectWithExisting")
 	t.Logf("running TestReadWriteCloser")
 	TestReadWriteCloser(t, s)
+	u.Debugf("finished TestReadWriteCloser")
 }
 
 func BasicRW(t TestingT, store cloudstorage.Store) {
@@ -212,8 +220,8 @@ func ListObjsAndFolders(t TestingT, store cloudstorage.Store) {
 				break
 			}
 			objs = append(objs, o)
-			u.Debugf("iter i=%d  len names=%v", i, len(names))
-			u.Infof("2 %d found %v expect %v", i, o.Name(), names[i])
+			//u.Debugf("iter i=%d  len names=%v", i, len(names))
+			//u.Infof("2 %d found %v expect %v", i, o.Name(), names[i])
 			assert.Equal(t, names[i], o.Name(), "unexpected name.")
 			i++
 		}
@@ -385,15 +393,20 @@ func TestReadWriteCloser(t TestingT, store cloudstorage.Store) {
 
 	Clearstore(t, store)
 
+	u.Debugf("starting TestReadWriteCloser")
 	object := "prefix/iorw.test"
 	data := fmt.Sprintf("pid:%v:time:%v", os.Getpid(), time.Now().Nanosecond())
 
+	u.Infof("before new writer")
 	wc, err := store.NewWriter(object, nil)
+	u.Infof("after new writer")
 	assert.Equal(t, nil, err)
 	buf1 := bytes.NewBufferString(data)
 	_, err = buf1.WriteTo(wc)
 	assert.Equal(t, nil, err)
+	u.Infof("about to close")
 	err = wc.Close()
+	u.Infof("after close")
 	assert.Equal(t, nil, err)
 
 	rc, err := store.NewReader(object)

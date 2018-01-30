@@ -43,5 +43,9 @@ func TestAll(t *testing.T) {
 		t.Skip()
 		return
 	}
+	if store == nil {
+		t.Fatalf("No store???")
+	}
+	gou.Warnf("Hello %#v", store)
 	testutils.RunTests(t, store)
 }
