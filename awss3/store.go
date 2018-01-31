@@ -338,15 +338,24 @@ func (f *FS) Objects(ctx context.Context, q cloudstorage.Query) (cloudstorage.Ob
 
 // Folders get folders list.
 func (f *FS) Folders(ctx context.Context, q cloudstorage.Query) ([]string, error) {
-	q.Prefix = "/"
 
-	itemLimit := int64(q.PageSize)
+	//q.Prefix = "/"
+	q.Delimiter = "/"
+
+	itemLimit := int64(f.PageSize)
+	if q.PageSize > 0 {
+		itemLimit = int64(q.PageSize)
+	}
+	//itemLimit := int64(0)
 
 	params := &s3.ListObjectsInput{
-		Bucket:  aws.String(f.bucket),
-		MaxKeys: &itemLimit,
-		Prefix:  &q.Prefix,
+		Bucket:    aws.String(f.bucket),
+		MaxKeys:   &itemLimit,
+		Prefix:    &q.Prefix,
+		Delimiter: &q.Delimiter,
 	}
+
+	//u.Debugf("folders %+v  %+v", params, q)
 
 	folders := make([]string, 0)
 
@@ -354,23 +363,22 @@ func (f *FS) Folders(ctx context.Context, q cloudstorage.Query) ([]string, error
 		select {
 		case <-ctx.Done():
 			// If has been closed
+			u.Warnf("exit because done from folders")
 			return folders, ctx.Err()
 		default:
 			if q.Marker != "" {
 				params.Marker = &q.Marker
 			}
-			resp, err := f.client.ListObjects(params)
+			resp, err := f.client.ListObjectsWithContext(ctx, params)
+			//u.Infof("resp: %#v err=%v", resp, err)
+			//u.Infof("common: %v", resp.CommonPrefixes)
 			if err != nil {
 				return nil, err
 			}
-			for _, o := range resp.Contents {
-				folders = append(folders, strings.Trim(*o.Key, `/`))
+			for _, cp := range resp.CommonPrefixes {
+				folders = append(folders, strings.Trim(*cp.Prefix, `/`))
 			}
-			if *resp.IsTruncated {
-				q.Marker = *resp.Contents[len(resp.Contents)-1].Key
-			} else {
-				return folders, nil
-			}
+			return folders, nil
 		}
 	}
 }
@@ -422,7 +430,7 @@ func (f *FS) NewReader(o string) (io.ReadCloser, error) {
 	return f.NewReaderWithContext(context.Background(), o)
 }
 
-// NewReaderWithContext create new GCS File reader with context.
+// NewReaderWithContext create new File reader with context.
 func (f *FS) NewReaderWithContext(ctx context.Context, objectname string) (io.ReadCloser, error) {
 	res, err := f.client.GetObjectWithContext(ctx, &s3.GetObjectInput{
 		Key:    aws.String(objectname),
@@ -430,6 +438,7 @@ func (f *FS) NewReaderWithContext(ctx context.Context, objectname string) (io.Re
 	})
 	if err != nil {
 		// translate the string error to typed error
+		u.Errorf("erro   %q", err.Error())
 		if strings.Contains(err.Error(), "NoSuchKey") {
 			return nil, cloudstorage.ErrObjectNotFound
 		}
@@ -703,6 +712,7 @@ func (o *object) Sync() error {
 
 func (o *object) Close() error {
 	if !o.opened {
+		u.Warnf("returning because not closed")
 		return nil
 	}
 	defer func() {
@@ -714,12 +724,14 @@ func (o *object) Close() error {
 	serr := o.cachedcopy.Sync()
 	cerr := o.cachedcopy.Close()
 	if serr != nil || cerr != nil {
+		u.Warnf("err ")
 		return fmt.Errorf("error on sync and closing localfile. %s sync=%v, err=%v", o.cachepath, serr, cerr)
 	}
 
 	if o.opened && !o.readonly {
 		err := o.Sync()
 		if err != nil {
+			u.Errorf("error on sync %v", err)
 			return err
 		}
 	}
