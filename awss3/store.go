@@ -23,7 +23,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/lytics/cloudstorage"
-	"github.com/lytics/cloudstorage/csbufio"
 )
 
 const (
@@ -458,7 +457,7 @@ func (f *FS) NewWriterWithContext(ctx context.Context, objectName string, metada
 	// Create an uploader with the session and default options
 	uploader := s3manager.NewUploader(f.sess)
 
-	pw := csbufio.NewReadWriter()
+	pr, pw := io.Pipe()
 
 	go func() {
 		// TODO:  this needs to be managed, ie shutdown signals, close, handler err etc.
@@ -467,7 +466,7 @@ func (f *FS) NewWriterWithContext(ctx context.Context, objectName string, metada
 		_, err := uploader.Upload(&s3manager.UploadInput{
 			Bucket: aws.String(f.bucket),
 			Key:    aws.String(objectName),
-			Body:   pw,
+			Body:   pr,
 		})
 		if err != nil {
 			u.Warnf("could not upload %v", err)
@@ -501,18 +500,6 @@ func newObject(f *FS, o *s3.Object) *object {
 	if o.LastModified != nil {
 		obj.updated = *o.LastModified
 	}
-	// metadata?
-	//obj.metadata, _ = convertMetaData(o.)
-	/*
-	   obj := &object{
-	   	name:       objectname,
-	   	metadata:   map[string]string{cloudstorage.ContentTypeKey: cloudstorage.ContentType(objectname)},
-	   	bucket:     f.bucket,
-	   	cachedcopy: nil,
-	   	cachepath:  cloudstorage.CachePathObj(f.cachepath, objectname, f.ID),
-	   	fs:         f,
-	   }
-	*/
 	return obj
 }
 func newObjectFromResponse(f *FS, name string, o *s3.GetObjectOutput) *object {
