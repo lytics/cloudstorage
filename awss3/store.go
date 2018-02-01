@@ -148,7 +148,6 @@ func NewClient(conf *cloudstorage.Config) (*s3.S3, *session.Session, error) {
 
 	sess := session.New(awsConf)
 	if sess == nil {
-		u.Errorf("no session")
 		return nil, nil, ErrNoS3Session
 	}
 
@@ -160,8 +159,6 @@ func NewClient(conf *cloudstorage.Config) (*s3.S3, *session.Session, error) {
 // NewStore Create AWS S3 storage client of type cloudstorage.Store
 func NewStore(c *s3.S3, sess *session.Session, conf *cloudstorage.Config) (*FS, error) {
 
-	// , bucket, cachepath string, pagesize int
-	// conf.Bucket, conf.TmpDir, cloudstorage.MaxResults
 	if conf.TmpDir == "" {
 		return nil, fmt.Errorf("unable to create cachepath. config.tmpdir=%q", conf.TmpDir)
 	}
@@ -255,10 +252,6 @@ func (f *FS) getObject(ctx context.Context, objectname string) (*object, error) 
 
 func (f *FS) getS3OpenObject(ctx context.Context, objectname string) (*s3.GetObjectOutput, error) {
 
-	if f == nil {
-		u.WarnT(10)
-	}
-	//u.Infof("%T get object bucket=%q object=%q", f, f.bucket, objectname)
 	res, err := f.client.GetObjectWithContext(ctx, &s3.GetObjectInput{
 		Key:    aws.String(objectname),
 		Bucket: aws.String(f.bucket),
@@ -270,10 +263,6 @@ func (f *FS) getS3OpenObject(ctx context.Context, objectname string) (*s3.GetObj
 		}
 		return nil, err
 	}
-	// NOTE:  caller must close
-	//res.Body.Close()
-	//u.Infof("result %#v", res)
-
 	return res, nil
 }
 
@@ -298,8 +287,6 @@ func (f *FS) List(ctx context.Context, q cloudstorage.Query) (*cloudstorage.Obje
 		itemLimit = int64(q.PageSize)
 	}
 
-	//u.Infof("List bucket=%q marker=%q prefix=%q pageSize=%d", f.bucket, q.Marker, q.Prefix, itemLimit)
-
 	params := &s3.ListObjectsInput{
 		Bucket:  aws.String(f.bucket),
 		Marker:  &q.Marker,
@@ -312,7 +299,6 @@ func (f *FS) List(ctx context.Context, q cloudstorage.Query) (*cloudstorage.Obje
 		u.Warnf("err = %v", err)
 		return nil, err
 	}
-	//u.Debugf("got contents %v", len(resp.Contents))
 
 	objResp := &cloudstorage.ObjectsResponse{
 		Objects: make(cloudstorage.Objects, len(resp.Contents)),
@@ -338,14 +324,13 @@ func (f *FS) Objects(ctx context.Context, q cloudstorage.Query) (cloudstorage.Ob
 // Folders get folders list.
 func (f *FS) Folders(ctx context.Context, q cloudstorage.Query) ([]string, error) {
 
-	//q.Prefix = "/"
 	q.Delimiter = "/"
 
+	// Think we should just put 1 here right?
 	itemLimit := int64(f.PageSize)
 	if q.PageSize > 0 {
 		itemLimit = int64(q.PageSize)
 	}
-	//itemLimit := int64(0)
 
 	params := &s3.ListObjectsInput{
 		Bucket:    aws.String(f.bucket),
@@ -354,23 +339,18 @@ func (f *FS) Folders(ctx context.Context, q cloudstorage.Query) ([]string, error
 		Delimiter: &q.Delimiter,
 	}
 
-	//u.Debugf("folders %+v  %+v", params, q)
-
 	folders := make([]string, 0)
 
 	for {
 		select {
 		case <-ctx.Done():
 			// If has been closed
-			u.Warnf("exit because done from folders")
 			return folders, ctx.Err()
 		default:
 			if q.Marker != "" {
 				params.Marker = &q.Marker
 			}
 			resp, err := f.client.ListObjectsWithContext(ctx, params)
-			//u.Infof("resp: %#v err=%v", resp, err)
-			//u.Infof("common: %v", resp.CommonPrefixes)
 			if err != nil {
 				return nil, err
 			}
@@ -437,7 +417,6 @@ func (f *FS) NewReaderWithContext(ctx context.Context, objectname string) (io.Re
 	})
 	if err != nil {
 		// translate the string error to typed error
-		u.Errorf("erro   %q", err.Error())
 		if strings.Contains(err.Error(), "NoSuchKey") {
 			return nil, cloudstorage.ErrObjectNotFound
 		}
@@ -514,7 +493,6 @@ func newObjectFromResponse(f *FS, name string, o *s3.GetObjectOutput) *object {
 	}
 	// metadata?
 	obj.metadata, _ = convertMetaData(o.Metadata)
-	//u.Infof("newobj name=%q etag=%s  updated:%v", name, *o.ETag, obj.updated)
 	return obj
 }
 
@@ -640,14 +618,6 @@ func (o *object) Write(p []byte) (n int, err error) {
 	return o.cachedcopy.Write(p)
 }
 
-/*
-func (o *object) Sync() error {
-	u.Warnf("Could not sync")
-	u.WarnT(12)
-	return cloudstorage.ErrNotImplemented
-}
-*/
-
 func (o *object) Sync() error {
 
 	if !o.opened {
@@ -680,26 +650,11 @@ func (o *object) Sync() error {
 		u.Warnf("could not upload %v", err)
 		return fmt.Errorf("failed to upload file, %v", err)
 	}
-	//u.Debugf("object.Close() upload result: %#v", result)
-
-	// if o.metadata != nil {
-	// 	wc.Metadata = o.metadata
-	// 	// contenttype is only used for viewing the file in a browser. (i.e. the GCS Object browser).
-	// 	ctype := cloudstorage.EnsureContextType(o.name, o.metadata)
-	// 	wc.ContentType = ctype
-	// }
-
-	// if err = wc.Close(); err != nil {
-	// 	errs = append(errs, fmt.Sprintf("close gcs writer error:%v", err))
-	// 	backoff(try)
-	// 	continue
-	// }
 	return nil
 }
 
 func (o *object) Close() error {
 	if !o.opened {
-		u.Warnf("returning because not closed")
 		return nil
 	}
 	defer func() {
@@ -711,7 +666,6 @@ func (o *object) Close() error {
 	serr := o.cachedcopy.Sync()
 	cerr := o.cachedcopy.Close()
 	if serr != nil || cerr != nil {
-		u.Warnf("err ")
 		return fmt.Errorf("error on sync and closing localfile. %s sync=%v, err=%v", o.cachepath, serr, cerr)
 	}
 
