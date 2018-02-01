@@ -686,7 +686,7 @@ func (o *object) Sync() error {
 	}
 
 	// Upload the file to S3.
-	_, err = uploader.Upload(&s3manager.UploadInput{
+	resp, err := uploader.Upload(&s3manager.UploadInput{
 		Bucket: aws.String(o.fs.bucket),
 		Key:    aws.String(o.name),
 		Body:   cachedcopy,
@@ -696,6 +696,7 @@ func (o *object) Sync() error {
 		return fmt.Errorf("failed to upload file, %v", err)
 	}
 	//u.Debugf("result: %#v", result)
+	u.Debugf("result:  %+v", resp)
 
 	// if o.metadata != nil {
 	// 	wc.Metadata = o.metadata

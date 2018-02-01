@@ -146,7 +146,7 @@ func Append(t TestingT, store cloudstorage.Store) {
 
 	err = obj2.Close()
 	assert.Equal(t, nil, err)
-	time.Sleep(time.Millisecond * 250)
+	time.Sleep(time.Millisecond * 500)
 
 	// Read the object back out of the cloud storage.
 	obj3, err := store.Get(context.Background(), "test.csv")
