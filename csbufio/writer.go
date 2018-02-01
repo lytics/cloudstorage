@@ -11,8 +11,8 @@ import (
 var (
 	_ = u.EMPTY
 
-// Ensure we implement io.ReadWriteCloser
-//_ io.ReadWriteCloser = (*pipeWriter)(nil)
+	// Ensure we implement io.ReadWriteCloser
+	_ io.ReadWriteCloser = (*pipeWriter)(nil)
 )
 
 type (
@@ -21,11 +21,8 @@ type (
 		c io.Closer
 	}
 	pipeWriter struct {
-		pw     *io.PipeWriter
-		pr     *io.PipeReader
-		opened bool
-		donec  chan struct{} // closed after err and obj are set.
-		err    error
+		pw *io.PipeWriter
+		pr *io.PipeReader
 	}
 )
 
@@ -51,34 +48,18 @@ func (bc bufWriteCloser) Close() error {
 
 // NewReadWriter creates a writeable pipe io.ReadWriteCloser suitable for
 func NewReadWriter() io.ReadWriteCloser {
-	return &pipeWriter{}
-}
-
-func (w *pipeWriter) open() {
-
-	w.pr, w.pw = io.Pipe()
-	w.opened = true
+	rw := &pipeWriter{}
+	rw.pr, rw.pw = io.Pipe()
+	return rw
 }
 
 // Read readers from read pipe.
 func (w *pipeWriter) Read(b []byte) (n int, err error) {
-	if w.err != nil {
-		return 0, w.err
-	}
-	if !w.opened {
-		w.open()
-	}
 	return w.pr.Read(b)
 }
 
 // Write appends to w. It implements the io.Writer interface.
 func (w *pipeWriter) Write(p []byte) (n int, err error) {
-	if w.err != nil {
-		return 0, w.err
-	}
-	if !w.opened {
-		w.open()
-	}
 	return w.pw.Write(p)
 }
 
@@ -86,22 +67,15 @@ func (w *pipeWriter) Write(p []byte) (n int, err error) {
 // If Close doesn't return an error, metadata about the written object
 // can be retrieved by calling Object.
 func (w *pipeWriter) Close() error {
-	if !w.opened {
-		w.open()
-	}
-
 	if err := w.pw.Close(); err != nil {
 		return err
 	}
 	//<-w.donec
-	return w.err
+	return nil
 }
 
 // CloseWithError aborts the write operation with the provided error.
 // CloseWithError always returns nil.
 func (w *pipeWriter) CloseWithError(err error) error {
-	if !w.opened {
-		return nil
-	}
 	return w.pw.CloseWithError(err)
 }

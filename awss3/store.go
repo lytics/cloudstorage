@@ -463,6 +463,8 @@ func (f *FS) NewWriterWithContext(ctx context.Context, objectName string, metada
 	u.Infof("after read writer")
 
 	go func() {
+		// TODO:  this needs to be managed, ie shutdown signals, close, etc.
+
 		// Upload the file to S3.
 		result, err := uploader.Upload(&s3manager.UploadInput{
 			Bucket: aws.String(f.bucket),
