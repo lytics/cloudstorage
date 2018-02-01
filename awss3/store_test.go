@@ -36,7 +36,7 @@ var config = &cloudstorage.Config{
 func TestAll(t *testing.T) {
 	config.Settings[awss3.ConfKeyAccessKey] = os.Getenv("AWS_ACCESS_KEY")
 	config.Settings[awss3.ConfKeyAccessSecret] = os.Getenv("AWS_SECRET_KEY")
-	gou.Debugf("config %v", config)
+	//gou.Debugf("config %v", config)
 	store, err := cloudstorage.NewStore(config)
 	if err != nil {
 		t.Logf("No valid auth provided, skipping awss3 testing %v", err)
@@ -46,6 +46,5 @@ func TestAll(t *testing.T) {
 	if store == nil {
 		t.Fatalf("No store???")
 	}
-	gou.Warnf("Hello %#v", store)
 	testutils.RunTests(t, store)
 }

@@ -458,15 +458,13 @@ func (f *FS) NewWriterWithContext(ctx context.Context, objectName string, metada
 	// Create an uploader with the session and default options
 	uploader := s3manager.NewUploader(f.sess)
 
-	u.Infof("about to open csbufio new read-writer")
 	pw := csbufio.NewReadWriter()
-	u.Infof("after read writer")
 
 	go func() {
-		// TODO:  this needs to be managed, ie shutdown signals, close, etc.
+		// TODO:  this needs to be managed, ie shutdown signals, close, handler err etc.
 
 		// Upload the file to S3.
-		result, err := uploader.Upload(&s3manager.UploadInput{
+		_, err := uploader.Upload(&s3manager.UploadInput{
 			Bucket: aws.String(f.bucket),
 			Key:    aws.String(objectName),
 			Body:   pw,
@@ -474,7 +472,6 @@ func (f *FS) NewWriterWithContext(ctx context.Context, objectName string, metada
 		if err != nil {
 			u.Warnf("could not upload %v", err)
 		}
-		u.Debugf("result: %#v", result)
 	}()
 
 	return pw, nil
@@ -530,6 +527,7 @@ func newObjectFromResponse(f *FS, name string, o *s3.GetObjectOutput) *object {
 	}
 	// metadata?
 	obj.metadata, _ = convertMetaData(o.Metadata)
+	//u.Infof("newobj name=%q etag=%s  updated:%v", name, *o.ETag, obj.updated)
 	return obj
 }
 
@@ -695,7 +693,7 @@ func (o *object) Sync() error {
 		u.Warnf("could not upload %v", err)
 		return fmt.Errorf("failed to upload file, %v", err)
 	}
-	//u.Debugf("result: %#v", result)
+	//u.Debugf("object.Close() upload result: %#v", result)
 
 	// if o.metadata != nil {
 	// 	wc.Metadata = o.metadata

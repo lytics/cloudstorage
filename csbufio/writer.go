@@ -64,8 +64,6 @@ func (w *pipeWriter) Write(p []byte) (n int, err error) {
 }
 
 // Close completes the write operation and flushes any buffered data.
-// If Close doesn't return an error, metadata about the written object
-// can be retrieved by calling Object.
 func (w *pipeWriter) Close() error {
 	if err := w.pw.Close(); err != nil {
 		return err
