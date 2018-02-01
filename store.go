@@ -109,7 +109,7 @@ type (
 		NewObject(o string) (Object, error)
 
 		// Delete removes the object from the cloud store.
-		Delete(o string) error
+		Delete(ctx context.Context, o string) error
 	}
 
 	// Object is a handle to a cloud stored file/object.  Calling Open will pull the remote file onto

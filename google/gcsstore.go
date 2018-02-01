@@ -233,8 +233,8 @@ func (g *GcsFS) NewWriterWithContext(ctx context.Context, o string, metadata map
 }
 
 // Delete requested object path string.
-func (g *GcsFS) Delete(obj string) error {
-	err := g.gcsb().Object(obj).Delete(context.Background())
+func (g *GcsFS) Delete(ctx context.Context, obj string) error {
+	err := g.gcsb().Object(obj).Delete(ctx)
 	if err != nil {
 		return err
 	}

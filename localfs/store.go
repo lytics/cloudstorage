@@ -261,7 +261,7 @@ func (l *LocalStore) Get(ctx context.Context, o string) (cloudstorage.Object, er
 	}, nil
 }
 
-func (l *LocalStore) Delete(obj string) error {
+func (l *LocalStore) Delete(ctx context.Context, obj string) error {
 	fo := path.Join(l.storepath, obj)
 	os.Remove(fo)
 	mf := fo + ".metadata"

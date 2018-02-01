@@ -3,8 +3,6 @@ package awss3
 import (
 	"fmt"
 	"io"
-	"math"
-	"math/rand"
 	"net/http"
 	"os"
 	"path"
@@ -23,6 +21,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/lytics/cloudstorage"
+	"github.com/lytics/cloudstorage/csbufio"
 )
 
 const (
@@ -437,12 +436,13 @@ func (f *FS) NewWriterWithContext(ctx context.Context, objectName string, metada
 	uploader := s3manager.NewUploader(f.sess)
 
 	pr, pw := io.Pipe()
+	bw := csbufio.NewWriter(pw)
 
 	go func() {
 		// TODO:  this needs to be managed, ie shutdown signals, close, handler err etc.
 
 		// Upload the file to S3.
-		_, err := uploader.Upload(&s3manager.UploadInput{
+		_, err := uploader.UploadWithContext(ctx, &s3manager.UploadInput{
 			Bucket: aws.String(f.bucket),
 			Key:    aws.String(objectName),
 			Body:   pr,
@@ -452,17 +452,17 @@ func (f *FS) NewWriterWithContext(ctx context.Context, objectName string, metada
 		}
 	}()
 
-	return pw, nil
+	return bw, nil
 }
 
 // Delete requested object path string.
-func (f *FS) Delete(obj string) error {
+func (f *FS) Delete(ctx context.Context, obj string) error {
 	params := &s3.DeleteObjectInput{
 		Bucket: aws.String(f.bucket),
 		Key:    aws.String(obj),
 	}
 
-	_, err := f.client.DeleteObject(params)
+	_, err := f.client.DeleteObjectWithContext(ctx, params)
 	if err != nil {
 		return err
 	}
@@ -516,7 +516,7 @@ func (o *object) SetMetaData(meta map[string]string) {
 }
 
 func (o *object) Delete() error {
-	return o.fs.Delete(o.name)
+	return o.fs.Delete(context.Background(), o.name)
 }
 
 func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
@@ -553,7 +553,7 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 				} else {
 					// lets re-try
 					errs = append(errs, fmt.Errorf("error getting object err=%v", err))
-					backoff(try)
+					cloudstorage.Backoff(try)
 					continue
 				}
 			}
@@ -582,7 +582,7 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 					return nil, fmt.Errorf("error creating a new cachedcopy file. local=%s err=%v", o.cachepath, err)
 				}
 
-				backoff(try)
+				cloudstorage.Backoff(try)
 				continue
 			}
 		}
@@ -684,20 +684,4 @@ func (o *object) Release() error {
 		o.cachedcopy.Close()
 	}
 	return os.Remove(o.cachepath)
-}
-
-// backoff sleeps a random amount so we can.
-// retry failed requests using a randomized exponential backoff:
-// wait a random period between [0..1] seconds and retry; if that fails,
-// wait a random period between [0..2] seconds and retry; if that fails,
-// wait a random period between [0..4] seconds and retry, and so on,
-// with an upper bounds to the wait period being 16 seconds.
-// http://play.golang.org/p/l9aUHgiR8J
-func backoff(try int) {
-	nf := math.Pow(2, float64(try))
-	nf = math.Max(1, nf)
-	nf = math.Min(nf, 16)
-	r := rand.Int31n(int32(nf))
-	d := time.Duration(r) * time.Second
-	time.Sleep(d)
 }

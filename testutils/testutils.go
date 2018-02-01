@@ -27,14 +27,15 @@ func Clearstore(t TestingT, store cloudstorage.Store) {
 	//t.Logf("----------------Clearstore-----------------\n")
 	q := cloudstorage.NewQueryAll()
 	q.Sorted()
-	iter, _ := store.Objects(context.Background(), q)
+	ctx := context.Background()
+	iter, _ := store.Objects(ctx, q)
 	objs, err := cloudstorage.ObjectsAll(iter)
 	if err != nil {
 		t.Fatalf("Could not list store %v", err)
 	}
 	for _, o := range objs {
 		//t.Logf("clearstore(): deleting %v", o.Name())
-		store.Delete(o.Name())
+		store.Delete(ctx, o.Name())
 	}
 
 	if store.Type() == "gcs" {
