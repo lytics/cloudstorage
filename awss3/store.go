@@ -218,7 +218,7 @@ func (f *FS) NewObject(objectname string) (cloudstorage.Object, error) {
 // Get a single File Object
 func (f *FS) Get(ctx context.Context, objectpath string) (cloudstorage.Object, error) {
 
-	obj, err := f.getObject(ctx, objectpath)
+	obj, err := f.getObjectMeta(ctx, objectpath)
 	if err != nil {
 		return nil, err
 	} else if obj == nil {
@@ -229,24 +229,23 @@ func (f *FS) Get(ctx context.Context, objectpath string) (cloudstorage.Object, e
 }
 
 // get single object
-func (f *FS) getObject(ctx context.Context, objectname string) (*object, error) {
+func (f *FS) getObjectMeta(ctx context.Context, objectname string) (*object, error) {
 
-	res, err := f.client.GetObjectWithContext(ctx, &s3.GetObjectInput{
+	req := &s3.HeadObjectInput{
 		Key:    aws.String(objectname),
 		Bucket: aws.String(f.bucket),
-	})
+	}
+
+	res, err := f.client.HeadObjectWithContext(ctx, req)
 	if err != nil {
 		// translate the string error to typed error
-		if strings.Contains(err.Error(), "NoSuchKey") {
+		if strings.Contains(err.Error(), "Not Found") {
 			return nil, cloudstorage.ErrObjectNotFound
 		}
 		return nil, err
 	}
-	// TODO:  this is messed up, we need to leave it open for some?
-	// should we not even have a helper function?
-	res.Body.Close()
 
-	return newObjectFromResponse(f, objectname, res), nil
+	return newObjectFromHead(f, objectname, res), nil
 }
 
 func (f *FS) getS3OpenObject(ctx context.Context, objectname string) (*s3.GetObjectOutput, error) {
@@ -403,7 +402,7 @@ func (f *FS) Move(ctx context.Context, src, des cloudstorage.Object) error {
 	return oh.Delete(ctx)
 }
 */
-// NewReader create GCS file reader.
+// NewReader create file reader.
 func (f *FS) NewReader(o string) (io.ReadCloser, error) {
 	return f.NewReaderWithContext(context.Background(), o)
 }
@@ -481,7 +480,7 @@ func newObject(f *FS, o *s3.Object) *object {
 	}
 	return obj
 }
-func newObjectFromResponse(f *FS, name string, o *s3.GetObjectOutput) *object {
+func newObjectFromHead(f *FS, name string, o *s3.HeadObjectOutput) *object {
 	obj := &object{
 		fs:        f,
 		name:      name,
