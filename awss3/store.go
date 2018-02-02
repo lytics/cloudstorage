@@ -48,7 +48,7 @@ const (
 
 var (
 	// Retries number of times to retry upon failures.
-	Retries = 55
+	Retries = 3
 	// PageSize is default page size
 	PageSize = 2000
 
