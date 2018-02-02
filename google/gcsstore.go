@@ -4,8 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"math"
-	"math/rand"
 	"os"
 	"path"
 	"strings"
@@ -38,7 +36,7 @@ var (
 	GCSRetries int = 55
 
 	// Ensure we implement ObjectIterator
-	_ cloudstorage.ObjectIterator = (*GcsObjectIterator)(nil)
+	_ cloudstorage.ObjectIterator = (*objectIterator)(nil)
 )
 
 // GcsFS Simple wrapper for accessing smaller GCS files, it doesn't currently implement a
@@ -91,7 +89,7 @@ func (g *GcsFS) gcsb() *storage.BucketHandle {
 
 // NewObject of Type GCS.
 func (g *GcsFS) NewObject(objectname string) (cloudstorage.Object, error) {
-	obj, err := g.Get(objectname)
+	obj, err := g.Get(context.Background(), objectname)
 	if err != nil && err != cloudstorage.ErrObjectNotFound {
 		return nil, err
 	} else if obj != nil {
@@ -100,9 +98,9 @@ func (g *GcsFS) NewObject(objectname string) (cloudstorage.Object, error) {
 
 	cf := cloudstorage.CachePathObj(g.cachepath, objectname, g.Id)
 
-	return &gcsFSObject{
+	return &object{
 		name:       objectname,
-		metadata:   map[string]string{cloudstorage.ContextTypeKey: cloudstorage.ContentType(objectname)},
+		metadata:   map[string]string{cloudstorage.ContentTypeKey: cloudstorage.ContentType(objectname)},
 		gcsb:       g.gcsb(),
 		bucket:     g.bucket,
 		cachedcopy: nil,
@@ -111,7 +109,7 @@ func (g *GcsFS) NewObject(objectname string) (cloudstorage.Object, error) {
 }
 
 // Get Gets a single File Object
-func (g *GcsFS) Get(objectpath string) (cloudstorage.Object, error) {
+func (g *GcsFS) Get(ctx context.Context, objectpath string) (cloudstorage.Object, error) {
 
 	gobj, err := g.gcsb().Object(objectpath).Attrs(context.Background()) // .Objects(context.Background(), q)
 	if err != nil {
@@ -125,59 +123,15 @@ func (g *GcsFS) Get(objectpath string) (cloudstorage.Object, error) {
 		return nil, cloudstorage.ErrObjectNotFound
 	}
 
-	return newObjectFromGcs(g, gobj), nil
-}
-
-// List objects from this store.
-func (g *GcsFS) List(query cloudstorage.Query) (cloudstorage.Objects, error) {
-
-	var q = &storage.Query{Prefix: query.Prefix}
-
-	res, err := g.listObjects(q, GCSRetries)
-	if err != nil {
-		return nil, err
-	}
-
-	if res == nil {
-		return make(cloudstorage.Objects, 0), nil
-	}
-
-	res = query.ApplyFilters(res)
-
-	return res, nil
+	return newObject(g, gobj), nil
 }
 
 // Objects returns an iterator over the objects in the google bucket that match the Query q.
 // If q is nil, no filtering is done.
-func (g *GcsFS) Objects(ctx context.Context, csq cloudstorage.Query) cloudstorage.ObjectIterator {
+func (g *GcsFS) Objects(ctx context.Context, csq cloudstorage.Query) (cloudstorage.ObjectIterator, error) {
 	var q = &storage.Query{Prefix: csq.Prefix}
 	iter := g.gcsb().Objects(ctx, q)
-	return &GcsObjectIterator{g, ctx, iter}
-}
-
-// ListObjects iterates to find a list of objects
-func (g *GcsFS) listObjects(q *storage.Query, retries int) (cloudstorage.Objects, error) {
-	var lasterr error
-
-	for i := 0; i < retries; i++ {
-		objects := make(cloudstorage.Objects, 0)
-		iter := g.gcsb().Objects(context.Background(), q)
-	iterLoop:
-		for {
-			oa, err := iter.Next()
-			switch err {
-			case nil:
-				objects = append(objects, newObjectFromGcs(g, oa))
-			case iterator.Done:
-				return objects, nil
-			default:
-				lasterr = err
-				backoff(i)
-				break iterLoop
-			}
-		}
-	}
-	return nil, lasterr
+	return &objectIterator{g, ctx, iter}, nil
 }
 
 // Folders get folders list.
@@ -209,11 +163,11 @@ func (g *GcsFS) Folders(ctx context.Context, csq cloudstorage.Query) ([]string, 
 // Copy from src to destination
 func (g *GcsFS) Copy(ctx context.Context, src, des cloudstorage.Object) error {
 
-	srcgcs, ok := src.(*gcsFSObject)
+	srcgcs, ok := src.(*object)
 	if !ok {
 		return fmt.Errorf("Copy source file expected GCS but got %T", src)
 	}
-	desgcs, ok := des.(*gcsFSObject)
+	desgcs, ok := des.(*object)
 	if !ok {
 		return fmt.Errorf("Copy destination expected GCS but got %T", des)
 	}
@@ -228,11 +182,11 @@ func (g *GcsFS) Copy(ctx context.Context, src, des cloudstorage.Object) error {
 // Move which is a Copy & Delete
 func (g *GcsFS) Move(ctx context.Context, src, des cloudstorage.Object) error {
 
-	srcgcs, ok := src.(*gcsFSObject)
+	srcgcs, ok := src.(*object)
 	if !ok {
 		return fmt.Errorf("Move source file expected GCS but got %T", src)
 	}
-	desgcs, ok := des.(*gcsFSObject)
+	desgcs, ok := des.(*object)
 	if !ok {
 		return fmt.Errorf("Move destination expected GCS but got %T", des)
 	}
@@ -279,24 +233,26 @@ func (g *GcsFS) NewWriterWithContext(ctx context.Context, o string, metadata map
 }
 
 // Delete requested object path string.
-func (g *GcsFS) Delete(obj string) error {
-	err := g.gcsb().Object(obj).Delete(context.Background())
+func (g *GcsFS) Delete(ctx context.Context, obj string) error {
+	err := g.gcsb().Object(obj).Delete(ctx)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-// GcsObjectIterator iterator to match store interface for iterating
+// objectIterator iterator to match store interface for iterating
 // through all GcsObjects that matched query.
-type GcsObjectIterator struct {
+type objectIterator struct {
 	g    *GcsFS
 	ctx  context.Context
 	iter *storage.ObjectIterator
 }
 
+func (*objectIterator) Close() {}
+
 // Next iterator to go to next object or else returns error for done.
-func (it *GcsObjectIterator) Next() (cloudstorage.Object, error) {
+func (it *objectIterator) Next() (cloudstorage.Object, error) {
 	retryCt := 0
 	for {
 		select {
@@ -306,7 +262,7 @@ func (it *GcsObjectIterator) Next() (cloudstorage.Object, error) {
 		default:
 			o, err := it.iter.Next()
 			if err == nil {
-				return newObjectFromGcs(it.g, o), nil
+				return newObject(it.g, o), nil
 			} else if err == iterator.Done {
 				return nil, err
 			} else if err == context.Canceled || err == context.DeadlineExceeded {
@@ -314,7 +270,7 @@ func (it *GcsObjectIterator) Next() (cloudstorage.Object, error) {
 				return nil, err
 			}
 			if retryCt < 5 {
-				backoff(retryCt)
+				cloudstorage.Backoff(retryCt)
 			} else {
 				return nil, err
 			}
@@ -323,7 +279,7 @@ func (it *GcsObjectIterator) Next() (cloudstorage.Object, error) {
 	}
 }
 
-type gcsFSObject struct {
+type object struct {
 	name         string
 	updated      time.Time
 	metadata     map[string]string
@@ -336,8 +292,8 @@ type gcsFSObject struct {
 	cachepath    string
 }
 
-func newObjectFromGcs(g *GcsFS, o *storage.ObjectAttrs) *gcsFSObject {
-	return &gcsFSObject{
+func newObject(g *GcsFS, o *storage.ObjectAttrs) *object {
+	return &object{
 		name:      o.Name,
 		updated:   o.Updated,
 		metadata:  o.Metadata,
@@ -346,31 +302,31 @@ func newObjectFromGcs(g *GcsFS, o *storage.ObjectAttrs) *gcsFSObject {
 		cachepath: cloudstorage.CachePathObj(g.cachepath, o.Name, g.Id),
 	}
 }
-func (o *gcsFSObject) StorageSource() string {
+func (o *object) StorageSource() string {
 	return StoreType
 }
-func (o *gcsFSObject) Name() string {
+func (o *object) Name() string {
 	return o.name
 }
-func (o *gcsFSObject) String() string {
+func (o *object) String() string {
 	return o.name
 }
-func (o *gcsFSObject) Updated() time.Time {
+func (o *object) Updated() time.Time {
 	return o.updated
 }
-func (o *gcsFSObject) MetaData() map[string]string {
+func (o *object) MetaData() map[string]string {
 	return o.metadata
 }
-func (o *gcsFSObject) SetMetaData(meta map[string]string) {
+func (o *object) SetMetaData(meta map[string]string) {
 	o.metadata = meta
 }
 
-func (o *gcsFSObject) Delete() error {
+func (o *object) Delete() error {
 	o.Release()
 	return o.gcsb.Object(o.name).Delete(context.Background())
 }
 
-func (o *gcsFSObject) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
+func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 	if o.opened {
 		return nil, fmt.Errorf("the store object is already opened. %s", o.name)
 	}
@@ -406,7 +362,7 @@ func (o *gcsFSObject) Open(accesslevel cloudstorage.AccessLevel) (*os.File, erro
 					// New, this is fine
 				} else {
 					errs = append(errs, fmt.Errorf("error storage.NewReader err=%v", err))
-					backoff(try)
+					cloudstorage.Backoff(try)
 					continue
 				}
 			}
@@ -421,7 +377,7 @@ func (o *gcsFSObject) Open(accesslevel cloudstorage.AccessLevel) (*os.File, erro
 			rc, err := o.gcsb.Object(o.name).NewReader(context.Background())
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error storage.NewReader err=%v", err))
-				backoff(try)
+				cloudstorage.Backoff(try)
 				continue
 			}
 			defer rc.Close()
@@ -441,7 +397,7 @@ func (o *gcsFSObject) Open(accesslevel cloudstorage.AccessLevel) (*os.File, erro
 					return nil, fmt.Errorf("error creating a new cachedcopy file. local=%s err=%v", o.cachepath, err)
 				}
 
-				backoff(try)
+				cloudstorage.Backoff(try)
 				continue
 			}
 		}
@@ -467,17 +423,17 @@ func (o *gcsFSObject) Open(accesslevel cloudstorage.AccessLevel) (*os.File, erro
 	return nil, fmt.Errorf("fetch error retry cnt reached: obj=%s tfile=%v errs:[%v]", o.name, o.cachepath, errs)
 }
 
-func (o *gcsFSObject) File() *os.File {
+func (o *object) File() *os.File {
 	return o.cachedcopy
 }
-func (o *gcsFSObject) Read(p []byte) (n int, err error) {
+func (o *object) Read(p []byte) (n int, err error) {
 	return o.cachedcopy.Read(p)
 }
-func (o *gcsFSObject) Write(p []byte) (n int, err error) {
+func (o *object) Write(p []byte) (n int, err error) {
 	return o.cachedcopy.Write(p)
 }
 
-func (o *gcsFSObject) Sync() error {
+func (o *object) Sync() error {
 
 	if !o.opened {
 		return fmt.Errorf("object isn't opened object:%s", o.name)
@@ -516,13 +472,13 @@ func (o *gcsFSObject) Sync() error {
 			if err2 != nil {
 				errs = append(errs, fmt.Sprintf("CloseWithError error:%v", err2))
 			}
-			backoff(try)
+			cloudstorage.Backoff(try)
 			continue
 		}
 
 		if err = wc.Close(); err != nil {
 			errs = append(errs, fmt.Sprintf("close gcs writer error:%v", err))
-			backoff(try)
+			cloudstorage.Backoff(try)
 			continue
 		}
 
@@ -533,7 +489,7 @@ func (o *gcsFSObject) Sync() error {
 	return fmt.Errorf("GCS sync error after retry: (oname=%s cpath:%v) errors[%v]", o.name, o.cachepath, errmsg)
 }
 
-func (o *gcsFSObject) Close() error {
+func (o *object) Close() error {
 	if !o.opened {
 		return nil
 	}
@@ -558,25 +514,9 @@ func (o *gcsFSObject) Close() error {
 	return nil
 }
 
-func (o *gcsFSObject) Release() error {
+func (o *object) Release() error {
 	if o.cachedcopy != nil {
 		o.cachedcopy.Close()
 	}
 	return os.Remove(o.cachepath)
-}
-
-// backoff sleeps a random amount so we can.
-// retry failed requests using a randomized exponential backoff:
-// wait a random period between [0..1] seconds and retry; if that fails,
-// wait a random period between [0..2] seconds and retry; if that fails,
-// wait a random period between [0..4] seconds and retry, and so on,
-// with an upper bounds to the wait period being 16 seconds.
-// http://play.golang.org/p/l9aUHgiR8J
-func backoff(try int) {
-	nf := math.Pow(2, float64(try))
-	nf = math.Max(1, nf)
-	nf = math.Min(nf, 16)
-	r := rand.Int31n(int32(nf))
-	d := time.Duration(r) * time.Second
-	time.Sleep(d)
 }

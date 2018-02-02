@@ -7,18 +7,24 @@ import (
 	"os"
 	"time"
 
+	"github.com/araddon/gou"
 	"golang.org/x/net/context"
 )
 
 const (
 	// StoreCacheFileExt = ".cache"
 	StoreCacheFileExt = ".cache"
-	// ContextTypeKey
-	ContextTypeKey = "content_type"
+	// ContentTypeKey
+	ContentTypeKey = "content_type"
 	// MaxResults default number of objects to retrieve during a list-objects request,
 	// if more objects exist, then they will need to be paged
 	MaxResults = 3000
+)
 
+// AccessLevel is the level of permissions on files
+type AccessLevel int
+
+const (
 	// ReadOnly File Permissions Levels
 	ReadOnly  AccessLevel = 0
 	ReadWrite AccessLevel = 1
@@ -29,6 +35,8 @@ var (
 	ErrObjectNotFound = fmt.Errorf("object not found")
 	// ErrObjectExists error trying to create an already existing file.
 	ErrObjectExists = fmt.Errorf("object already exists in backing store (use store.Get)")
+	// ErrNotImplemented this feature is not implemented for this store
+	ErrNotImplemented = fmt.Errorf("Not implemented")
 )
 
 type (
@@ -42,21 +50,27 @@ type (
 		// Get returns an object (file) from the cloud store. The object
 		// isn't opened already, see Object.Open()
 		// ObjectNotFound will be returned if the object is not found.
-		Get(o string) (Object, error)
-		// List takes a prefix query and returns an array of unopened objects
-		// that have the given prefix.
-		List(query Query) (Objects, error)
-		// Iterator based api to get Objects
-		Objects(ctx context.Context, q Query) ObjectIterator
+		Get(ctx context.Context, o string) (Object, error)
+		// Objects returns an object Iterator to allow paging through object
+		// which keeps track of page cursors.  Query defines the specific set
+		// of filters to apply to request.
+		Objects(ctx context.Context, q Query) (ObjectIterator, error)
 		// Folders creates list of folders
 		Folders(ctx context.Context, q Query) ([]string, error)
-
 		// NewReader creates a new Reader to read the contents of the object.
-		// ObjectNotFound will be returned if the object is not found.
+		// ErrObjectNotFound will be returned if the object is not found.
 		NewReader(o string) (io.ReadCloser, error)
+		// NewReader with context (for cancelation, etc)
 		NewReaderWithContext(ctx context.Context, o string) (io.ReadCloser, error)
-
+		// String default descriptor.
 		String() string
+	}
+
+	// StoreList not all api's support iteration, so if they support List based
+	// paged requests we will wrap the List with ObjectIterator.
+	StoreList interface {
+		// List file/objects filter by given query.
+		List(ctx context.Context, q Query) (*ObjectsResponse, error)
 	}
 
 	// StoreCopy Optional interface to fast path copy.  Many of the cloud providers
@@ -86,6 +100,7 @@ type (
 		// The object will not be available (and any previous object will remain)
 		// until Close has been called
 		NewWriter(o string, metadata map[string]string) (io.WriteCloser, error)
+		// NewWriter but with context.
 		NewWriterWithContext(ctx context.Context, o string, metadata map[string]string) (io.WriteCloser, error)
 
 		// NewObject creates a new empty object backed by the cloud store
@@ -94,17 +109,22 @@ type (
 		NewObject(o string) (Object, error)
 
 		// Delete removes the object from the cloud store.
-		Delete(o string) error
+		Delete(ctx context.Context, o string) error
 	}
 
 	// Object is a handle to a cloud stored file/object.  Calling Open will pull the remote file onto
 	// your local filesystem for reading/writing.  Calling Sync/Close will push the local copy
 	// backup to the cloud store.
 	Object interface {
+		// Name of object/file.
 		Name() string
+		// String is default descriptor.
 		String() string
+		// Updated timestamp.
 		Updated() time.Time
+		// MetaData is map of arbitrary name/value pairs about object.
 		MetaData() map[string]string
+		// SetMetaData allows you to set key/value pairs.
 		SetMetaData(meta map[string]string)
 		// StorageSource is the type of store.
 		StorageSource() string
@@ -130,9 +150,17 @@ type (
 	// ObjectIterator interface to page through objects
 	// See go doc for examples https://github.com/GoogleCloudPlatform/google-cloud-go/wiki/Iterator-Guidelines
 	ObjectIterator interface {
+		// Next gets next object, returns google.golang.org/api/iterator iterator.Done error.
 		Next() (Object, error)
+		// Close this down (and or context.Close)
+		Close()
 	}
 
+	// ObjectsResponse for paged object apis.
+	ObjectsResponse struct {
+		Objects    Objects
+		NextMarker string
+	}
 	// Objects are just a collection of Object(s).
 	// Used as the results for store.List commands.
 	Objects []Object
@@ -140,32 +168,38 @@ type (
 	// AuthMethod Is the source/location/type of auth token
 	AuthMethod string
 
-	// AccessLevel is the level of permissions on files
-	AccessLevel int
-
-	// Config the cloud store config parameters
+	// Config the cloud store config settings.
 	Config struct {
-		// StoreType [gcs,localfs,s3,azure]
+		// Type is StoreType [gcs,localfs,s3,azure]
 		Type string
 		// AuthMethod the methods of authenticating store.  Ie, where/how to
 		// find auth tokens.
 		AuthMethod AuthMethod
 		// Cloud Bucket Project
 		Project string
+		// Region is the cloud region
+		Region string
 		// Bucket is the "path" or named bucket in cloud
 		Bucket string
-		// the page size to use with google api requests (default 1000)
+		// the page size to use with api requests (default 1000)
 		PageSize int
-		// used by LyticsJWTKeySource
+		// used by JWTKeySource
 		JwtConf *JwtConf
-		// used by GoogleJWTKeySource
-		JwtFile string
+		// JwtFile is the file-path to local auth-token file.
+		JwtFile string `json:"jwtfile,omitempty"`
+		// BaseUrl is the base-url path for customizing regions etc.  IE
+		// AWS has different url paths per region on some situations.
+		BaseUrl string `json:"baseurl,omitempty"`
 		// Permissions scope
-		Scope string
-		// LocalFS Archive
-		LocalFS string // The location to use for archived events
-		// The location to save locally cached seq files.
-		TmpDir string
+		Scope string `json:"scope,omitempty"`
+		// LocalFS is filesystem path to use for the local files
+		// for Type=localfs
+		LocalFS string `json:"localfs,omitempty"`
+		// The filesystem path to save locally cached files as they are
+		// being read/written from cloud and need a staging area.
+		TmpDir string `json:"tmpdir,omitempty"`
+		// Settings are catch-all-bag to allow per-implementation over-rides
+		Settings gou.JsonHelper `json:"settings,omitempty"`
 	}
 
 	// JwtConf For use with google/google_jwttransporter.go
@@ -259,6 +293,11 @@ func Move(ctx context.Context, s Store, src, des Object) error {
 	return des.Close() //this will flush and sync the file.
 }
 
+func NewObjectsResponse() *ObjectsResponse {
+	return &ObjectsResponse{
+		Objects: make(Objects, 0),
+	}
+}
 func (o Objects) Len() int           { return len(o) }
 func (o Objects) Less(i, j int) bool { return o[i].Name() < o[j].Name() }
 func (o Objects) Swap(i, j int)      { o[i], o[j] = o[j], o[i] }

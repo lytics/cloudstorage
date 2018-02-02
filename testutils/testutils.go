@@ -10,9 +10,11 @@ import (
 	"sort"
 	"time"
 
-	"github.com/lytics/cloudstorage"
+	u "github.com/araddon/gou"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/api/iterator"
+
+	"github.com/lytics/cloudstorage"
 )
 
 type TestingT interface {
@@ -22,16 +24,18 @@ type TestingT interface {
 }
 
 func Clearstore(t TestingT, store cloudstorage.Store) {
-	t.Logf("----------------Clearstore-----------------\n")
-	q := cloudstorage.Query{"", "", nil}
+	//t.Logf("----------------Clearstore-----------------\n")
+	q := cloudstorage.NewQueryAll()
 	q.Sorted()
-	objs, err := store.List(q)
+	ctx := context.Background()
+	iter, _ := store.Objects(ctx, q)
+	objs, err := cloudstorage.ObjectsAll(iter)
 	if err != nil {
 		t.Fatalf("Could not list store %v", err)
 	}
 	for _, o := range objs {
-		t.Logf("clearstore(): deleting %v", o.Name())
-		store.Delete(o.Name())
+		//t.Logf("clearstore(): deleting %v", o.Name())
+		store.Delete(ctx, o.Name())
 	}
 
 	if store.Type() == "gcs" {
@@ -44,16 +48,22 @@ func Clearstore(t TestingT, store cloudstorage.Store) {
 func RunTests(t TestingT, s cloudstorage.Store) {
 	t.Logf("running basic rw")
 	BasicRW(t, s)
+	u.Debugf("finished basicrw")
 	t.Logf("running Append")
 	Append(t, s)
+	u.Debugf("finished append")
 	t.Logf("running ListObjsAndFolders")
 	ListObjsAndFolders(t, s)
+	u.Debugf("finished ListObjsAndFolders")
 	t.Logf("running Truncate")
 	Truncate(t, s)
+	u.Debugf("finished Truncate")
 	t.Logf("running NewObjectWithExisting")
 	NewObjectWithExisting(t, s)
+	u.Debugf("finished NewObjectWithExisting")
 	t.Logf("running TestReadWriteCloser")
 	TestReadWriteCloser(t, s)
+	u.Debugf("finished TestReadWriteCloser")
 }
 
 func BasicRW(t TestingT, store cloudstorage.Store) {
@@ -80,7 +90,7 @@ func BasicRW(t TestingT, store cloudstorage.Store) {
 	assert.Equal(t, nil, err)
 
 	// Read the object back out of the cloud storage.
-	obj2, err := store.Get("prefix/test.csv")
+	obj2, err := store.Get(context.Background(), "prefix/test.csv")
 	assert.Equal(t, nil, err)
 
 	f2, err := obj2.Open(cloudstorage.ReadOnly)
@@ -117,10 +127,10 @@ func Append(t TestingT, store cloudstorage.Store) {
 
 	// get the object and append to it...
 	morerows := "2013,VW,Jetta\n2011,Dodge,Caravan\n"
-	obj2, err := store.Get("test.csv")
+	obj2, err := store.Get(context.Background(), "test.csv")
 	assert.Equal(t, nil, err)
 
-	// get updated time
+	// snapshot updated time pre-update
 	updated := obj2.Updated()
 	assert.True(t, updated.After(now), "updated time was not set")
 	time.Sleep(10 * time.Millisecond)
@@ -133,12 +143,14 @@ func Append(t TestingT, store cloudstorage.Store) {
 	_, err = w2.WriteString(morerows)
 	assert.Equal(t, nil, err)
 	w2.Flush()
-
+	if store.Type() == "s3" {
+		time.Sleep(time.Millisecond * 1000)
+	}
 	err = obj2.Close()
 	assert.Equal(t, nil, err)
 
 	// Read the object back out of the cloud storage.
-	obj3, err := store.Get("test.csv")
+	obj3, err := store.Get(context.Background(), "test.csv")
 	assert.Equal(t, nil, err)
 	updated3 := obj3.Updated()
 	assert.True(t, updated3.After(updated), "updated time not updated")
@@ -192,24 +204,47 @@ func ListObjsAndFolders(t TestingT, store cloudstorage.Store) {
 
 	q := cloudstorage.NewQuery("list-test/")
 	q.Sorted()
-	objs, err := store.List(q)
+	iter, _ := store.Objects(context.Background(), q)
+	objs, err := cloudstorage.ObjectsAll(iter)
 	assert.Equal(t, nil, err)
 	assert.Equal(t, 15, len(objs), "incorrect list len. wanted 15 got %d", len(objs))
 
+	// Now we are going to re-run this test using an Object Iterator
+	q = cloudstorage.NewQuery("list-test/")
+	q.Sorted()
+	if listStore, ok := store.(cloudstorage.StoreList); ok {
+		iter = cloudstorage.NewObjectPageIterator(context.Background(), listStore, q)
+		objs = make(cloudstorage.Objects, 0)
+		i := 0
+		for {
+			o, err := iter.Next()
+			if err == iterator.Done {
+				break
+			}
+			objs = append(objs, o)
+			//u.Debugf("iter i=%d  len names=%v", i, len(names))
+			//u.Infof("2 %d found %v expect %v", i, o.Name(), names[i])
+			assert.Equal(t, names[i], o.Name(), "unexpected name.")
+			i++
+		}
+		assert.Equal(t, 15, len(objs), "incorrect list len. wanted 15 got %d", len(objs))
+	} else {
+		u.Warnf("does not implement List %T", store)
+	}
+
 	q = cloudstorage.NewQuery("list-test/b")
 	q.Sorted()
-	objs, err = store.List(q)
+	iter, _ = store.Objects(context.Background(), q)
+	objs, err = cloudstorage.ObjectsAll(iter)
 	assert.Equal(t, nil, err)
 	assert.Equal(t, 5, len(objs), "incorrect list len. wanted 5 got %d", len(objs))
 
 	for i, o := range objs {
-		t.Logf("%d found %v", i, o.Name())
 		assert.Equal(t, names[i+5], o.Name(), "unexpected name.")
 	}
 
-	// Now with iterator
-	iter := store.Objects(context.Background(), q)
-
+	// test with iterator
+	iter, _ = store.Objects(context.Background(), q)
 	objs = make(cloudstorage.Objects, 0)
 	i := 0
 	for {
@@ -218,7 +253,7 @@ func ListObjsAndFolders(t TestingT, store cloudstorage.Store) {
 			break
 		}
 		objs = append(objs, o)
-		t.Logf("%d found %v", i, o.Name())
+		//t.Logf("%d found %v", i, o.Name())
 		assert.Equal(t, names[i+5], o.Name(), "unexpected name.")
 		i++
 	}
@@ -227,7 +262,6 @@ func ListObjsAndFolders(t TestingT, store cloudstorage.Store) {
 
 	q = cloudstorage.NewQueryForFolders("list-test/")
 	folders, err = store.Folders(context.Background(), q)
-	t.Logf("folders %v", folders)
 	assert.Equal(t, nil, err)
 	assert.Equal(t, 3, len(folders), "incorrect list len. wanted 3 folders. %v", folders)
 
@@ -246,13 +280,11 @@ func ListObjsAndFolders(t TestingT, store cloudstorage.Store) {
 
 	q = cloudstorage.NewQueryForFolders("list-test/")
 	folders, err = store.Folders(context.Background(), q)
-	t.Logf("folders %v", folders)
 	assert.Equal(t, nil, err)
 	assert.Equal(t, 3, len(folders), "incorrect list len. wanted 3 folders. %v", folders)
 
 	q = cloudstorage.NewQueryForFolders("list-test/b/")
 	folders, err = store.Folders(context.Background(), q)
-	t.Logf("folders %v", folders)
 	assert.Equal(t, nil, err)
 	assert.Equal(t, 2, len(folders), "incorrect list len. wanted 2 folders. %v", folders)
 }
@@ -281,7 +313,7 @@ func Truncate(t TestingT, store cloudstorage.Store) {
 
 	// get the object and replace it...
 	newtestcsv := "Year,Make,Model\n2013,VW,Jetta\n"
-	obj2, err := store.Get("test.csv")
+	obj2, err := store.Get(context.Background(), "test.csv")
 	assert.Equal(t, nil, err)
 
 	f2, err := obj2.Open(cloudstorage.ReadWrite)
@@ -302,7 +334,7 @@ func Truncate(t TestingT, store cloudstorage.Store) {
 	assert.Equal(t, nil, err)
 
 	// Read the object back out of the cloud storage.
-	obj3, err := store.Get("test.csv")
+	obj3, err := store.Get(context.Background(), "test.csv")
 	assert.Equal(t, nil, err)
 
 	f3, err := obj3.Open(cloudstorage.ReadOnly)
@@ -343,7 +375,7 @@ func NewObjectWithExisting(t TestingT, store cloudstorage.Store) {
 	assert.Equal(t, nil, obj2, "object should be nil.")
 
 	// Read the object back out of the cloud storage.
-	obj3, err := store.Get("test.csv")
+	obj3, err := store.Get(context.Background(), "test.csv")
 	assert.Equal(t, nil, err)
 
 	f3, err := obj3.Open(cloudstorage.ReadOnly)
@@ -359,6 +391,7 @@ func TestReadWriteCloser(t TestingT, store cloudstorage.Store) {
 
 	Clearstore(t, store)
 
+	u.Debugf("starting TestReadWriteCloser")
 	object := "prefix/iorw.test"
 	data := fmt.Sprintf("pid:%v:time:%v", os.Getpid(), time.Now().Nanosecond())
 
@@ -369,9 +402,14 @@ func TestReadWriteCloser(t TestingT, store cloudstorage.Store) {
 	assert.Equal(t, nil, err)
 	err = wc.Close()
 	assert.Equal(t, nil, err)
+	time.Sleep(time.Millisecond * 100)
 
 	rc, err := store.NewReader(object)
 	assert.Equal(t, nil, err)
+	if rc == nil {
+		t.Fatalf("could not create reader")
+		return
+	}
 	buf2 := bytes.Buffer{}
 	_, err = buf2.ReadFrom(rc)
 	assert.Equal(t, nil, err)
