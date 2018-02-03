@@ -55,6 +55,9 @@ type (
 		// which keeps track of page cursors.  Query defines the specific set
 		// of filters to apply to request.
 		Objects(ctx context.Context, q Query) (ObjectIterator, error)
+		// List file/objects filter by given query.  This just wraps the object-iterator
+		// returning full list of objects.
+		List(ctx context.Context, q Query) (*ObjectsResponse, error)
 		// Folders creates list of folders
 		Folders(ctx context.Context, q Query) ([]string, error)
 		// NewReader creates a new Reader to read the contents of the object.
@@ -64,13 +67,6 @@ type (
 		NewReaderWithContext(ctx context.Context, o string) (io.ReadCloser, error)
 		// String default descriptor.
 		String() string
-	}
-
-	// StoreList not all api's support iteration, so if they support List based
-	// paged requests we will wrap the List with ObjectIterator.
-	StoreList interface {
-		// List file/objects filter by given query.
-		List(ctx context.Context, q Query) (*ObjectsResponse, error)
 	}
 
 	// StoreCopy Optional interface to fast path copy.  Many of the cloud providers
