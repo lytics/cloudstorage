@@ -32,7 +32,6 @@ func localProvider(conf *cloudstorage.Config) (cloudstorage.Store, error) {
 var (
 	// Ensure Our LocalStore implement CloudStorage interfaces
 	_ cloudstorage.StoreReader = (*LocalStore)(nil)
-	_ cloudstorage.StoreList   = (*LocalStore)(nil)
 )
 
 const (
@@ -179,7 +178,7 @@ func (l *LocalStore) List(ctx context.Context, query cloudstorage.Query) (*cloud
 	return resp, nil
 }
 
-// Objects returns an iterator over the objects in the google bucket that match the Query q.
+// Objects returns an iterator over the objects in the local folder that match the Query q.
 // If q is nil, no filtering is done.
 func (l *LocalStore) Objects(ctx context.Context, csq cloudstorage.Query) (cloudstorage.ObjectIterator, error) {
 	resp, err := l.List(ctx, csq)

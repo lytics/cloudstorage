@@ -209,28 +209,32 @@ func ListObjsAndFolders(t TestingT, store cloudstorage.Store) {
 	assert.Equal(t, nil, err)
 	assert.Equal(t, 15, len(objs), "incorrect list len. wanted 15 got %d", len(objs))
 
-	// Now we are going to re-run this test using an Object Iterator
+	// Now we are going to re-run this test using store.List() instead of store.Objects()
 	q = cloudstorage.NewQuery("list-test/")
 	q.Sorted()
-	if listStore, ok := store.(cloudstorage.StoreList); ok {
-		iter = cloudstorage.NewObjectPageIterator(context.Background(), listStore, q)
-		objs = make(cloudstorage.Objects, 0)
-		i := 0
-		for {
-			o, err := iter.Next()
-			if err == iterator.Done {
-				break
-			}
-			objs = append(objs, o)
-			//u.Debugf("iter i=%d  len names=%v", i, len(names))
-			//u.Infof("2 %d found %v expect %v", i, o.Name(), names[i])
-			assert.Equal(t, names[i], o.Name(), "unexpected name.")
-			i++
+	objResp, err := store.List(context.Background(), q)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 15, len(objResp.Objects), "incorrect list len. wanted 15 got %d", len(objResp.Objects))
+
+	// Now we are going to re-run this test using an Object Iterator
+	// that uses store.List() instead of store.Objects()
+	q = cloudstorage.NewQuery("list-test/")
+	q.Sorted()
+	iter = cloudstorage.NewObjectPageIterator(context.Background(), store, q)
+	objs = make(cloudstorage.Objects, 0)
+	i := 0
+	for {
+		o, err := iter.Next()
+		if err == iterator.Done {
+			break
 		}
-		assert.Equal(t, 15, len(objs), "incorrect list len. wanted 15 got %d", len(objs))
-	} else {
-		u.Warnf("does not implement List %T", store)
+		objs = append(objs, o)
+		//u.Debugf("iter i=%d  len names=%v", i, len(names))
+		//u.Infof("2 %d found %v expect %v", i, o.Name(), names[i])
+		assert.Equal(t, names[i], o.Name(), "unexpected name.")
+		i++
 	}
+	assert.Equal(t, 15, len(objs), "incorrect list len. wanted 15 got %d", len(objs))
 
 	q = cloudstorage.NewQuery("list-test/b")
 	q.Sorted()
@@ -246,7 +250,7 @@ func ListObjsAndFolders(t TestingT, store cloudstorage.Store) {
 	// test with iterator
 	iter, _ = store.Objects(context.Background(), q)
 	objs = make(cloudstorage.Objects, 0)
-	i := 0
+	i = 0
 	for {
 		o, err := iter.Next()
 		if err == iterator.Done {

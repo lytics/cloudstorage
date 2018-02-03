@@ -24,10 +24,19 @@ func ObjectsAll(iter ObjectIterator) (Objects, error) {
 	return objs, nil
 }
 
+// ObjectResponseFromIter get all objects for an iterator.
+func ObjectResponseFromIter(iter ObjectIterator) (*ObjectsResponse, error) {
+	objs, err := ObjectsAll(iter)
+	if err != nil {
+		return nil, err
+	}
+	return &ObjectsResponse{Objects: objs}, nil
+}
+
 // ObjectPageIterator iterator to facilitate easy paging through store.List() method
 // to read all Objects that matched query.
 type ObjectPageIterator struct {
-	s      StoreList
+	s      Store
 	ctx    context.Context
 	cancel context.CancelFunc
 	q      Query
@@ -36,7 +45,7 @@ type ObjectPageIterator struct {
 }
 
 // NewObjectPageIterator create an iterator that wraps the store List interface.
-func NewObjectPageIterator(ctx context.Context, s StoreList, q Query) ObjectIterator {
+func NewObjectPageIterator(ctx context.Context, s Store, q Query) ObjectIterator {
 
 	cancelCtx, cancel := context.WithCancel(ctx)
 	return &ObjectPageIterator{

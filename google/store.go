@@ -134,6 +134,16 @@ func (g *GcsFS) Objects(ctx context.Context, csq cloudstorage.Query) (cloudstora
 	return &objectIterator{g, ctx, iter}, nil
 }
 
+// Objects returns an iterator over the objects in the google bucket that match the Query q.
+// If q is nil, no filtering is done.
+func (g *GcsFS) List(ctx context.Context, csq cloudstorage.Query) (*cloudstorage.ObjectsResponse, error) {
+	iter, err := g.Objects(ctx, csq)
+	if err != nil {
+		return nil, err
+	}
+	return cloudstorage.ObjectResponseFromIter(iter)
+}
+
 // Folders get folders list.
 func (g *GcsFS) Folders(ctx context.Context, csq cloudstorage.Query) ([]string, error) {
 	var q = &storage.Query{Delimiter: csq.Delimiter, Prefix: csq.Prefix}
