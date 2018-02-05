@@ -8,9 +8,14 @@ It provides a unified api for local files and Cloud files that aids testing and 
 [![Go ReportCard](https://goreportcard.com/badge/lytics/cloudstorage)](https://goreportcard.com/report/lytics/cloudstorage)
 
 
+**Features**
+* Provide single api for multiple cloud/local files.
+* Buffer/Cache files from cloud local so speed of usage is very high.
+
+
 ### Similar/Related works
-* https://github.com/graymeta/stow
-* sync tool https://github.com/ncw/rclone
+* https://github.com/graymeta/stow similar to this pkg, library for interacting with cloud services.  Less of the buffer/local cache.  Different clouds.
+* https://github.com/ncw/rclone great cli sync tool, many connections (30+), well tested.  Designed as cli tool, config is less suited for use as library.
 
 
 # Example usage:
@@ -68,7 +73,7 @@ obj.Close()
 ##### Reading an existing object:
 ```go
 // Calling Get on an existing object will return a cloudstorage object or the cloudstorage.ErrObjectNotFound error.
-obj2, _ := store.Get("prefix/test.csv")
+obj2, _ := store.Get(context.Background(), "prefix/test.csv")
 f2, _ := obj2.Open(cloudstorage.ReadOnly)
 bytes, _ := ioutil.ReadAll(f2)
 fmt.Println(string(bytes)) // should print the CSV file from the block above...
@@ -94,7 +99,7 @@ See [testsuite.go](https://github.com/lytics/cloudstorage/blob/master/testutils/
 
 ## Testing
 
-Due to the way integration tests act against a GCS bucket and objects; run tests without parallelization. 
+Due to the way integration tests act against a cloud bucket and objects; run tests without parallelization. 
 
 ```
 cd $GOPATH/src/github.com/lytics/cloudstorage
