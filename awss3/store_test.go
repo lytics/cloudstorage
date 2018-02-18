@@ -29,7 +29,7 @@ var config = &cloudstorage.Config{
 	Type:       awss3.StoreType,
 	AuthMethod: awss3.AuthAccessKey,
 	Bucket:     os.Getenv("AWS_BUCKET"),
-	TmpDir:     "/tmp/localcache",
+	TmpDir:     "/tmp/localcache/aws",
 	Settings:   make(gou.JsonHelper),
 }
 

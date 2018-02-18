@@ -29,7 +29,7 @@ var config = &cloudstorage.Config{
 	Type:       azure.StoreType,
 	AuthMethod: azure.AuthKey,
 	Bucket:     os.Getenv("AZURE_BUCKET"),
-	TmpDir:     "/tmp/localcache",
+	TmpDir:     "/tmp/localcache/azure",
 	Settings:   make(gou.JsonHelper),
 }
 
