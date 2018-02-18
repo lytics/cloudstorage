@@ -209,7 +209,11 @@ func (f *FS) getObject(ctx context.Context, objectname string) (*object, error) 
 	}
 
 	u.Debugf("GET %#v", blob)
+	u.Debugf("get.props: %#v", o.o.Properties)
 	o.o.Properties.Etag = cloudstorage.CleanETag(o.o.Properties.Etag)
+	o.updated = time.Time(o.o.Properties.LastModified)
+	u.Debugf("get.updated=%v", o.updated)
+
 	o.cachepath = cloudstorage.CachePathObj(f.cachepath, o.name, f.ID)
 
 	return o, nil
@@ -394,13 +398,14 @@ func (f *FS) NewWriterWithContext(ctx context.Context, name string, metadata map
 
 	pr, pw := io.Pipe()
 	bw := csbufio.NewWriter(pw)
+	o := &object{name: name, metadata: metadata}
 
 	go func() {
 		// TODO:  this needs to be managed, ie shutdown signals, close, handler err etc.
 
 		// Upload the file to azure.
 		// Do a multipart upload
-		err := f.uploadMultiPart(name, pr, metadata)
+		err := f.uploadMultiPart(o, pr)
 		if err != nil {
 			u.Warnf("could not upload %v", err)
 		}
@@ -423,7 +428,7 @@ func makeBlockID(id uint64) string {
 }
 
 // uploadMultiPart start an upload
-func (f *FS) uploadMultiPart(name string, r io.Reader, md map[string]string) error {
+func (f *FS) uploadMultiPart(o *object, r io.Reader) error {
 
 	//chunkSize, err := calcBlockSize(size)
 	// if err != nil {
@@ -434,7 +439,7 @@ func (f *FS) uploadMultiPart(name string, r io.Reader, md map[string]string) err
 	var blocks []az.Block
 	var rawID uint64
 
-	blob := f.client.GetContainerReference(f.bucket).GetBlobReference(name)
+	blob := f.client.GetContainerReference(f.bucket).GetBlobReference(o.name)
 
 	// TODO: performance improvement to mange uploads in separate
 	// go-routine than the reader
@@ -471,9 +476,16 @@ func (f *FS) uploadMultiPart(name string, r io.Reader, md map[string]string) err
 		return err
 	}
 	u.Infof("finished block list put %d", len(blocks))
+	err = blob.GetProperties(nil)
+	if err != nil {
+		u.Warnf("could not load blog properties %v", err)
+		return err
+	}
+	u.Debugf("finished lastmodified=%v", time.Time(blob.Properties.LastModified))
 
-	u.Debugf("set metdata=%v", md)
-	blob.Metadata = md
+	u.Debugf("set metdata=%v", o.metadata)
+	blob.Metadata = o.metadata
+
 	err = blob.SetMetadata(nil)
 	if err != nil {
 		u.Warnf("can't set metadata err=%v", err)
@@ -665,7 +677,7 @@ func (o *object) Sync() error {
 	}
 
 	// Upload the file
-	if err = o.fs.uploadMultiPart(o.name, cachedcopy, o.metadata); err != nil {
+	if err = o.fs.uploadMultiPart(o, cachedcopy); err != nil {
 		u.Warnf("could not upload %v", err)
 		return fmt.Errorf("failed to upload file, %v", err)
 	}
