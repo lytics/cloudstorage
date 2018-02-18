@@ -1,22 +1,17 @@
 
 
-aws-s3 store
+azure blog store
 --------------------------
-Cloudstorage abstraction to s3
+Cloudstorage abstraction to Azure Blob storage.
 
 
 
 config
 -----------------
 
-* *access_key* access key
-* *access_secret* secret
-* *arn* 
-* *disable_ssl*
-* *bucket* bucket
+* *config.Project* is required.  use "Account" in azure portal.
+* *azure_key* access key
 
 
 
-```go
 
-```

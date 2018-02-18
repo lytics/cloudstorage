@@ -70,6 +70,9 @@ func BasicRW(t TestingT, store cloudstorage.Store) {
 
 	Clearstore(t, store)
 
+	assert.NotEqual(t, "", store.String())
+	assert.NotEqual(t, nil, store.Client())
+
 	// Create a new object and write to it.
 	obj, err := store.NewObject("prefix/test.csv")
 	assert.Equal(t, nil, err)
@@ -93,7 +96,6 @@ func BasicRW(t TestingT, store cloudstorage.Store) {
 	obj2, err := store.Get(context.Background(), "prefix/test.csv")
 	assert.Equal(t, nil, err)
 
-	u.Warnf("about to call obj.Open()")
 	f2, err := obj2.Open(cloudstorage.ReadOnly)
 	assert.Equal(t, nil, err)
 
