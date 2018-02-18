@@ -1,4 +1,4 @@
-package awss3_test
+package azure_test
 
 import (
 	"os"
@@ -7,17 +7,17 @@ import (
 	"github.com/araddon/gou"
 
 	"github.com/lytics/cloudstorage"
-	"github.com/lytics/cloudstorage/awss3"
+	"github.com/lytics/cloudstorage/azure"
 	"github.com/lytics/cloudstorage/testutils"
 )
 
 /*
 
-# to use aws tests ensure you have exported
+# to use azure tests ensure you have exported
 
-export AWS_ACCESS_KEY="aaa"
-export AWS_SECRET_KEY="bbb"
-export AWS_BUCKET="bucket"
+export AZURE_KEY="aaa"
+export AZURE_PROJECT="bbb"
+export AZURE_BUCKET="bucket"
 
 */
 func init() {
@@ -26,16 +26,15 @@ func init() {
 }
 
 var config = &cloudstorage.Config{
-	Type:       awss3.StoreType,
-	AuthMethod: awss3.AuthAccessKey,
-	Bucket:     os.Getenv("AWS_BUCKET"),
+	Type:       azure.StoreType,
+	AuthMethod: azure.AuthKey,
+	Bucket:     os.Getenv("AZURE_BUCKET"),
 	TmpDir:     "/tmp/localcache",
 	Settings:   make(gou.JsonHelper),
 }
 
 func TestAll(t *testing.T) {
-	config.Settings[awss3.ConfKeyAccessKey] = os.Getenv("AWS_ACCESS_KEY")
-	config.Settings[awss3.ConfKeyAccessSecret] = os.Getenv("AWS_SECRET_KEY")
+	config.Settings[azure.ConfKeyAuthKey] = os.Getenv("AZURE_KEY")
 	//gou.Debugf("config %v", config)
 	store, err := cloudstorage.NewStore(config)
 	if err != nil {
