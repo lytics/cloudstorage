@@ -100,10 +100,12 @@ func NewClient(conf *cloudstorage.Config) (*az.Client, *az.BlobStorageClient, er
 	case AuthKey:
 		accessKey := conf.Settings.String(ConfKeyAuthKey)
 		if accessKey == "" {
+			u.Warnf("no access key %v", conf.Settings)
 			return nil, nil, ErrNoAccessKey
 		}
 		basicClient, err := az.NewBasicClient(conf.Project, accessKey)
 		if err != nil {
+			u.Warnf("could not get azure client %v", err)
 			return nil, nil, err
 		}
 		client := basicClient.GetBlobService()
