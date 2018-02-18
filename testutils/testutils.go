@@ -52,7 +52,6 @@ func RunTests(t TestingT, s cloudstorage.Store) {
 	t.Logf("running Append")
 	Append(t, s)
 	u.Debugf("finished append")
-	return
 	t.Logf("running ListObjsAndFolders")
 	ListObjsAndFolders(t, s)
 	u.Debugf("finished ListObjsAndFolders")

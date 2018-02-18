@@ -137,7 +137,7 @@ func NewStore(c *az.Client, blobClient *az.BlobStorageClient, conf *cloudstorage
 		bucket:     conf.Bucket,
 		cachepath:  conf.TmpDir,
 		ID:         uid,
-		PageSize:   cloudstorage.MaxResults,
+		PageSize:   10000,
 	}, nil
 }
 
@@ -197,7 +197,6 @@ func (f *FS) getObject(ctx context.Context, objectname string) (*object, error) 
 	err := blob.GetProperties(nil)
 	if err != nil {
 		if strings.Contains(err.Error(), "404") {
-			u.Debugf("err object not found")
 			return nil, cloudstorage.ErrObjectNotFound
 		}
 		return nil, err
@@ -208,12 +207,8 @@ func (f *FS) getObject(ctx context.Context, objectname string) (*object, error) 
 		o:    blob,
 	}
 
-	u.Debugf("GET %#v", blob)
-	u.Debugf("get.props: %#v", o.o.Properties)
 	o.o.Properties.Etag = cloudstorage.CleanETag(o.o.Properties.Etag)
 	o.updated = time.Time(o.o.Properties.LastModified)
-	u.Debugf("get.updated=%v", o.updated)
-
 	o.cachepath = cloudstorage.CachePathObj(f.cachepath, o.name, f.ID)
 
 	return o, nil
@@ -223,7 +218,6 @@ func (f *FS) getObject(ctx context.Context, objectname string) (*object, error) 
 func (f *FS) getOpenObject(ctx context.Context, objectname string) (io.ReadCloser, error) {
 	rc, err := f.client.GetContainerReference(f.bucket).GetBlobReference(objectname).Get(nil)
 	if err != nil && strings.Contains(err.Error(), "404") {
-		u.Debugf("err object not found")
 		return nil, cloudstorage.ErrObjectNotFound
 	} else if err != nil {
 		return nil, err
@@ -295,33 +289,27 @@ func (f *FS) Folders(ctx context.Context, q cloudstorage.Query) ([]string, error
 	params := az.ListBlobsParameters{
 		Prefix:     q.Prefix,
 		MaxResults: itemLimit,
-		Marker:     q.Marker,
 		Delimiter:  "/",
 	}
-
-	folders := make([]string, 0)
 
 	for {
 		select {
 		case <-ctx.Done():
 			// If has been closed
-			return folders, ctx.Err()
+			return nil, ctx.Err()
 		default:
 			// if q.Marker != "" {
 			// 	params.Marker = &q.Marker
 			// }
 			blobs, err := f.client.GetContainerReference(f.bucket).ListBlobs(params)
 			if err != nil {
+				u.Warnf("leaving %v", err)
 				return nil, err
 			}
-			for _, b := range blobs.Blobs {
-				folders = append(folders, b.Name)
+			if len(blobs.BlobPrefixes) > 0 {
+				return blobs.BlobPrefixes, nil
 			}
-			if blobs.Marker != "" {
-				q.Marker = blobs.Marker
-				continue
-			}
-			return folders, nil
+			return nil, nil
 		}
 	}
 }
@@ -445,10 +433,8 @@ func (f *FS) uploadMultiPart(o *object, r io.Reader) error {
 	// go-routine than the reader
 	for {
 		n, err := r.Read(buf)
-		u.Debugf("r.Read() n=%v err=%v", n, err)
 		if err != nil {
 			if err == io.EOF {
-				u.Warnf("eof n=%v rawID=%v  initialChunk=%v", n, rawID, initialChunkSize)
 				break
 			}
 			u.Warnf("unknown err=%v", err)
@@ -461,7 +447,6 @@ func (f *FS) uploadMultiPart(o *object, r io.Reader) error {
 		if err := blob.PutBlock(blockID, chunk, nil); err != nil {
 			return err
 		}
-		u.Infof("finished block put")
 
 		blocks = append(blocks, az.Block{
 			ID:     blockID,
@@ -475,15 +460,13 @@ func (f *FS) uploadMultiPart(o *object, r io.Reader) error {
 		u.Warnf("could not put block list %v", err)
 		return err
 	}
-	u.Infof("finished block list put %d", len(blocks))
+
 	err = blob.GetProperties(nil)
 	if err != nil {
 		u.Warnf("could not load blog properties %v", err)
 		return err
 	}
-	u.Debugf("finished lastmodified=%v", time.Time(blob.Properties.LastModified))
 
-	u.Debugf("set metdata=%v", o.metadata)
 	blob.Metadata = o.metadata
 
 	err = blob.SetMetadata(nil)
@@ -577,17 +560,12 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 		return nil, fmt.Errorf("error occurred creating file. local=%s err=%v", o.cachepath, err)
 	}
 
-	if o.o != nil {
-		u.Infof("already has object? %v", o.o)
-	}
 	for try := 0; try < Retries; try++ {
 		if o.rc == nil {
 			rc, err := o.fs.getOpenObject(context.Background(), o.name)
-			u.Debugf("obj.Open() rc=%T  err=%v", rc, err)
 			if err != nil {
 				if err == cloudstorage.ErrObjectNotFound {
 					// New, this is fine
-					u.Infof("obj.Open() is new object name=%q", o.name)
 				} else {
 					// lets re-try
 					errs = append(errs, fmt.Errorf("error getting object err=%v", err))
@@ -610,7 +588,6 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 			}
 
 			_, err = io.Copy(cachedcopy, o.rc)
-			u.Debugf("cachedcopy %#v", cachedcopy)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error coping bytes. err=%v", err))
 				//recreate the cachedcopy file incase it has incomplete data
