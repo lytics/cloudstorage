@@ -52,6 +52,7 @@ func RunTests(t TestingT, s cloudstorage.Store) {
 	t.Logf("running Append")
 	Append(t, s)
 	u.Debugf("finished append")
+	return
 	t.Logf("running ListObjsAndFolders")
 	ListObjsAndFolders(t, s)
 	u.Debugf("finished ListObjsAndFolders")
@@ -93,6 +94,7 @@ func BasicRW(t TestingT, store cloudstorage.Store) {
 	obj2, err := store.Get(context.Background(), "prefix/test.csv")
 	assert.Equal(t, nil, err)
 
+	u.Warnf("about to call obj.Open()")
 	f2, err := obj2.Open(cloudstorage.ReadOnly)
 	assert.Equal(t, nil, err)
 

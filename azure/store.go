@@ -1,6 +1,8 @@
 package azure
 
 import (
+	"encoding/base64"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"os"
@@ -195,6 +197,7 @@ func (f *FS) getObject(ctx context.Context, objectname string) (*object, error) 
 	err := blob.GetProperties(nil)
 	if err != nil {
 		if strings.Contains(err.Error(), "404") {
+			u.Debugf("err object not found")
 			return nil, cloudstorage.ErrObjectNotFound
 		}
 		return nil, err
@@ -205,14 +208,23 @@ func (f *FS) getObject(ctx context.Context, objectname string) (*object, error) 
 		o:    blob,
 	}
 
+	u.Debugf("GET %#v", blob)
 	o.o.Properties.Etag = cloudstorage.CleanETag(o.o.Properties.Etag)
+	o.cachepath = cloudstorage.CachePathObj(f.cachepath, o.name, f.ID)
 
 	return o, nil
 	//return newObjectFromHead(f, objectname, res), nil
 }
 
 func (f *FS) getOpenObject(ctx context.Context, objectname string) (io.ReadCloser, error) {
-	return f.client.GetContainerReference(f.bucket).GetBlobReference(objectname).Get(nil)
+	rc, err := f.client.GetContainerReference(f.bucket).GetBlobReference(objectname).Get(nil)
+	if err != nil && strings.Contains(err.Error(), "404") {
+		u.Debugf("err object not found")
+		return nil, cloudstorage.ErrObjectNotFound
+	} else if err != nil {
+		return nil, err
+	}
+	return rc, nil
 }
 
 func convertMetaData(m map[string]*string) (map[string]string, error) {
@@ -397,54 +409,77 @@ func (f *FS) NewWriterWithContext(ctx context.Context, name string, metadata map
 	return bw, nil
 }
 
+const (
+	// constants related to chunked uploads
+	initialChunkSize = 4 * 1024 * 1024
+	maxChunkSize     = 100 * 1024 * 1024
+	maxParts         = 50000
+)
+
+func makeBlockID(id uint64) string {
+	bytesID := make([]byte, 8)
+	binary.LittleEndian.PutUint64(bytesID, id)
+	return base64.StdEncoding.EncodeToString(bytesID)
+}
+
 // uploadMultiPart start an upload
 func (f *FS) uploadMultiPart(name string, r io.Reader, md map[string]string) error {
 
-	/*
-		chunkSize, err := determineChunkSize(size)
+	//chunkSize, err := calcBlockSize(size)
+	// if err != nil {
+	// 	return err
+	// }
+	var buf = make([]byte, initialChunkSize)
+
+	var blocks []az.Block
+	var rawID uint64
+
+	blob := f.client.GetContainerReference(f.bucket).GetBlobReference(name)
+
+	// TODO: performance improvement to mange uploads in separate
+	// go-routine than the reader
+	for {
+		n, err := r.Read(buf)
+		u.Debugf("r.Read() n=%v err=%v", n, err)
 		if err != nil {
+			if err == io.EOF {
+				u.Warnf("eof n=%v rawID=%v  initialChunk=%v", n, rawID, initialChunkSize)
+				break
+			}
+			u.Warnf("unknown err=%v", err)
 			return err
 		}
-		var buf = make([]byte, chunkSize)
 
-		var blocks []az.Block
-		var rawID uint64
+		blockID := makeBlockID(rawID)
+		chunk := buf[:n]
 
-		blob := f.client.GetContainerReference(f.bucket).GetBlobReference(name)
-		blob.Metadata = md
-		err = blob.SetMetadata(nil)
-		if err != nil {
+		if err := blob.PutBlock(blockID, chunk, nil); err != nil {
 			return err
 		}
+		u.Infof("finished block put")
 
-		// TODO: performance improvement to mange uploads in separate
-		// go-routine than the reader
-		for {
-			n, err := r.Read(buf)
-			if err != nil {
-				if err == io.EOF {
-					break
-				}
-				return err
-			}
+		blocks = append(blocks, az.Block{
+			ID:     blockID,
+			Status: az.BlockStatusLatest,
+		})
+		rawID++
+	}
 
-			blockID := encodedBlockID(rawID)
-			chunk := buf[:n]
+	err := blob.PutBlockList(blocks, nil)
+	if err != nil {
+		u.Warnf("could not put block list %v", err)
+		return err
+	}
+	u.Infof("finished block list put %d", len(blocks))
 
-			if err := blob.PutBlock(blockID, chunk, nil); err != nil {
-				return err
-			}
-
-			blocks = append(blocks, az.Block{
-				ID:     blockID,
-				Status: az.BlockStatusLatest,
-			})
-			rawID++
-		}
-
-		return blob.PutBlockList(blocks, nil)
-	*/
-	return cloudstorage.ErrNotImplemented
+	u.Debugf("set metdata=%v", md)
+	blob.Metadata = md
+	err = blob.SetMetadata(nil)
+	if err != nil {
+		u.Warnf("can't set metadata err=%v", err)
+		return err
+	}
+	return nil
 }
 
 // Delete requested object path string.
@@ -530,12 +565,17 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 		return nil, fmt.Errorf("error occurred creating file. local=%s err=%v", o.cachepath, err)
 	}
 
+	if o.o != nil {
+		u.Infof("already has object? %v", o.o)
+	}
 	for try := 0; try < Retries; try++ {
-		if o.o == nil {
+		if o.rc == nil {
 			rc, err := o.fs.getOpenObject(context.Background(), o.name)
+			u.Debugf("obj.Open() rc=%T  err=%v", rc, err)
 			if err != nil {
 				if err == cloudstorage.ErrObjectNotFound {
 					// New, this is fine
+					u.Infof("obj.Open() is new object name=%q", o.name)
 				} else {
 					// lets re-try
 					errs = append(errs, fmt.Errorf("error getting object err=%v", err))
@@ -558,6 +598,7 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 			}
 
 			_, err = io.Copy(cachedcopy, o.rc)
+			u.Debugf("cachedcopy %#v", cachedcopy)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error coping bytes. err=%v", err))
 				//recreate the cachedcopy file incase it has incomplete data
