@@ -1,5 +1,5 @@
 # Introduction
-Cloudstorage is an abstraction layer for Cloud Storage (Google, AWS) and Local Files.
+Cloudstorage is an abstraction layer for Cloud Storage (Google, AWS, Azure) and Local Files.
 It provides a unified api for local files and Cloud files that aids testing and operating on multiple cloud storage.
 
 [![Code Coverage](https://codecov.io/gh/lytics/cloudstorage/branch/master/graph/badge.svg)](https://codecov.io/gh/lytics/cloudstorage)
@@ -9,7 +9,7 @@ It provides a unified api for local files and Cloud files that aids testing and 
 
 
 **Features**
-* Provide single api for multiple cloud/local files.
+* Provide single unified api for multiple cloud (google, azure, aws) & local files.
 * Buffer/Cache files from cloud local so speed of usage is very high.
 
 
