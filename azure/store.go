@@ -1,22 +1,18 @@
-package awss3
+package azure
 
 import (
+	"encoding/base64"
+	"encoding/binary"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"path"
 	"strings"
-	"sync"
 	"time"
 
+	az "github.com/Azure/azure-sdk-for-go/storage"
 	u "github.com/araddon/gou"
-
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/pborman/uuid"
 	"golang.org/x/net/context"
 
@@ -25,25 +21,20 @@ import (
 )
 
 const (
-	// StoreType = "s3" this is used to define the storage type to create
+	// StoreType = "azure" this is used to define the storage type to create
 	// from cloudstorage.NewStore(config)
-	StoreType = "s3"
+	StoreType = "azure"
 
 	// Configuration Keys.  These are the names of keys
 	// to look for in the json map[string]string to extract for config.
 
-	// ConfKeyAccessKey config key name of the aws access_key(id) for auth
-	ConfKeyAccessKey = "access_key"
-	// ConfKeyAccessSecret config key name of the aws acccess secret
-	ConfKeyAccessSecret = "access_secret"
-	// ConfKeyARN config key name of the aws ARN name of user
-	ConfKeyARN = "arn"
-	// ConfKeyDisableSSL config key name of disabling ssl flag
-	ConfKeyDisableSSL = "disable_ssl"
+	// ConfKeyAuthKey config key name of the azure api key for auth
+	ConfKeyAuthKey = "azure_key"
+
 	// Authentication Source's
 
-	// AuthAccessKey is for using aws access key/secret pairs
-	AuthAccessKey cloudstorage.AuthMethod = "aws_access_key"
+	// AuthKey is for using azure api key
+	AuthKey cloudstorage.AuthMethod = "azure_key"
 )
 
 var (
@@ -52,18 +43,16 @@ var (
 	// PageSize is default page size
 	PageSize = 2000
 
-	// ErrNoS3Session no valid session
-	ErrNoS3Session = fmt.Errorf("no valid aws session was created")
-	// ErrNoAccessKey error for no access_key
-	ErrNoAccessKey = fmt.Errorf("no settings.access_key")
-	// ErrNoAccessSecret error for no settings.access_secret
-	ErrNoAccessSecret = fmt.Errorf("no settings.access_secret")
+	// ErrNoAzureSession no valid session
+	ErrNoAzureSession = fmt.Errorf("no valid azure session was created")
+	// ErrNoAccessKey error for no azure_key
+	ErrNoAccessKey = fmt.Errorf("no settings.azure_key")
 	// ErrNoAuth error for no findable auth
 	ErrNoAuth = fmt.Errorf("No auth provided")
 )
 
 func init() {
-	// Register this Driver (s3) in cloudstorage driver registry.
+	// Register this Driver (azure) in cloudstorage driver registry.
 	cloudstorage.Register(StoreType, func(conf *cloudstorage.Config) (cloudstorage.Store, error) {
 		client, sess, err := NewClient(conf)
 		if err != nil {
@@ -74,89 +63,62 @@ func init() {
 }
 
 type (
-	// FS Simple wrapper for accessing s3 files, it doesn't currently implement a
+	// FS Simple wrapper for accessing azure blob files, it doesn't currently implement a
 	// Reader/Writer interface so not useful for stream reading of large files yet.
 	FS struct {
-		PageSize  int
-		ID        string
-		client    *s3.S3
-		sess      *session.Session
-		endpoint  string
-		bucket    string
-		cachepath string
+		PageSize   int
+		ID         string
+		baseClient *az.Client
+		client     *az.BlobStorageClient
+		endpoint   string
+		bucket     string
+		cachepath  string
 	}
 
 	object struct {
 		fs         *FS
-		o          *s3.GetObjectOutput
+		o          *az.Blob
 		cachedcopy *os.File
+		rc         io.ReadCloser
 
-		name      string    // aka "key" in s3
-		updated   time.Time // LastModifyied in s3
+		name      string    // aka "id" in azure
+		updated   time.Time // LastModified in azure
 		metadata  map[string]string
 		bucket    string
 		readonly  bool
 		opened    bool
 		cachepath string
 
-		infoOnce sync.Once
-		infoErr  error
+		//infoOnce sync.Once
+		infoErr error
 	}
 )
 
 // NewClient create new AWS s3 Client.  Uses cloudstorage.Config to read
 // necessary config settings such as bucket, region, auth.
-func NewClient(conf *cloudstorage.Config) (*s3.S3, *session.Session, error) {
-
-	awsConf := aws.NewConfig().
-		WithHTTPClient(http.DefaultClient).
-		WithMaxRetries(aws.UseServiceDefaultRetries).
-		WithLogger(aws.NewDefaultLogger()).
-		WithLogLevel(aws.LogOff).
-		WithSleepDelay(time.Sleep)
-
-	if conf.Region != "" {
-		awsConf.WithRegion(conf.Region)
-	} else {
-		awsConf.WithRegion("us-east-1")
-	}
+func NewClient(conf *cloudstorage.Config) (*az.Client, *az.BlobStorageClient, error) {
 
 	switch conf.AuthMethod {
-	case AuthAccessKey:
-		accessKey := conf.Settings.String(ConfKeyAccessKey)
+	case AuthKey:
+		accessKey := conf.Settings.String(ConfKeyAuthKey)
 		if accessKey == "" {
+			u.Warnf("no access key %v", conf.Settings)
 			return nil, nil, ErrNoAccessKey
 		}
-		secretKey := conf.Settings.String(ConfKeyAccessSecret)
-		if secretKey == "" {
-			return nil, nil, ErrNoAccessSecret
+		basicClient, err := az.NewBasicClient(conf.Project, accessKey)
+		if err != nil {
+			u.Warnf("could not get azure client %v", err)
+			return nil, nil, err
 		}
-		awsConf.WithCredentials(credentials.NewStaticCredentials(accessKey, secretKey, ""))
-	default:
-		return nil, nil, ErrNoAuth
+		client := basicClient.GetBlobService()
+		return &basicClient, &client, err
 	}
 
-	if conf.BaseUrl != "" {
-		awsConf.WithEndpoint(conf.BaseUrl).WithS3ForcePathStyle(true)
-	}
-
-	disableSSL := conf.Settings.Bool(ConfKeyDisableSSL)
-	if disableSSL {
-		awsConf.WithDisableSSL(true)
-	}
-
-	sess := session.New(awsConf)
-	if sess == nil {
-		return nil, nil, ErrNoS3Session
-	}
-
-	s3Client := s3.New(sess)
-
-	return s3Client, sess, nil
+	return nil, nil, ErrNoAuth
 }
 
 // NewStore Create AWS S3 storage client of type cloudstorage.Store
-func NewStore(c *s3.S3, sess *session.Session, conf *cloudstorage.Config) (*FS, error) {
+func NewStore(c *az.Client, blobClient *az.BlobStorageClient, conf *cloudstorage.Config) (*FS, error) {
 
 	if conf.TmpDir == "" {
 		return nil, fmt.Errorf("unable to create cachepath. config.tmpdir=%q", conf.TmpDir)
@@ -170,16 +132,16 @@ func NewStore(c *s3.S3, sess *session.Session, conf *cloudstorage.Config) (*FS, 
 	uid = strings.Replace(uid, "-", "", -1)
 
 	return &FS{
-		client:    c,
-		sess:      sess,
-		bucket:    conf.Bucket,
-		cachepath: conf.TmpDir,
-		ID:        uid,
-		PageSize:  cloudstorage.MaxResults,
+		baseClient: c,
+		client:     blobClient,
+		bucket:     conf.Bucket,
+		cachepath:  conf.TmpDir,
+		ID:         uid,
+		PageSize:   10000,
 	}, nil
 }
 
-// Type of store = "s3"
+// Type of store = "azure"
 func (f *FS) Type() string {
 	return StoreType
 }
@@ -189,12 +151,12 @@ func (f *FS) Client() interface{} {
 	return f.client
 }
 
-// String function to provide s3://..../file   path
+// String function to provide azure://..../file   path
 func (f *FS) String() string {
-	return fmt.Sprintf("s3://%s/", f.bucket)
+	return fmt.Sprintf("azure://%s/", f.bucket)
 }
 
-// NewObject of Type s3.
+// NewObject of Type azure.
 func (f *FS) NewObject(objectname string) (cloudstorage.Object, error) {
 	obj, err := f.Get(context.Background(), objectname)
 	if err != nil && err != cloudstorage.ErrObjectNotFound {
@@ -218,7 +180,7 @@ func (f *FS) NewObject(objectname string) (cloudstorage.Object, error) {
 // Get a single File Object
 func (f *FS) Get(ctx context.Context, objectpath string) (cloudstorage.Object, error) {
 
-	obj, err := f.getObjectMeta(ctx, objectpath)
+	obj, err := f.getObject(ctx, objectpath)
 	if err != nil {
 		return nil, err
 	} else if obj == nil {
@@ -229,39 +191,38 @@ func (f *FS) Get(ctx context.Context, objectpath string) (cloudstorage.Object, e
 }
 
 // get single object
-func (f *FS) getObjectMeta(ctx context.Context, objectname string) (*object, error) {
+func (f *FS) getObject(ctx context.Context, objectname string) (*object, error) {
 
-	req := &s3.HeadObjectInput{
-		Key:    aws.String(objectname),
-		Bucket: aws.String(f.bucket),
-	}
-
-	res, err := f.client.HeadObjectWithContext(ctx, req)
+	blob := f.client.GetContainerReference(f.bucket).GetBlobReference(objectname)
+	err := blob.GetProperties(nil)
 	if err != nil {
-		// translate the string error to typed error
-		if strings.Contains(err.Error(), "Not Found") {
+		if strings.Contains(err.Error(), "404") {
 			return nil, cloudstorage.ErrObjectNotFound
 		}
 		return nil, err
 	}
+	o := &object{
+		name: objectname,
+		fs:   f,
+		o:    blob,
+	}
 
-	return newObjectFromHead(f, objectname, res), nil
+	o.o.Properties.Etag = cloudstorage.CleanETag(o.o.Properties.Etag)
+	o.updated = time.Time(o.o.Properties.LastModified)
+	o.cachepath = cloudstorage.CachePathObj(f.cachepath, o.name, f.ID)
+
+	return o, nil
+	//return newObjectFromHead(f, objectname, res), nil
 }
 
-func (f *FS) getS3OpenObject(ctx context.Context, objectname string) (*s3.GetObjectOutput, error) {
-
-	res, err := f.client.GetObjectWithContext(ctx, &s3.GetObjectInput{
-		Key:    aws.String(objectname),
-		Bucket: aws.String(f.bucket),
-	})
-	if err != nil {
-		// translate the string error to typed error
-		if strings.Contains(err.Error(), "NoSuchKey") {
-			return nil, cloudstorage.ErrObjectNotFound
-		}
+func (f *FS) getOpenObject(ctx context.Context, objectname string) (io.ReadCloser, error) {
+	rc, err := f.client.GetContainerReference(f.bucket).GetBlobReference(objectname).Get(nil)
+	if err != nil && strings.Contains(err.Error(), "404") {
+		return nil, cloudstorage.ErrObjectNotFound
+	} else if err != nil {
 		return nil, err
 	}
-	return res, nil
+	return rc, nil
 }
 
 func convertMetaData(m map[string]*string) (map[string]string, error) {
@@ -280,35 +241,30 @@ func convertMetaData(m map[string]*string) (map[string]string, error) {
 // List objects from this store.
 func (f *FS) List(ctx context.Context, q cloudstorage.Query) (*cloudstorage.ObjectsResponse, error) {
 
-	itemLimit := int64(f.PageSize)
+	itemLimit := uint(f.PageSize)
 	if q.PageSize > 0 {
-		itemLimit = int64(q.PageSize)
+		itemLimit = uint(q.PageSize)
 	}
 
-	params := &s3.ListObjectsInput{
-		Bucket:  aws.String(f.bucket),
-		Marker:  &q.Marker,
-		MaxKeys: &itemLimit,
-		Prefix:  &q.Prefix,
+	params := az.ListBlobsParameters{
+		Prefix:     q.Prefix,
+		MaxResults: itemLimit,
+		Marker:     q.Marker,
 	}
 
-	resp, err := f.client.ListObjects(params)
+	blobs, err := f.client.GetContainerReference(f.bucket).ListBlobs(params)
 	if err != nil {
-		u.Warnf("err = %v", err)
 		return nil, err
 	}
-
 	objResp := &cloudstorage.ObjectsResponse{
-		Objects: make(cloudstorage.Objects, len(resp.Contents)),
+		Objects: make(cloudstorage.Objects, len(blobs.Blobs)),
 	}
 
-	for i, o := range resp.Contents {
-		objResp.Objects[i] = newObject(f, o)
+	for i, o := range blobs.Blobs {
+		objResp.Objects[i] = newObject(f, &o)
 	}
-
-	if resp.IsTruncated != nil && *resp.IsTruncated {
-		q.Marker = *resp.Contents[len(resp.Contents)-1].Key
-	}
+	objResp.NextMarker = blobs.NextMarker
+	q.Marker = blobs.NextMarker
 
 	return objResp, nil
 }
@@ -325,37 +281,35 @@ func (f *FS) Folders(ctx context.Context, q cloudstorage.Query) ([]string, error
 	q.Delimiter = "/"
 
 	// Think we should just put 1 here right?
-	itemLimit := int64(f.PageSize)
+	itemLimit := uint(f.PageSize)
 	if q.PageSize > 0 {
-		itemLimit = int64(q.PageSize)
+		itemLimit = uint(q.PageSize)
 	}
 
-	params := &s3.ListObjectsInput{
-		Bucket:    aws.String(f.bucket),
-		MaxKeys:   &itemLimit,
-		Prefix:    &q.Prefix,
-		Delimiter: &q.Delimiter,
+	params := az.ListBlobsParameters{
+		Prefix:     q.Prefix,
+		MaxResults: itemLimit,
+		Delimiter:  "/",
 	}
-
-	folders := make([]string, 0)
 
 	for {
 		select {
 		case <-ctx.Done():
 			// If has been closed
-			return folders, ctx.Err()
+			return nil, ctx.Err()
 		default:
-			if q.Marker != "" {
-				params.Marker = &q.Marker
-			}
-			resp, err := f.client.ListObjectsWithContext(ctx, params)
+			// if q.Marker != "" {
+			// 	params.Marker = &q.Marker
+			// }
+			blobs, err := f.client.GetContainerReference(f.bucket).ListBlobs(params)
 			if err != nil {
+				u.Warnf("leaving %v", err)
 				return nil, err
 			}
-			for _, cp := range resp.CommonPrefixes {
-				folders = append(folders, strings.Trim(*cp.Prefix, `/`))
+			if len(blobs.BlobPrefixes) > 0 {
+				return blobs.BlobPrefixes, nil
 			}
-			return folders, nil
+			return nil, nil
 		}
 	}
 }
@@ -409,18 +363,15 @@ func (f *FS) NewReader(o string) (io.ReadCloser, error) {
 
 // NewReaderWithContext create new File reader with context.
 func (f *FS) NewReaderWithContext(ctx context.Context, objectname string) (io.ReadCloser, error) {
-	res, err := f.client.GetObjectWithContext(ctx, &s3.GetObjectInput{
-		Key:    aws.String(objectname),
-		Bucket: aws.String(f.bucket),
-	})
+	ioc, err := f.client.GetContainerReference(f.bucket).GetBlobReference(objectname).Get(nil)
 	if err != nil {
 		// translate the string error to typed error
-		if strings.Contains(err.Error(), "NoSuchKey") {
+		if strings.Contains(err.Error(), "404") {
 			return nil, cloudstorage.ErrObjectNotFound
 		}
 		return nil, err
 	}
-	return res.Body, nil
+	return ioc, nil
 }
 
 // NewWriter create Object Writer.
@@ -429,23 +380,20 @@ func (f *FS) NewWriter(objectName string, metadata map[string]string) (io.WriteC
 }
 
 // NewWriterWithContext create writer with provided context and metadata.
-func (f *FS) NewWriterWithContext(ctx context.Context, objectName string, metadata map[string]string) (io.WriteCloser, error) {
+func (f *FS) NewWriterWithContext(ctx context.Context, name string, metadata map[string]string) (io.WriteCloser, error) {
 
-	// Create an uploader with the session and default options
-	uploader := s3manager.NewUploader(f.sess)
+	name = strings.Replace(name, " ", "+", -1)
 
 	pr, pw := io.Pipe()
 	bw := csbufio.NewWriter(pw)
+	o := &object{name: name, metadata: metadata}
 
 	go func() {
 		// TODO:  this needs to be managed, ie shutdown signals, close, handler err etc.
 
-		// Upload the file to S3.
-		_, err := uploader.UploadWithContext(ctx, &s3manager.UploadInput{
-			Bucket: aws.String(f.bucket),
-			Key:    aws.String(objectName),
-			Body:   pr,
-		})
+		// Upload the file to azure.
+		// Do a multipart upload
+		err := f.uploadMultiPart(o, pr)
 		if err != nil {
 			u.Warnf("could not upload %v", err)
 		}
@@ -454,30 +402,99 @@ func (f *FS) NewWriterWithContext(ctx context.Context, objectName string, metada
 	return bw, nil
 }
 
-// Delete requested object path string.
-func (f *FS) Delete(ctx context.Context, obj string) error {
-	params := &s3.DeleteObjectInput{
-		Bucket: aws.String(f.bucket),
-		Key:    aws.String(obj),
+const (
+	// constants related to chunked uploads
+	initialChunkSize = 4 * 1024 * 1024
+	maxChunkSize     = 100 * 1024 * 1024
+	maxParts         = 50000
+)
+
+func makeBlockID(id uint64) string {
+	bytesID := make([]byte, 8)
+	binary.LittleEndian.PutUint64(bytesID, id)
+	return base64.StdEncoding.EncodeToString(bytesID)
+}
+
+// uploadMultiPart start an upload
+func (f *FS) uploadMultiPart(o *object, r io.Reader) error {
+
+	//chunkSize, err := calcBlockSize(size)
+	// if err != nil {
+	// 	return err
+	// }
+	var buf = make([]byte, initialChunkSize)
+
+	var blocks []az.Block
+	var rawID uint64
+
+	blob := f.client.GetContainerReference(f.bucket).GetBlobReference(o.name)
+
+	// TODO: performance improvement to mange uploads in separate
+	// go-routine than the reader
+	for {
+		n, err := r.Read(buf)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			u.Warnf("unknown err=%v", err)
+			return err
+		}
+
+		blockID := makeBlockID(rawID)
+		chunk := buf[:n]
+
+		if err := blob.PutBlock(blockID, chunk, nil); err != nil {
+			return err
+		}
+
+		blocks = append(blocks, az.Block{
+			ID:     blockID,
+			Status: az.BlockStatusLatest,
+		})
+		rawID++
 	}
 
-	_, err := f.client.DeleteObjectWithContext(ctx, params)
+	err := blob.PutBlockList(blocks, nil)
 	if err != nil {
+		u.Warnf("could not put block list %v", err)
+		return err
+	}
+
+	err = blob.GetProperties(nil)
+	if err != nil {
+		u.Warnf("could not load blog properties %v", err)
+		return err
+	}
+
+	blob.Metadata = o.metadata
+
+	err = blob.SetMetadata(nil)
+	if err != nil {
+		u.Warnf("can't set metadata err=%v", err)
 		return err
 	}
 	return nil
 }
 
-func newObject(f *FS, o *s3.Object) *object {
+// Delete requested object path string.
+func (f *FS) Delete(ctx context.Context, name string) error {
+	err := f.client.GetContainerReference(f.bucket).GetBlobReference(name).Delete(nil)
+	if err != nil && strings.Contains(err.Error(), "404") {
+		return cloudstorage.ErrObjectNotFound
+	}
+	return err
+}
+
+func newObject(f *FS, o *az.Blob) *object {
 	obj := &object{
 		fs:        f,
-		name:      *o.Key,
+		o:         o,
+		name:      o.Name,
 		bucket:    f.bucket,
-		cachepath: cloudstorage.CachePathObj(f.cachepath, *o.Key, f.ID),
+		cachepath: cloudstorage.CachePathObj(f.cachepath, o.Name, f.ID),
 	}
-	if o.LastModified != nil {
-		obj.updated = *o.LastModified
-	}
+	obj.o.Properties.Etag = cloudstorage.CleanETag(obj.o.Properties.Etag)
 	return obj
 }
 func newObjectFromHead(f *FS, name string, o *s3.HeadObjectOutput) *object {
@@ -544,8 +561,8 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 	}
 
 	for try := 0; try < Retries; try++ {
-		if o.o == nil {
-			obj, err := o.fs.getS3OpenObject(context.Background(), o.name)
+		if o.rc == nil {
+			rc, err := o.fs.getOpenObject(context.Background(), o.name)
 			if err != nil {
 				if err == cloudstorage.ErrObjectNotFound {
 					// New, this is fine
@@ -557,20 +574,20 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 				}
 			}
 
-			if obj != nil {
-				o.o = obj
+			if rc != nil {
+				o.rc = rc
 			}
 		}
 
-		if o.o != nil {
+		if o.rc != nil {
 			// we have a preexisting object, so lets download it..
-			defer o.o.Body.Close()
+			defer o.rc.Close()
 
 			if _, err := cachedcopy.Seek(0, os.SEEK_SET); err != nil {
 				return nil, fmt.Errorf("error seeking to start of cachedcopy err=%v", err) //don't retry on local fs errors
 			}
 
-			_, err = io.Copy(cachedcopy, o.o.Body)
+			_, err = io.Copy(cachedcopy, o.rc)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error coping bytes. err=%v", err))
 				//recreate the cachedcopy file incase it has incomplete data
@@ -632,20 +649,12 @@ func (o *object) Sync() error {
 	}
 	defer cachedcopy.Close()
 
-	// Create an uploader with the session and default options
-	uploader := s3manager.NewUploader(o.fs.sess)
-
 	if _, err := cachedcopy.Seek(0, os.SEEK_SET); err != nil {
 		return fmt.Errorf("error seeking to start of cachedcopy err=%v", err) //don't retry on local filesystem errors
 	}
 
-	// Upload the file to S3.
-	_, err = uploader.Upload(&s3manager.UploadInput{
-		Bucket: aws.String(o.fs.bucket),
-		Key:    aws.String(o.name),
-		Body:   cachedcopy,
-	})
-	if err != nil {
+	// Upload the file
+	if err = o.fs.uploadMultiPart(o, cachedcopy); err != nil {
 		u.Warnf("could not upload %v", err)
 		return fmt.Errorf("failed to upload file, %v", err)
 	}

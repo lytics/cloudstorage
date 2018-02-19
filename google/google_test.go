@@ -23,7 +23,7 @@ var config = &cloudstorage.Config{
 	AuthMethod: google.AuthJWTKeySource,
 	Project:    "tbd",
 	Bucket:     "liotesting-int-tests-nl",
-	TmpDir:     "/tmp/localcache",
+	TmpDir:     "/tmp/localcache/google",
 }
 
 func TestAll(t *testing.T) {

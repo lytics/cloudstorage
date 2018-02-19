@@ -9,6 +9,31 @@ import (
 	"strings"
 )
 
+// CleanETag transforms a string into the full etag spec, removing
+// extra quote-marks, whitespace from etag.
+//
+// per Etag spec https://tools.ietf.org/html/rfc7232#section-2.3 the etag value (<ETAG VALUE>) may:
+// - W/"<ETAG VALUE>"
+// - "<ETAG VALUE>"
+// - ""
+func CleanETag(etag string) string {
+	for {
+		// loop through checking for extra-characters and removing
+		if strings.HasPrefix(etag, `\"`) {
+			etag = strings.Trim(etag, `\"`)
+		} else if strings.HasPrefix(etag, `"`) {
+			etag = strings.Trim(etag, `"`)
+		} else if strings.HasPrefix(etag, `W/`) {
+			etag = strings.Replace(etag, `W/`, "", 1)
+		} else {
+			// as soon as no condition matches, we are done
+			// return
+			return etag
+		}
+	}
+	return etag
+}
+
 // ContentType check content type of file by looking
 // at extension  (.html, .png) uses package mime for global types.
 // Use mime.AddExtensionType to add new global types.

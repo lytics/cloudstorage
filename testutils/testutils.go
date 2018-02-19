@@ -70,6 +70,8 @@ func BasicRW(t TestingT, store cloudstorage.Store) {
 
 	Clearstore(t, store)
 
+	assert.NotEqual(t, "", store.String())
+
 	// Create a new object and write to it.
 	obj, err := store.NewObject("prefix/test.csv")
 	assert.Equal(t, nil, err)
@@ -103,12 +105,13 @@ func BasicRW(t TestingT, store cloudstorage.Store) {
 }
 
 func Append(t TestingT, store cloudstorage.Store) {
+
 	Clearstore(t, store)
 	now := time.Now()
 	time.Sleep(10 * time.Millisecond)
 
 	// Create a new object and write to it.
-	obj, err := store.NewObject("test.csv")
+	obj, err := store.NewObject("append.csv")
 	assert.Equal(t, nil, err)
 
 	f1, err := obj.Open(cloudstorage.ReadWrite)
@@ -127,12 +130,19 @@ func Append(t TestingT, store cloudstorage.Store) {
 
 	// get the object and append to it...
 	morerows := "2013,VW,Jetta\n2011,Dodge,Caravan\n"
-	obj2, err := store.Get(context.Background(), "test.csv")
+	obj2, err := store.Get(context.Background(), "append.csv")
 	assert.Equal(t, nil, err)
 
 	// snapshot updated time pre-update
 	updated := obj2.Updated()
-	assert.True(t, updated.After(now), "updated time was not set")
+	switch store.Type() {
+	case "azure":
+		// azure doesn't have sub-second granularity so will always be equal
+		assert.True(t, updated.After(now.Add(-time.Second*2)), "updated time was not set")
+	default:
+		assert.True(t, updated.After(now), "updated time was not set")
+	}
+
 	time.Sleep(10 * time.Millisecond)
 
 	f2, err := obj2.Open(cloudstorage.ReadWrite)
@@ -143,14 +153,16 @@ func Append(t TestingT, store cloudstorage.Store) {
 	_, err = w2.WriteString(morerows)
 	assert.Equal(t, nil, err)
 	w2.Flush()
-	if store.Type() == "s3" {
+	switch store.Type() {
+	case "s3", "azure":
+		// azure and s3 have 1 second granularity on LastModified.  wtf.
 		time.Sleep(time.Millisecond * 1000)
 	}
 	err = obj2.Close()
 	assert.Equal(t, nil, err)
 
 	// Read the object back out of the cloud storage.
-	obj3, err := store.Get(context.Background(), "test.csv")
+	obj3, err := store.Get(context.Background(), "append.csv")
 	assert.Equal(t, nil, err)
 	updated3 := obj3.Updated()
 	assert.True(t, updated3.After(updated), "updated time not updated")
