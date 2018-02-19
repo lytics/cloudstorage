@@ -1,24 +1,3 @@
-
-
-azure blog store
---------------------------
-Cloudstorage abstraction to Azure Blob storage.
-
-
-
-config
------------------
-
-Login to your https://portal.azure.com account and click "Storage Accounts" in menu.  Then Click the storage account you want.
-
-* *config.Project* is required.  use "Account" in azure portal.  This is the "Name" of cloudstorageazuretesting https://cloudstorageazuretesting.blob.core.windows.net/  
-* *azure_key* from your storage account go to the menu "Access Keys"
-* *Bucket* go to *Containers* in the azure storage and get this name.
-
-
-
-Example in Go:
-```go
 package main
 
 import (
@@ -89,7 +68,3 @@ func main() {
 		fmt.Println("found object", o.Name())
 	}
 }
-
-```
-
-

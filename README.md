@@ -44,14 +44,17 @@ https://github.com/GoogleCloudPlatform/google-cloud-go/wiki/Iterator-Guidelines
 // Create a query
 q := cloudstorage.NewQuery("list-test/")
 // Create an Iterator
-iter := store.Objects(context.Background(), q)
+iter, err := store.Objects(context.Background(), q)
+if err != nil {
+	// handle
+}
 
 for {
 	o, err := iter.Next()
 	if err == iterator.Done {
 		break
 	}
-	log.Println("found object %v", o.Name())
+	log.Println("found object ", o.Name())
 }
 ```
 
