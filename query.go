@@ -11,11 +11,12 @@ type Filter func(objects Objects) Objects
 // `ls /my-csv-files/baseball/*`.  This is the Request, and includes the
 // PageSize, cursor/next token as well.
 type Query struct {
-	Delimiter string   // Delimiter is most likely "/"
-	Prefix    string   // prefix (directory) to search for or object name if one file
-	Marker    string   // Next Page Marker if provided is a start next page fetch bookmark.
-	Filters   []Filter // Applied to the result sets to filter out Objects (i.e. remove objects by extension)
-	PageSize  int      // PageSize defaults to global, or you can supply an override
+	Delimiter  string   // Delimiter is most likely "/"
+	Prefix     string   // prefix (directory) to search for or object name if one file
+	Marker     string   // Next Page Marker if provided is a start next page fetch bookmark.
+	ShowHidden bool     // Show hidden files?
+	Filters    []Filter // Applied to the result sets to filter out Objects (i.e. remove objects by extension)
+	PageSize   int      // PageSize defaults to global, or you can supply an override
 }
 
 // NewQuery create a query for finding files under given prefix.
