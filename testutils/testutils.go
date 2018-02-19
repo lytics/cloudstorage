@@ -71,7 +71,6 @@ func BasicRW(t TestingT, store cloudstorage.Store) {
 	Clearstore(t, store)
 
 	assert.NotEqual(t, "", store.String())
-	assert.NotEqual(t, nil, store.Client())
 
 	// Create a new object and write to it.
 	obj, err := store.NewObject("prefix/test.csv")
