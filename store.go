@@ -203,10 +203,10 @@ type (
 	JwtConf struct {
 		ProjectID        string `json:"project_id,omitempty"`
 		PrivateKeyID     string `json:"private_key_id,omitempty"`
-		PrivateKeyBase64 string `json:"private_key,omitempty"`
+		PrivateKeyBase64 string `json:"private_keybase64,omitempty"`
 		ClientEmail      string `json:"client_email,omitempty"`
 		ClientID         string `json:"client_id,omitempty"`
-		Keytype          string `json:"type,omitempty"`
+		Keytype          string `json:"keytype,omitempty"`
 		// Scopes is list of what scope to use when the token is created.
 		// for example https://github.com/google/google-api-go-client/blob/0d3983fb069cb6651353fc44c5cb604e263f2a93/storage/v1/storage-gen.go#L54
 		Scopes []string `json:"scopes,omitempty"`
