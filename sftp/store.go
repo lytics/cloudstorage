@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/araddon/gou"
+	u "github.com/araddon/gou"
 	"github.com/pborman/uuid"
 	ftp "github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
@@ -66,13 +67,13 @@ type (
 	}
 	// Client is the sftp client
 	Client struct {
-		ID string
+		ID        string
 		clientCtx context.Context
 		client    *ftp.Client
 		cachepath string
 		host      string
 		port      int
-		Folder    string
+		bucket    string
 		files     []string
 	}
 
@@ -82,17 +83,14 @@ type (
 		client     *Client
 		cachedcopy *os.File
 		fi         os.FileInfo
-		/*
-			name      string
-			updated   time.Time
-			metadata  map[string]string
-			bucket    string
-		*/
-		readonly  bool
-		opened    bool
-		cachepath string
-		infoOnce sync.Once
-		infoErr  error
+		name       string
+		updated    time.Time
+		metadata   map[string]string
+		readonly   bool
+		opened     bool
+		cachepath  string
+		infoOnce   sync.Once
+		infoErr    error
 	}
 )
 
@@ -138,7 +136,7 @@ func NewClientFromConfig(clientCtx context.Context, conf *cloudstorage.Config) (
 
 // NewClient returns a new SFTP Client
 // Make sure to close SFTP connection when done
-func NewClient(clientCtx context.Context, conf *cloudstorage.Config,  host string, port int, folder string, config *ssh.ClientConfig) (*Client, error) {
+func NewClient(clientCtx context.Context, conf *cloudstorage.Config, host string, port int, folder string, config *ssh.ClientConfig) (*Client, error) {
 	target, err := sftpAddr(host, port)
 	if err != nil {
 		gou.WarnCtx(clientCtx, "failed creating address with %s, %d: %v", host, port, err)
@@ -162,13 +160,13 @@ func NewClient(clientCtx context.Context, conf *cloudstorage.Config,  host strin
 	uid = strings.Replace(uid, "-", "", -1)
 
 	sftpClient := &Client{
-		ID: uid, 
-		clientCtx: clientCtx, 
-		client: ftpClient, 
-		host: host, 
-		port: port, 
+		ID:        uid,
+		clientCtx: clientCtx,
+		client:    ftpClient,
+		host:      host,
+		port:      port,
 		cachepath: conf.TmpDir,
-		Folder: folder,
+		bucket:    folder,
 	}
 
 	return sftpClient, nil
@@ -220,6 +218,11 @@ func ConfigUserKey(user, keyString string) (*ssh.ClientConfig, error) {
 	}, nil
 }
 
+// Type of store = "sftp"
+func (m *Client) Type() string {
+	return StoreType
+}
+
 // Client return underlying client
 func (s *Client) Client() interface{} {
 	return s
@@ -241,9 +244,9 @@ func (s *Client) NewObject(objectname string) (cloudstorage.Object, error) {
 	cf := cloudstorage.CachePathObj(s.cachepath, objectname, s.ID)
 
 	return &object{
-		client:         s,
-		name:       objectname,
-		metadata:   map[string]string{cloudstorage.ContentTypeKey: cloudstorage.ContentType(objectname)},
+		client:   s,
+		name:     objectname,
+		metadata: map[string]string{cloudstorage.ContentTypeKey: cloudstorage.ContentType(objectname)},
 		//bucket:     s.bucket,
 		cachedcopy: nil,
 		cachepath:  cf,
@@ -255,7 +258,7 @@ func (s *Client) Get(ctx context.Context, name string) (cloudstorage.Object, err
 	if !s.Exists(name) {
 		return nil, cloudstorage.ErrObjectNotFound
 	}
-	get := Concat(s.Folder, name)
+	get := Concat(s.bucket, name)
 	gou.InfoCtx(s.clientCtx, "getting file %s", get)
 	f, err := s.client.Open(get)
 	if err != nil {
@@ -273,10 +276,16 @@ func (s *Client) Open(prefix, filename string) (io.ReadCloser, error) {
 	if !s.Exists(fn) {
 		return nil, os.ErrNotExist
 	}
-	get := Concat(s.Folder, fn)
+	get := Concat(s.bucket, fn)
 	gou.InfoCtx(s.clientCtx, "getting file %s", get)
 
 	return s.client.Open(get)
+}
+
+// Objects returns an iterator over the objects in the google bucket that match the Query q.
+// If q is nil, no filtering is done.
+func (m *Client) Objects(ctx context.Context, q cloudstorage.Query) (cloudstorage.ObjectIterator, error) {
+	return cloudstorage.NewObjectPageIterator(ctx, m, q), nil
 }
 
 // Delete deletes a file
@@ -284,7 +293,7 @@ func (s *Client) Delete(ctx context.Context, filename string) error {
 	if !s.Exists(filename) {
 		return os.ErrNotExist
 	}
-	r := Concat(s.Folder, filename)
+	r := Concat(s.bucket, filename)
 	gou.InfoCtx(s.clientCtx, "removing file %s", r)
 
 	return s.client.Remove(r)
@@ -295,8 +304,8 @@ func (s *Client) Rename(oldname, newname string) error {
 	if !s.Exists(oldname) {
 		return os.ErrNotExist
 	}
-	o := Concat(s.Folder, oldname)
-	n := Concat(s.Folder, newname)
+	o := Concat(s.bucket, oldname)
+	n := Concat(s.bucket, newname)
 
 	gou.InfoCtx(s.clientCtx, "renaming file %s to %s", o, n)
 
@@ -321,8 +330,8 @@ func (s *Client) Exists(filename string) bool {
 }
 
 // List lists files in a directory
-func (s *Client) List(ctx context.Context, q cloudstorage.Query) (*cloudstorage.ObjectsResponse, error) {
-	fi, err := s.fetchFiles(folder)
+func (m *Client) List(ctx context.Context, q cloudstorage.Query) (*cloudstorage.ObjectsResponse, error) {
+	fi, err := m.fetchFiles(m.bucket)
 	if err != nil {
 		return nil, err
 	}
@@ -335,7 +344,7 @@ func (s *Client) List(ctx context.Context, q cloudstorage.Query) (*cloudstorage.
 		if o.IsDir() {
 			continue
 		}
-		objResp.Objects = append(objResp.Objects, newObjectFromFile(s, o))
+		objResp.Objects = append(objResp.Objects, newObjectFromFile(m, o))
 	}
 	return objResp, nil
 }
@@ -383,6 +392,7 @@ func (s *Client) listDirs(folder, prefix string, hidden bool) ([]string, error) 
 	}
 	return out, nil
 }
+
 /*
 // MkDir creates new folder in base dir
 func (s *Client) MkDir(dir string) error {
@@ -434,13 +444,12 @@ func (s *Client) NewReader(o string) (io.ReadCloser, error) {
 	return s.NewReaderWithContext(context.Background(), o)
 }
 
-
 // NewReaderWithContext create new File reader with context.
-func (s *Client) NewReaderWithContext(ctx context.Context, objectname string) (io.ReadCloser, error) {
+func (s *Client) NewReaderWithContext(ctx context.Context, name string) (io.ReadCloser, error) {
 	if !s.Exists(name) {
 		return nil, cloudstorage.ErrObjectNotFound
 	}
-	get := Concat(s.Folder, name)
+	get := Concat(s.bucket, name)
 	gou.InfoCtx(s.clientCtx, "getting file %s", get)
 	f, err := s.client.Open(get)
 	if err != nil {
@@ -450,6 +459,30 @@ func (s *Client) NewReaderWithContext(ctx context.Context, objectname string) (i
 	return f, nil
 }
 
+// NewWriter create Object Writer.
+func (s *Client) NewWriter(objectName string, metadata map[string]string) (io.WriteCloser, error) {
+	return s.NewWriterWithContext(context.Background(), objectName, metadata)
+}
+
+// NewWriterWithContext create writer with provided context and metadata.
+func (s *Client) NewWriterWithContext(ctx context.Context, name string, metadata map[string]string) (io.WriteCloser, error) {
+
+	name = strings.Replace(name, " ", "+", -1)
+
+	// pr, pw := io.Pipe()
+	// bw := csbufio.NewWriter(pw)
+	o := &object{name: name}
+
+	moveto := Concat(s.bucket, name)
+	gou.InfoCtx(ctx, "creating file %s", moveto)
+
+	file, err := s.client.Create(moveto)
+	if err != nil {
+		return nil, err
+	}
+	o.file = file
+	return o, nil
+}
 
 /*
 // NewFile creates file with filename in upload folder
@@ -466,13 +499,13 @@ func (s *Client) NewFile(filename string) (Uploader, error) {
 }
 */
 func (s *Client) fetchFiles(f string) ([]os.FileInfo, error) {
-	folder := Concat(s.Folder, f)
+	folder := Concat(s.bucket, f)
 	if folder == "" {
 		folder = "."
 	}
 	fi, err := s.client.ReadDir(folder)
 	if err != nil {
-		gou.WarnCtx(s.clientCtx, "failed to read directory %s with error: %v", s.Folder, err)
+		gou.WarnCtx(s.clientCtx, "failed to read directory %s with error: %v", s.bucket, err)
 		return nil, err
 	}
 	return fi, nil
@@ -493,6 +526,7 @@ func newObjectFromFile(c *Client, f os.FileInfo) *object {
 	}
 }
 
+/*
 // Upload copies reader body bytes into underlying sftp file
 func (o *object) Upload(body io.Reader) (int64, error) {
 	defer o.file.Close()
@@ -503,6 +537,19 @@ func (o *object) Upload(body io.Reader) (int64, error) {
 	}
 
 	return wLength, nil
+}
+*/
+
+func (o *object) Write(p []byte) (n int, err error) {
+	return o.cachedcopy.Write(p)
+}
+
+func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
+	return nil, fmt.Errorf("fetch error retry cnt reached: obj=%s tfile=%v", o.name, o.cachepath)
+}
+
+func (o *object) Read(p []byte) (n int, err error) {
+	return o.cachedcopy.Read(p)
 }
 
 func (o *object) Delete() error {
@@ -529,8 +576,7 @@ func (o *object) Sync() error {
 		return fmt.Errorf("error seeking to start of cachedcopy err=%v", err) //don't retry on local filesystem errors
 	}
 
-	return cloudstorage.ErrObjectNotImplemented
-	return nil
+	return cloudstorage.ErrNotImplemented
 }
 
 func (o *object) Close() error {
@@ -564,6 +610,25 @@ func (o *object) Release() error {
 		o.cachedcopy.Close()
 	}
 	return os.Remove(o.cachepath)
+}
+
+func (o *object) MetaData() map[string]string {
+	return o.metadata
+}
+func (o *object) SetMetaData(meta map[string]string) {
+	o.metadata = meta
+}
+func (o *object) StorageSource() string {
+	return StoreType
+}
+func (o *object) Name() string {
+	return o.name
+}
+func (o *object) String() string {
+	return o.name
+}
+func (o *object) Updated() time.Time {
+	return o.updated
 }
 
 type ByModTime []os.FileInfo
