@@ -36,6 +36,8 @@ var config = &cloudstorage.Config{
 func TestAll(t *testing.T) {
 	config.Settings[sftp.ConfKeyUser] = os.Getenv("SFTP_USER")
 	config.Settings[sftp.ConfKeyPassword] = os.Getenv("SFTP_PASSWORD")
+	config.Settings[sftp.ConfKeyHost] = os.Getenv("SFTP_HOST")
+	config.Settings[sftp.ConfKeyPort] = "22"
 	//gou.Debugf("config %v", config)
 	store, err := cloudstorage.NewStore(config)
 	if err != nil {

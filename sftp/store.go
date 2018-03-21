@@ -137,6 +137,8 @@ func NewClientFromConfig(clientCtx context.Context, conf *cloudstorage.Config) (
 // NewClient returns a new SFTP Client
 // Make sure to close SFTP connection when done
 func NewClient(clientCtx context.Context, conf *cloudstorage.Config, host string, port int, folder string, config *ssh.ClientConfig) (*Client, error) {
+
+	u.Infof("new sftp host=%q port=%d folder=%q", host, port, folder)
 	target, err := sftpAddr(host, port)
 	if err != nil {
 		gou.WarnCtx(clientCtx, "failed creating address with %s, %d: %v", host, port, err)
