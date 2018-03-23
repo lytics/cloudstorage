@@ -324,11 +324,12 @@ func ListObjsAndFolders(t TestingT, store cloudstorage.Store) {
 	q = cloudstorage.NewQueryForFolders("list-test/")
 	folders, err = store.Folders(context.Background(), q)
 	assert.Equal(t, nil, err)
-	assert.Equal(t, 3, len(folders), "incorrect list len. wanted 3 folders. %v", folders)
+	sort.Strings(folders)
+	assert.Equal(t, []string{"list-test/a/", "list-test/b/", "list-test/c/"}, folders)
 
-	folders = []string{"a/a2", "b/b1", "b/b2"}
+	foldersInput := []string{"a/a2", "b/b1", "b/b2"}
 	names = []string{}
-	for _, folder := range folders {
+	for _, folder := range foldersInput {
 		for i := 0; i < 2; i++ {
 			n := fmt.Sprintf("list-test/%s/test%d.csv", folder, i)
 			names = append(names, n)
@@ -343,11 +344,13 @@ func ListObjsAndFolders(t TestingT, store cloudstorage.Store) {
 	folders, err = store.Folders(context.Background(), q)
 	assert.Equal(t, nil, err)
 	assert.Equal(t, 3, len(folders), "incorrect list len. wanted 3 folders. %v", folders)
+	assert.Equal(t, []string{"list-test/a/", "list-test/b/", "list-test/c/"}, folders)
 
 	q = cloudstorage.NewQueryForFolders("list-test/b/")
 	folders, err = store.Folders(context.Background(), q)
 	assert.Equal(t, nil, err)
 	assert.Equal(t, 2, len(folders), "incorrect list len. wanted 2 folders. %v", folders)
+	assert.Equal(t, []string{"list-test/b/b1/", "list-test/b/b2/"}, folders)
 }
 
 func Truncate(t TestingT, store cloudstorage.Store) {
