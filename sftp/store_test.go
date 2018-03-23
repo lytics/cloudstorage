@@ -31,6 +31,7 @@ var config = &cloudstorage.Config{
 	Bucket:     os.Getenv("SFTP_FOLDER"),
 	TmpDir:     "/tmp/localcache/sftp",
 	Settings:   make(gou.JsonHelper),
+	LogPrefix:  "sftp-testing",
 }
 
 func TestAll(t *testing.T) {

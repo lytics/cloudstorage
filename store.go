@@ -196,6 +196,8 @@ type (
 		TmpDir string `json:"tmpdir,omitempty"`
 		// Settings are catch-all-bag to allow per-implementation over-rides
 		Settings gou.JsonHelper `json:"settings,omitempty"`
+		// LogPrefix Logging Prefix/Context message
+		LogPrefix string
 	}
 
 	// JwtConf For use with google/google_jwttransporter.go

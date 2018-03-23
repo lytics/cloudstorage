@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/araddon/gou"
@@ -75,29 +74,34 @@ type (
 		port      int
 		bucket    string
 		files     []string
+		paths     map[string]struct{}
 	}
 
 	// File represents sftp File
 	object struct {
-		file       *ftp.File
 		client     *Client
+		file       *ftp.File
 		cachedcopy *os.File
 		fi         os.FileInfo
 		name       string
-		updated    time.Time
-		metadata   map[string]string
 		readonly   bool
 		opened     bool
 		cachepath  string
-		infoOnce   sync.Once
-		infoErr    error
+		//updated    time.Time
+		//metadata   map[string]string
+		//infoOnce   sync.Once
+		//infoErr    error
 	}
 )
 
 func init() {
 	// Register this Driver (s3) in cloudstorage driver registry.
 	cloudstorage.Register(StoreType, func(conf *cloudstorage.Config) (cloudstorage.Store, error) {
-		client, err := NewClientFromConfig(context.Background(), conf)
+		ctx := context.Background()
+		if conf.LogPrefix != "" {
+			ctx = gou.NewContext(ctx, conf.LogPrefix)
+		}
+		client, err := NewClientFromConfig(ctx, conf)
 		if err != nil {
 			return nil, err
 		}
@@ -138,7 +142,7 @@ func NewClientFromConfig(clientCtx context.Context, conf *cloudstorage.Config) (
 // Make sure to close SFTP connection when done
 func NewClient(clientCtx context.Context, conf *cloudstorage.Config, host string, port int, folder string, config *ssh.ClientConfig) (*Client, error) {
 
-	u.Infof("new sftp host=%q port=%d folder=%q", host, port, folder)
+	//u.Debugf("new sftp host=%q port=%d folder=%q", host, port, folder)
 	target, err := sftpAddr(host, port)
 	if err != nil {
 		gou.WarnCtx(clientCtx, "failed creating address with %s, %d: %v", host, port, err)
@@ -161,7 +165,7 @@ func NewClient(clientCtx context.Context, conf *cloudstorage.Config, host string
 	uid := uuid.NewUUID().String()
 	uid = strings.Replace(uid, "-", "", -1)
 
-	sftpClient := &Client{
+	client := &Client{
 		ID:        uid,
 		clientCtx: clientCtx,
 		client:    ftpClient,
@@ -169,9 +173,12 @@ func NewClient(clientCtx context.Context, conf *cloudstorage.Config, host string
 		port:      port,
 		cachepath: conf.TmpDir,
 		bucket:    folder,
+		paths:     make(map[string]struct{}),
 	}
 
-	return sftpClient, nil
+	//gou.Infof("%p created sftp client %#v", client, ftpClient)
+
+	return client, nil
 }
 
 // ConfigUserPass creates ssh config with user/password
@@ -234,7 +241,8 @@ func (s *Client) String() string {
 	return fmt.Sprintf("<sftp host=%q />", s.host)
 }
 
-// NewObject of Type sftp.
+// NewObject create a new object with given name.  Will not write to remote
+// sftp until Close is called.
 func (s *Client) NewObject(objectname string) (cloudstorage.Object, error) {
 	obj, err := s.Get(context.Background(), objectname)
 	if err != nil && err != cloudstorage.ErrObjectNotFound {
@@ -244,32 +252,30 @@ func (s *Client) NewObject(objectname string) (cloudstorage.Object, error) {
 	}
 
 	cf := cloudstorage.CachePathObj(s.cachepath, objectname, s.ID)
+	//gou.DebugCtx(s.clientCtx, "new object cf = %q", cf)
 
 	return &object{
-		client:   s,
-		name:     objectname,
-		metadata: map[string]string{cloudstorage.ContentTypeKey: cloudstorage.ContentType(objectname)},
+		client: s,
+		name:   objectname,
+		//metadata: map[string]string{cloudstorage.ContentTypeKey: cloudstorage.ContentType(objectname)},
 		//bucket:     s.bucket,
 		cachedcopy: nil,
 		cachepath:  cf,
 	}, nil
 }
 
-// Open opens a file for read or writing
+// Get opens a file for read or writing
 func (s *Client) Get(ctx context.Context, name string) (cloudstorage.Object, error) {
 	if !s.Exists(name) {
 		return nil, cloudstorage.ErrObjectNotFound
 	}
 	get := Concat(s.bucket, name)
-	gou.InfoCtx(s.clientCtx, "getting file %s", get)
-	f, err := s.client.Open(get)
+	//gou.DebugCtx(s.clientCtx, "getting file %s", get)
+	f, err := s.client.Stat(get)
 	if err != nil {
 		return nil, err
 	}
-	return &object{
-		file:   f,
-		client: s,
-	}, nil
+	return newObjectFromFile(s, get, f), nil
 }
 
 // Open opens a file for read or writing
@@ -279,7 +285,7 @@ func (s *Client) Open(prefix, filename string) (io.ReadCloser, error) {
 		return nil, os.ErrNotExist
 	}
 	get := Concat(s.bucket, fn)
-	gou.InfoCtx(s.clientCtx, "getting file %s", get)
+	gou.InfoCtx(s.clientCtx, "getting file %q", get)
 
 	return s.client.Open(get)
 }
@@ -296,8 +302,7 @@ func (s *Client) Delete(ctx context.Context, filename string) error {
 		return os.ErrNotExist
 	}
 	r := Concat(s.bucket, filename)
-	gou.InfoCtx(s.clientCtx, "removing file %s", r)
-
+	//gou.InfoCtx(s.clientCtx, "removing file %q", r)
 	return s.client.Remove(r)
 }
 
@@ -309,7 +314,7 @@ func (s *Client) Rename(oldname, newname string) error {
 	o := Concat(s.bucket, oldname)
 	n := Concat(s.bucket, newname)
 
-	gou.InfoCtx(s.clientCtx, "renaming file %s to %s", o, n)
+	gou.InfoCtx(s.clientCtx, "renaming file %q to %q", o, n)
 
 	return s.client.Rename(o, n)
 }
@@ -321,7 +326,8 @@ func (s *Client) Exists(filename string) bool {
 		folder = filename[:i]
 		filename = filename[i+1:]
 	}
-
+	// TODO:  is there a more efficient way of getting single file existence?
+	// i think we should move to .Stat()
 	files, _ := s.ListFiles(folder, true)
 	for _, f := range files {
 		if f == filename {
@@ -331,26 +337,80 @@ func (s *Client) Exists(filename string) bool {
 	return false
 }
 
-// List lists files in a directory
-func (m *Client) List(ctx context.Context, q cloudstorage.Query) (*cloudstorage.ObjectsResponse, error) {
-	fi, err := m.fetchFiles(m.bucket)
-	if err != nil {
-		return nil, err
-	}
+func (s *Client) ensureDir(name string) {
 
-	objResp := &cloudstorage.ObjectsResponse{
-		Objects: make(cloudstorage.Objects, 0, len(fi)),
-	}
-
-	for _, o := range fi {
-		if o.IsDir() {
+	//u.Infof("bucket = %q", s.bucket)
+	name = Concat(s.bucket, name)
+	parts := strings.Split(strings.ToLower(name), "/")
+	dir := ""
+	for _, dirPart := range parts[0 : len(parts)-1] {
+		if dir == "" {
+			dir = dirPart
+		} else {
+			dir = strings.Join([]string{dir, dirPart}, "/")
+		}
+		if _, exists := s.paths[dir]; exists {
 			continue
 		}
-		objResp.Objects = append(objResp.Objects, newObjectFromFile(m, o))
+
+		_, err := s.client.Stat(dir)
+		if err != nil && strings.Contains(err.Error(), "not exist") {
+			if err = s.client.Mkdir(dir); err != nil {
+				u.Warn("Could not create directory for ftp", dir, err)
+			}
+		}
+		s.paths[dir] = struct{}{}
 	}
-	return objResp, nil
 }
 
+// List lists files in a directory
+func (m *Client) List(ctx context.Context, q cloudstorage.Query) (*cloudstorage.ObjectsResponse, error) {
+
+	objs := &cloudstorage.ObjectsResponse{
+		Objects: make(cloudstorage.Objects, 0),
+	}
+
+	err := m.listFiles(ctx, q, objs, m.bucket)
+	if err != nil {
+		u.Warnf("fetch error %v", err)
+		return nil, err
+	}
+	objs.Objects = q.ApplyFilters(objs.Objects)
+
+	return objs, nil
+}
+func (m *Client) listFiles(ctx context.Context, q cloudstorage.Query, objs *cloudstorage.ObjectsResponse, path string) error {
+	fil, err := m.fetchFiles(path)
+	if err != nil {
+		u.Warnf("fetch error %v %v", path, err)
+		return err
+	}
+	name := ""
+	for _, fi := range fil {
+		if fi.IsDir() {
+			// u.Debugf("is dir %v", dir)
+			err = m.listFiles(ctx, q, objs, strings.Join([]string{path, fi.Name()}, "/"))
+			if err != nil {
+				u.Errorf("could not get files %v  %v", fi.Name(), err)
+				return err
+			}
+		} else {
+			if strings.HasPrefix(path, "/") {
+				name = Concat(path[1:], fi.Name())
+			} else {
+				name = Concat(path, fi.Name())
+			}
+			if q.Prefix != "" && !strings.HasPrefix(name, q.Prefix) {
+				continue
+			}
+			//u.Debugf("%v", name)
+			objs.Objects = append(objs.Objects, newObjectFromFile(m, name, fi))
+		}
+	}
+	return nil
+}
+
+/*
 // Files lists files as os.FileInfo in a directory
 func (s *Client) Files(folder string) ([]os.FileInfo, error) {
 	fi, err := s.fetchFiles(folder)
@@ -361,12 +421,19 @@ func (s *Client) Files(folder string) ([]os.FileInfo, error) {
 	var files []os.FileInfo
 	for _, f := range fi {
 		if f.IsDir() {
-			continue
+			fid, err := s.Files(f.Name())
+			if err != nil {
+				u.Errorf("could not get files %v", err)
+				return nil, err
+			}
+			files = append(files, fid...)
+		} else {
+			files = append(files, f)
 		}
-		files = append(files, f)
 	}
 	return files, nil
 }
+*/
 
 // ListFiles lists files in a directory
 func (s *Client) ListFiles(folder string, hidden bool) ([]string, error) {
@@ -473,16 +540,17 @@ func (s *Client) NewWriterWithContext(ctx context.Context, name string, metadata
 
 	// pr, pw := io.Pipe()
 	// bw := csbufio.NewWriter(pw)
-	o := &object{name: name}
 
-	moveto := Concat(s.bucket, name)
-	gou.InfoCtx(ctx, "creating file %s", moveto)
-
-	file, err := s.client.Create(moveto)
+	//o := &object{name: name}
+	o, err := s.NewObject(name)
 	if err != nil {
 		return nil, err
 	}
-	o.file = file
+
+	if _, err = o.Open(cloudstorage.ReadWrite); err != nil {
+		u.Errorf("could not open %v %v", name, err)
+		return nil, err
+	}
 	return o, nil
 }
 
@@ -507,7 +575,10 @@ func (s *Client) fetchFiles(f string) ([]os.FileInfo, error) {
 	}
 	fi, err := s.client.ReadDir(folder)
 	if err != nil {
-		gou.WarnCtx(s.clientCtx, "failed to read directory %s with error: %v", s.bucket, err)
+		if err == os.ErrNotExist {
+			return nil, cloudstorage.ErrObjectNotFound
+		}
+		gou.WarnCtx(s.clientCtx, "failed to read directory %q with error: %v", s.bucket, err)
 		return nil, err
 	}
 	return fi, nil
@@ -522,41 +593,164 @@ func (s *Client) filterFileNames(folder string, dirs, files, hidden bool) ([]str
 	return filterFiles(fi, dirs, files, hidden), nil
 }
 
-func newObjectFromFile(c *Client, f os.FileInfo) *object {
+func newObjectFromFile(c *Client, name string, f os.FileInfo) *object {
+	cf := cloudstorage.CachePathObj(c.cachepath, name, c.ID)
+	//gou.Debugf("cachepath = %v", cf)
 	return &object{
-		client: c,
+		client:    c,
+		fi:        f,
+		name:      name,
+		cachepath: cf,
 	}
 }
 
-/*
 // Upload copies reader body bytes into underlying sftp file
-func (o *object) Upload(body io.Reader) (int64, error) {
-	defer o.file.Close()
+func (o *object) upload(body io.Reader) (int64, error) {
 
-	wLength, err := o.file.ReadFrom(body)
+	o.client.ensureDir(o.name)
+
+	name := Concat(o.client.bucket, o.name)
+
+	//gou.Infof("upload %q", name)
+
+	if o.file != nil {
+		if err := o.file.Close(); err != nil {
+			gou.Warnf("error closing %q %v", name, err)
+		}
+		// TODO:  Should we rename?  two-phase commit this?  if we do do we run
+		// risk of having a list operation find it?  use folders?
+		err := o.client.client.Remove(name)
+		if err != nil {
+			gou.Warnf("error removing %v", err)
+			return 0, err
+		}
+		o.file = nil
+		gou.Debugf("just removed %v to upload a new version", name)
+	}
+
+	//gou.Infof("client %p %#v", o.client, o.client)
+	//gou.Infof("client %#v", o.client.client)
+	f, err := o.client.client.Create(name)
 	if err != nil {
+		gou.Warnf("Could not create file %q err=%v", name, err)
 		return 0, err
 	}
 
+	defer f.Close()
+
+	wLength, err := f.ReadFrom(body)
+	if err != nil {
+		gou.Errorf("could not read file %v", err)
+		return 0, err
+	}
+
+	// gou.Debugf("%p uploaded %q size=%d", body, name, wLength)
 	return wLength, nil
 }
-*/
 
 func (o *object) Write(p []byte) (n int, err error) {
 	return o.cachedcopy.Write(p)
 }
 
+func statinfo(msg, name string) {
+	fi, err := os.Stat(name)
+	if err != nil {
+		//gou.Errorf("could not stat %q %v", name, err)
+		return
+	}
+	//gou.LogD(4, gou.DEBUG, fmt.Sprintf("stat: %s   %+v  mode=%v", msg, fi, fi.Mode().String()))
+	gou.LogD(4, gou.DEBUG, fmt.Sprintf("stat: %s %s size=%d mode=%v", msg, fi.Name(), fi.Size(), fi.Mode().String()))
+}
+
+// Open ensures the file is available for read/write (or accessevel)
 func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
-	return nil, fmt.Errorf("fetch error retry cnt reached: obj=%s tfile=%v", o.name, o.cachepath)
+
+	if o.opened {
+		return nil, fmt.Errorf("the store object is already opened. %s", o.cachepath)
+	}
+
+	readonly := accesslevel == cloudstorage.ReadOnly
+
+	err := cloudstorage.EnsureDir(o.cachepath)
+	if err != nil {
+		return nil, fmt.Errorf("could not create cachedcopy's dir. cachepath=%q err=%v", o.cachepath, err)
+	}
+
+	//statinfo("About to do first open() os.Create()", o.cachepath)
+	//os.Remove(o.cachepath)
+	cachedcopy, err := os.OpenFile(o.cachepath, os.O_RDWR|os.O_CREATE, 0665)
+	if err != nil {
+		return nil, fmt.Errorf("could not open cachedcopy file. cachepath=%q err=%v", o.cachepath, err)
+	}
+	//statinfo("About to do AFTER open() os.Create()", o.cachepath)
+
+	// if readonly {
+	// 	cachedcopy.Close()
+	// 	cachedcopy, err = os.Open(o.cachepath)
+	// 	gou.Debugf("just opened readonly?  %q?", o.cachepath)
+	// 	if err != nil {
+	// 		return nil, fmt.Errorf("sftp: error occurred opening file. storepath=%s tfile=%v err=%v",o.cachepath, cachedcopy.Name(), err)
+	// 	}
+	// }
+
+	if o.file != nil {
+		//gou.Debugf("has file so copy to local cached copy")
+		_, err = io.Copy(cachedcopy, o.file)
+		if err != nil {
+			return nil, err
+		}
+	} else if o.fi == nil {
+		// this is a new file
+		//gou.Debugf("new file ")
+		//statinfo("new file statinfo", o.cachepath)
+	} else if o.fi != nil {
+		// existing file
+		get := Concat(o.client.bucket, o.name)
+		//gou.Debugf("existingfile, open %s", get)
+		f, err := o.client.client.Open(get)
+		if err != nil {
+			gou.WarnCtx(o.client.clientCtx, "Could not get %q err=%v", get, err)
+			return nil, err
+		}
+		o.file = f
+
+		_, err = io.Copy(cachedcopy, f)
+		if err != nil {
+			gou.WarnCtx(o.client.clientCtx, "Could not copy %q err=%v", o.name, err)
+			return nil, err
+		}
+		cachedcopy.Close()
+		//statinfo("after close/iotutil readall", o.cachepath)
+
+		cachedcopy, err = os.OpenFile(o.cachepath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0665)
+		if err != nil {
+			gou.Error(err)
+			return nil, err
+		}
+	}
+
+	o.cachedcopy = cachedcopy
+	o.readonly = readonly
+	o.opened = true
+
+	// o.cachedcopy.Sync()
+	// o.cachedcopy.Close()
+	//gou.Debugf("opened %s", o.cachepath)
+	//gou.Infof("Open() returning cache copy %p", o.cachedcopy)
+	return o.cachedcopy, nil
+
+	//return nil, fmt.Errorf("fetch error retry cnt reached: obj=%s tfile=%v", o.name, o.cachepath)
 }
 
 func (o *object) Read(p []byte) (n int, err error) {
 	return o.cachedcopy.Read(p)
 }
 
+// Delete delete the underlying object from ftp server.
 func (o *object) Delete() error {
 	// this should be path/name ??
-	return o.client.Delete(context.Background(), o.fi.Name())
+	// gou.Debugf("Delete name=%q  sftp.Name()=%q", o.name, o.fi.Name())
+	return o.client.Delete(context.Background(), o.name)
 }
 
 func (o *object) Sync() error {
@@ -567,18 +761,44 @@ func (o *object) Sync() error {
 	if o.readonly {
 		return fmt.Errorf("trying to Sync a readonly object:%s", o.name)
 	}
+	if o.cachedcopy == nil {
+		return fmt.Errorf("No cached copy")
+	}
 
-	cachedcopy, err := os.OpenFile(o.cachepath, os.O_RDWR, 0664)
+	//statinfo("about to sync cachecopy", o.cachepath)
+	if err := o.cachedcopy.Sync(); err != nil {
+		if !strings.Contains(err.Error(), "already closed") {
+			gou.Warnf("%v", err)
+			return err
+		}
+	}
+
+	//gou.Warnf("%#v   %s", o.cachedcopy, o.cachedcopy.Name())
+	//gou.Infof("about to close cache copy %p", o.cachedcopy)
+	if err := o.cachedcopy.Close(); err != nil {
+		if !strings.Contains(err.Error(), "already closed") {
+			gou.Warnf("%v", err)
+			return err
+		}
+	}
+
+	//statinfo("about to upload cachecopy ", o.cachepath)
+	cachedcopy, err := os.Open(o.cachepath)
 	if err != nil {
-		return fmt.Errorf("couldn't open localfile for sync'ing. local=%s err=%v", o.cachepath, err)
+		gou.Warnf("%v", err)
+		return err
 	}
-	defer cachedcopy.Close()
-
-	if _, err := cachedcopy.Seek(0, os.SEEK_SET); err != nil {
-		return fmt.Errorf("error seeking to start of cachedcopy err=%v", err) //don't retry on local filesystem errors
+	if cachedcopy == nil {
+		gou.Warnf("damn, no object %q", o.cachepath)
 	}
-
-	return cloudstorage.ErrNotImplemented
+	_, err = o.upload(cachedcopy)
+	if err != nil {
+		gou.WarnCtx(o.client.clientCtx, "Could not upload %q err=%v", o.cachepath, err)
+		return err
+	}
+	o.cachedcopy = cachedcopy
+	//gou.DebugCtx(o.client.clientCtx, "Uploaded %q size=%d", o.name, size)
+	return nil
 }
 
 func (o *object) Close() error {
@@ -591,19 +811,21 @@ func (o *object) Close() error {
 		o.opened = false
 	}()
 
-	serr := o.cachedcopy.Sync()
-	cerr := o.cachedcopy.Close()
-	if serr != nil || cerr != nil {
-		return fmt.Errorf("error on sync and closing localfile. %s sync=%v, err=%v", o.cachepath, serr, cerr)
-	}
-
 	if o.opened && !o.readonly {
 		err := o.Sync()
 		if err != nil {
 			u.Errorf("error on sync %v", err)
 			return err
 		}
+	} else {
+		gou.Warnf("not syncing on close? %v opened?%v  readonly?%v", o.name, o.opened, o.readonly)
 	}
+
+	err := o.cachedcopy.Close()
+	if err != nil {
+		return fmt.Errorf("error on sync and closing localfile. %q err=%v", o.cachepath, err)
+	}
+
 	return nil
 }
 
@@ -615,10 +837,10 @@ func (o *object) Release() error {
 }
 
 func (o *object) MetaData() map[string]string {
-	return o.metadata
+	return nil
 }
 func (o *object) SetMetaData(meta map[string]string) {
-	o.metadata = meta
+	//o.metadata = meta
 }
 func (o *object) StorageSource() string {
 	return StoreType
@@ -630,7 +852,10 @@ func (o *object) String() string {
 	return o.name
 }
 func (o *object) Updated() time.Time {
-	return o.updated
+	if o.fi != nil {
+		return o.fi.ModTime()
+	}
+	return time.Time{}
 }
 
 type ByModTime []os.FileInfo
