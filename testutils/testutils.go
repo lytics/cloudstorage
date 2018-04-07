@@ -190,6 +190,11 @@ func Append(t TestingT, store cloudstorage.Store) {
 	err = obj.Close()
 	assert.Equal(t, nil, err)
 
+	switch store.Type() {
+	case "sftp":
+		time.Sleep(time.Millisecond * 200)
+	}
+
 	// get the object and append to it...
 	morerows := "2013,VW,Jetta\n2011,Dodge,Caravan\n"
 	obj2, err := store.Get(context.Background(), "append.csv")
