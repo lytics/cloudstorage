@@ -73,7 +73,8 @@ func Clearstore(t TestingT, store cloudstorage.Store) {
 	}
 	for _, o := range objs {
 		//t.Logf("clearstore(): deleting %v", o.Name())
-		store.Delete(ctx, o.Name())
+		err = store.Delete(ctx, o.Name())
+		assert.Equal(t, nil, err)
 	}
 
 	switch store.Type() {
@@ -85,6 +86,7 @@ func Clearstore(t TestingT, store cloudstorage.Store) {
 }
 
 func RunTests(t TestingT, s cloudstorage.Store) {
+
 	t.Logf("running basic rw")
 	BasicRW(t, s)
 	gou.Debugf("finished basicrw")

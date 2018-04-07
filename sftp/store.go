@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"strings"
 	"time"
 
@@ -299,6 +300,7 @@ func (m *Client) Objects(ctx context.Context, q cloudstorage.Query) (cloudstorag
 // Delete deletes a file
 func (s *Client) Delete(ctx context.Context, filename string) error {
 	if !s.Exists(filename) {
+		gou.Warnf("does not exist????? %q", filename)
 		return os.ErrNotExist
 	}
 	r := Concat(s.bucket, filename)
@@ -321,25 +323,35 @@ func (s *Client) Rename(oldname, newname string) error {
 
 // Exists checks to see if files exists
 func (s *Client) Exists(filename string) bool {
-	folder := ""
-	if i := strings.LastIndex(filename, "/"); i > 0 {
-		folder = filename[:i]
-		filename = filename[i+1:]
+	_, err := s.client.Stat(filename)
+	if err == nil {
+		return true
 	}
-	// TODO:  is there a more efficient way of getting single file existence?
-	// i think we should move to .Stat()
-	files, _ := s.ListFiles(folder, true)
-	for _, f := range files {
-		if f == filename {
-			return true
-		}
+	if err == os.ErrNotExist {
+		return false
 	}
+	gou.Warnf("could not stat? file=%s  err=%v", filename, err)
 	return false
+	/*
+		// do we need this fallback?  i doubt it
+		folder := ""
+		if i := strings.LastIndex(filename, "/"); i > 0 {
+			folder = filename[:i]
+			filename = filename[i+1:]
+		}
+
+		files, _ := s.ListFiles(folder, true)
+		for _, f := range files {
+			if f == filename {
+				return true
+			}
+		}
+		return false
+	*/
 }
 
 func (s *Client) ensureDir(name string) {
 
-	//u.Infof("bucket = %q", s.bucket)
 	name = Concat(s.bucket, name)
 	parts := strings.Split(strings.ToLower(name), "/")
 	dir := ""
@@ -372,13 +384,13 @@ func (m *Client) List(ctx context.Context, q cloudstorage.Query) (*cloudstorage.
 
 	err := m.listFiles(ctx, q, objs, m.bucket)
 	if err != nil {
-		u.Warnf("fetch error %v", err)
+		u.Warnf("fetch listFiles error %v", err)
 		return nil, err
 	}
 	objs.Objects = q.ApplyFilters(objs.Objects)
-
 	return objs, nil
 }
+
 func (m *Client) listFiles(ctx context.Context, q cloudstorage.Query, objs *cloudstorage.ObjectsResponse, path string) error {
 	fil, err := m.fetchFiles(path)
 	if err != nil {
@@ -388,14 +400,16 @@ func (m *Client) listFiles(ctx context.Context, q cloudstorage.Query, objs *clou
 	name := ""
 	for _, fi := range fil {
 		if fi.IsDir() {
-			// u.Debugf("is dir %v", dir)
 			err = m.listFiles(ctx, q, objs, strings.Join([]string{path, fi.Name()}, "/"))
 			if err != nil {
-				u.Errorf("could not get files %v  %v", fi.Name(), err)
+				u.Warnf("could not get files %v  %v", fi.Name(), err)
 				return err
 			}
 		} else {
-			if strings.HasPrefix(path, "/") {
+
+			if path == "" {
+				name = fi.Name()
+			} else if strings.HasPrefix(path, "/") {
 				name = Concat(path[1:], fi.Name())
 			} else {
 				name = Concat(path, fi.Name())
@@ -403,7 +417,6 @@ func (m *Client) listFiles(ctx context.Context, q cloudstorage.Query, objs *clou
 			if q.Prefix != "" && !strings.HasPrefix(name, q.Prefix) {
 				continue
 			}
-			//u.Debugf("%v", name)
 			objs.Objects = append(objs.Objects, newObjectFromFile(m, name, fi))
 		}
 	}
@@ -452,12 +465,7 @@ func (s *Client) listDirs(folder, prefix string, hidden bool) ([]string, error) 
 	}
 	var out []string
 	for _, d := range dirs {
-		f := Concat(folder, d)
-		p := Concat(prefix, d)
-		out = append(out, p)
-		if ds, err := s.listDirs(f, p, hidden); err == nil {
-			out = append(out, ds...)
-		}
+		out = append(out, fmt.Sprintf("%s/", path.Join(folder, d)))
 	}
 	return out, nil
 }
@@ -595,7 +603,6 @@ func (s *Client) filterFileNames(folder string, dirs, files, hidden bool) ([]str
 
 func newObjectFromFile(c *Client, name string, f os.FileInfo) *object {
 	cf := cloudstorage.CachePathObj(c.cachepath, name, c.ID)
-	//gou.Debugf("cachepath = %v", cf)
 	return &object{
 		client:    c,
 		fi:        f,
@@ -893,12 +900,28 @@ func filterFiles(fi []os.FileInfo, dirs, files, hidden bool) []string {
 // instead of "portland/"
 func Concat(strs ...string) string {
 	out := bytes.Buffer{}
-	for _, s := range strs {
-		if out.Len() == 0 {
+	for i, s := range strs {
+		if i == 0 {
 			out.WriteString(s)
 		} else if s != "" {
 			out.WriteByte('/')
 			out.WriteString(s)
+		}
+	}
+	return string(out.Bytes())
+}
+
+// Concat concats strings with "/" but ignores empty strings
+// so an input of "portland", "", would yield "portland"
+// instead of "portland/"
+func ConcatSlash(strs ...string) string {
+	out := bytes.Buffer{}
+	for _, s := range strs {
+		if strings.HasSuffix(s, "/") {
+			out.WriteString(s)
+		} else {
+			out.WriteString(s)
+			out.WriteByte('/')
 		}
 	}
 
