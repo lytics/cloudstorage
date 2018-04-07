@@ -199,7 +199,7 @@ func (l *LocalStore) Folders(ctx context.Context, csq cloudstorage.Query) ([]str
 	files, _ := ioutil.ReadDir(spath)
 	for _, f := range files {
 		if f.IsDir() {
-			folders = append(folders, f.Name())
+			folders = append(folders, fmt.Sprintf("%s/", path.Join(csq.Prefix, f.Name())))
 		}
 	}
 	return folders, nil

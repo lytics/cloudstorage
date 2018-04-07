@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/araddon/gou"
@@ -201,14 +202,21 @@ type (
 	}
 
 	// JwtConf For use with google/google_jwttransporter.go
-	// Which can be used by the google go sdk's
+	// Which can be used by the google go sdk's.   This struct is based on the Google
+	// Jwt files json for service accounts.
 	JwtConf struct {
-		ProjectID        string `json:"project_id,omitempty"`
-		PrivateKeyID     string `json:"private_key_id,omitempty"`
-		PrivateKeyBase64 string `json:"private_key,omitempty"`
-		ClientEmail      string `json:"client_email,omitempty"`
-		ClientID         string `json:"client_id,omitempty"`
-		Keytype          string `json:"type,omitempty"`
+		// Unfortuneately we departed from the standard jwt service account field-naming
+		// for reasons we forgot.  So, during load, we convert from bad->correct format.
+		PrivateKeyDeprecated string `json:"private_keybase64,omitempty"`
+		KeyTypeDeprecated    string `json:"keytype,omitempty"`
+
+		// Jwt Service Account Fields
+		ProjectID    string `json:"project_id,omitempty"`
+		PrivateKeyID string `json:"private_key_id,omitempty"`
+		PrivateKey   string `json:"private_key,omitempty"`
+		ClientEmail  string `json:"client_email,omitempty"`
+		ClientID     string `json:"client_id,omitempty"`
+		Type         string `json:"type,omitempty"`
 		// Scopes is list of what scope to use when the token is created.
 		// for example https://github.com/google/google-api-go-client/blob/0d3983fb069cb6651353fc44c5cb604e263f2a93/storage/v1/storage-gen.go#L54
 		Scopes []string `json:"scopes,omitempty"`
@@ -302,13 +310,33 @@ func (o Objects) Swap(i, j int)      { o[i], o[j] = o[j], o[i] }
 
 // Validate that this is a valid jwt conf set of tokens
 func (j *JwtConf) Validate() error {
+	if j.PrivateKeyDeprecated != "" {
+		j.PrivateKey = j.PrivateKeyDeprecated
+		j.PrivateKeyDeprecated = ""
+	}
+	j.fixKey()
+	if j.KeyTypeDeprecated != "" {
+		j.Type = j.KeyTypeDeprecated
+		j.KeyTypeDeprecated = ""
+	}
 	_, err := j.KeyBytes()
 	if err != nil {
 		return fmt.Errorf("Invalid JwtConf.PrivateKeyBase64  (error trying to decode base64 err: %v", err)
 	}
 	return nil
 }
-
+func (j *JwtConf) fixKey() {
+	parts := strings.Split(j.PrivateKey, "\n")
+	if len(parts) > 1 {
+		for _, part := range parts {
+			if strings.HasPrefix(part, "---") {
+				continue
+			}
+			j.PrivateKey = part
+			break
+		}
+	}
+}
 func (j *JwtConf) KeyBytes() ([]byte, error) {
-	return base64.StdEncoding.DecodeString(j.PrivateKeyBase64)
+	return base64.StdEncoding.DecodeString(j.PrivateKey)
 }
