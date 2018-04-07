@@ -20,10 +20,6 @@ export SFTP_PASSWORD="bbb"
 export SFTP_FOLDER="bucket"
 
 */
-func init() {
-	gou.SetupLogging("debug")
-	gou.SetColorOutput()
-}
 
 var config = &cloudstorage.Config{
 	Type:       sftp.StoreType,
