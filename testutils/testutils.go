@@ -192,7 +192,7 @@ func Append(t TestingT, store cloudstorage.Store) {
 
 	switch store.Type() {
 	case "sftp":
-		time.Sleep(time.Millisecond * 200)
+		time.Sleep(time.Millisecond * 1100)
 	}
 
 	// get the object and append to it...
@@ -207,7 +207,7 @@ func Append(t TestingT, store cloudstorage.Store) {
 		// azure doesn't have sub-second granularity so will always be equal
 		assert.True(t, updated.After(now.Add(-time.Second*2)), "updated time was not set")
 	default:
-		assert.True(t, updated.After(now), "updated time was not set")
+		assert.True(t, updated.After(now), "updated time was not set %v vs %v", now, updated)
 	}
 
 	time.Sleep(10 * time.Millisecond)
