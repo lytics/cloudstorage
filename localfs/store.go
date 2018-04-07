@@ -133,7 +133,6 @@ func (l *LocalStore) List(ctx context.Context, query cloudstorage.Query) (*cloud
 		}
 
 		obj := strings.Replace(fo, l.pathCleaned, "", 1)
-		//gou.Debugf("walk fo=%q pathcleaned=%q obj=%q", fo, l.pathCleaned, obj)
 
 		if f.IsDir() {
 			return nil
