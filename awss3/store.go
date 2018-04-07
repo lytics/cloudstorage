@@ -10,15 +10,15 @@ import (
 	"sync"
 	"time"
 
-	u "github.com/araddon/gou"
+	"github.com/araddon/gou"
+	"github.com/pborman/uuid"
+	"golang.org/x/net/context"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
-	"github.com/pborman/uuid"
-	"golang.org/x/net/context"
 
 	"github.com/lytics/cloudstorage"
 	"github.com/lytics/cloudstorage/csbufio"
@@ -294,7 +294,7 @@ func (f *FS) List(ctx context.Context, q cloudstorage.Query) (*cloudstorage.Obje
 
 	resp, err := f.client.ListObjects(params)
 	if err != nil {
-		u.Warnf("err = %v", err)
+		gou.Warnf("err = %v", err)
 		return nil, err
 	}
 
@@ -353,7 +353,7 @@ func (f *FS) Folders(ctx context.Context, q cloudstorage.Query) ([]string, error
 				return nil, err
 			}
 			for _, cp := range resp.CommonPrefixes {
-				folders = append(folders, strings.Trim(*cp.Prefix, `/`))
+				folders = append(folders, strings.TrimPrefix(*cp.Prefix, `/`))
 			}
 			return folders, nil
 		}
@@ -447,7 +447,7 @@ func (f *FS) NewWriterWithContext(ctx context.Context, objectName string, metada
 			Body:   pr,
 		})
 		if err != nil {
-			u.Warnf("could not upload %v", err)
+			gou.Warnf("could not upload %v", err)
 		}
 	}()
 
@@ -646,7 +646,7 @@ func (o *object) Sync() error {
 		Body:   cachedcopy,
 	})
 	if err != nil {
-		u.Warnf("could not upload %v", err)
+		gou.Warnf("could not upload %v", err)
 		return fmt.Errorf("failed to upload file, %v", err)
 	}
 	return nil
@@ -671,7 +671,7 @@ func (o *object) Close() error {
 	if o.opened && !o.readonly {
 		err := o.Sync()
 		if err != nil {
-			u.Errorf("error on sync %v", err)
+			gou.Errorf("error on sync %v", err)
 			return err
 		}
 	}

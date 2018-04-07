@@ -20,10 +20,6 @@ export AWS_SECRET_KEY="bbb"
 export AWS_BUCKET="bucket"
 
 */
-func init() {
-	gou.SetupLogging("debug")
-	gou.SetColorOutput()
-}
 
 var config = &cloudstorage.Config{
 	Type:       awss3.StoreType,
