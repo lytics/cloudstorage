@@ -133,6 +133,7 @@ func (l *LocalStore) List(ctx context.Context, query cloudstorage.Query) (*cloud
 		}
 
 		obj := strings.Replace(fo, l.pathCleaned, "", 1)
+		//gou.Debugf("walk fo=%q pathcleaned=%q obj=%q", fo, l.pathCleaned, obj)
 
 		if f.IsDir() {
 			return nil
@@ -199,7 +200,7 @@ func (l *LocalStore) Folders(ctx context.Context, csq cloudstorage.Query) ([]str
 	files, _ := ioutil.ReadDir(spath)
 	for _, f := range files {
 		if f.IsDir() {
-			folders = append(folders, f.Name())
+			folders = append(folders, fmt.Sprintf("%s/", path.Join(csq.Prefix, f.Name())))
 		}
 	}
 	return folders, nil

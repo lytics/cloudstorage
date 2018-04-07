@@ -4,23 +4,61 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"flag"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"sort"
+	"sync"
 	"time"
 
-	u "github.com/araddon/gou"
+	"github.com/araddon/gou"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/api/iterator"
 
 	"github.com/lytics/cloudstorage"
 )
 
+var (
+	verbose   *bool
+	setupOnce = sync.Once{}
+)
+
+func init() {
+	Setup()
+}
+
 type TestingT interface {
 	Logf(format string, args ...interface{})
 	Fatalf(format string, args ...interface{})
 	Errorf(format string, args ...interface{})
+}
+
+// Setup enables -vv verbose logging or sends logs to /dev/null
+// env var VERBOSELOGS=true was added to support verbose logging with alltests
+func Setup() {
+	setupOnce.Do(func() {
+
+		if flag.CommandLine.Lookup("vv") == nil {
+			verbose = flag.Bool("vv", false, "Verbose Logging?")
+		}
+
+		flag.Parse()
+		logger := gou.GetLogger()
+		if logger != nil {
+			// don't re-setup
+		} else {
+			if (verbose != nil && *verbose == true) || os.Getenv("VERBOSELOGS") != "" {
+				gou.SetupLogging("debug")
+				gou.SetColorOutput()
+			} else {
+				// make sure logging is always non-nil
+				dn, _ := os.Open(os.DevNull)
+				gou.SetLogger(log.New(dn, "", 0), "error")
+			}
+		}
+	})
 }
 
 func Clearstore(t TestingT, store cloudstorage.Store) {
@@ -48,22 +86,22 @@ func Clearstore(t TestingT, store cloudstorage.Store) {
 func RunTests(t TestingT, s cloudstorage.Store) {
 	t.Logf("running basic rw")
 	BasicRW(t, s)
-	u.Debugf("finished basicrw")
+	gou.Debugf("finished basicrw")
 	t.Logf("running Append")
 	Append(t, s)
-	u.Debugf("finished append")
+	gou.Debugf("finished append")
 	t.Logf("running ListObjsAndFolders")
 	ListObjsAndFolders(t, s)
-	u.Debugf("finished ListObjsAndFolders")
+	gou.Debugf("finished ListObjsAndFolders")
 	t.Logf("running Truncate")
 	Truncate(t, s)
-	u.Debugf("finished Truncate")
+	gou.Debugf("finished Truncate")
 	t.Logf("running NewObjectWithExisting")
 	NewObjectWithExisting(t, s)
-	u.Debugf("finished NewObjectWithExisting")
+	gou.Debugf("finished NewObjectWithExisting")
 	t.Logf("running TestReadWriteCloser")
 	TestReadWriteCloser(t, s)
-	u.Debugf("finished TestReadWriteCloser")
+	gou.Debugf("finished TestReadWriteCloser")
 }
 
 func BasicRW(t TestingT, store cloudstorage.Store) {
@@ -182,6 +220,9 @@ func ListObjsAndFolders(t TestingT, store cloudstorage.Store) {
 		for _, n := range names {
 			obj, err := store.NewObject(n)
 			assert.Equal(t, nil, err)
+			if obj == nil {
+				continue
+			}
 
 			f1, err := obj.Open(cloudstorage.ReadWrite)
 			assert.Equal(t, nil, err)
@@ -280,10 +321,12 @@ func ListObjsAndFolders(t TestingT, store cloudstorage.Store) {
 	folders, err = store.Folders(context.Background(), q)
 	assert.Equal(t, nil, err)
 	assert.Equal(t, 3, len(folders), "incorrect list len. wanted 3 folders. %v", folders)
+	sort.Strings(folders)
+	assert.Equal(t, []string{"list-test/a/", "list-test/b/", "list-test/c/"}, folders)
 
-	folders = []string{"a/a2", "b/b1", "b/b2"}
+	foldersInput := []string{"a/a2", "b/b1", "b/b2"}
 	names = []string{}
-	for _, folder := range folders {
+	for _, folder := range foldersInput {
 		for i := 0; i < 2; i++ {
 			n := fmt.Sprintf("list-test/%s/test%d.csv", folder, i)
 			names = append(names, n)
@@ -298,11 +341,13 @@ func ListObjsAndFolders(t TestingT, store cloudstorage.Store) {
 	folders, err = store.Folders(context.Background(), q)
 	assert.Equal(t, nil, err)
 	assert.Equal(t, 3, len(folders), "incorrect list len. wanted 3 folders. %v", folders)
+	assert.Equal(t, []string{"list-test/a/", "list-test/b/", "list-test/c/"}, folders)
 
 	q = cloudstorage.NewQueryForFolders("list-test/b/")
 	folders, err = store.Folders(context.Background(), q)
 	assert.Equal(t, nil, err)
 	assert.Equal(t, 2, len(folders), "incorrect list len. wanted 2 folders. %v", folders)
+	assert.Equal(t, []string{"list-test/b/b1/", "list-test/b/b2/"}, folders)
 }
 
 func Truncate(t TestingT, store cloudstorage.Store) {
@@ -407,7 +452,7 @@ func TestReadWriteCloser(t TestingT, store cloudstorage.Store) {
 
 	Clearstore(t, store)
 
-	u.Debugf("starting TestReadWriteCloser")
+	gou.Debugf("starting TestReadWriteCloser")
 	object := "prefix/iorw.test"
 	data := fmt.Sprintf("pid:%v:time:%v", os.Getpid(), time.Now().Nanosecond())
 

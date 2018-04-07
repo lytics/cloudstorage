@@ -1,7 +1,6 @@
 package azure_test
 
 import (
-	"flag"
 	"os"
 	"testing"
 
@@ -22,14 +21,6 @@ export AZURE_PROJECT="bbb"
 export AZURE_BUCKET="cloudstorageunittests"
 
 */
-func init() {
-	flag.Parse()
-	if testing.Verbose() {
-		gou.SetupLogging("debug")
-		gou.SetColorOutput()
-	}
-}
-
 var config = &cloudstorage.Config{
 	Type:       azure.StoreType,
 	AuthMethod: azure.AuthKey,
