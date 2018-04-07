@@ -170,7 +170,15 @@ func Append(t TestingT, store cloudstorage.Store) {
 	Clearstore(t, store)
 
 	now := time.Now()
-	time.Sleep(10 * time.Millisecond)
+
+	switch store.Type() {
+	case "sftp":
+		// the sftp service only has 1 second granularity
+		// on timestamps stored
+		time.Sleep(time.Millisecond * 1100)
+	default:
+		time.Sleep(10 * time.Millisecond)
+	}
 
 	// Create a new object and write to it.
 	obj, err := store.NewObject("append.csv")
@@ -189,11 +197,6 @@ func Append(t TestingT, store cloudstorage.Store) {
 
 	err = obj.Close()
 	assert.Equal(t, nil, err)
-
-	switch store.Type() {
-	case "sftp":
-		time.Sleep(time.Millisecond * 1100)
-	}
 
 	// get the object and append to it...
 	morerows := "2013,VW,Jetta\n2011,Dodge,Caravan\n"
