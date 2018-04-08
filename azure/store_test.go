@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/araddon/gou"
-	"github.com/bmizerany/assert"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/lytics/cloudstorage"
 	"github.com/lytics/cloudstorage/azure"
@@ -32,6 +32,7 @@ var config = &cloudstorage.Config{
 func TestConfig(t *testing.T) {
 	conf := &cloudstorage.Config{
 		Type:     azure.StoreType,
+		Project:  os.Getenv("AZURE_PROJECT"),
 		Settings: make(gou.JsonHelper),
 	}
 	// Should error with empty config
@@ -40,6 +41,23 @@ func TestConfig(t *testing.T) {
 
 	conf.AuthMethod = azure.AuthKey
 	conf.Settings[azure.ConfKeyAuthKey] = ""
+	_, err = cloudstorage.NewStore(conf)
+	assert.NotEqual(t, nil, err)
+
+	conf.Settings[azure.ConfKeyAuthKey] = "bad"
+	_, err = cloudstorage.NewStore(conf)
+	assert.NotEqual(t, nil, err)
+
+	conf.Settings[azure.ConfKeyAuthKey] = os.Getenv("AZURE_KEY")
+	client, sess, err := azure.NewClient(conf)
+	assert.Equal(t, nil, err)
+	assert.NotEqual(t, nil, client)
+	conf.TmpDir = ""
+	_, err = azure.NewStore(client, sess, conf)
+	assert.NotEqual(t, nil, err)
+
+	// Trying to find dir they don't have access to?
+	conf.TmpDir = "/home/fake"
 	_, err = cloudstorage.NewStore(conf)
 	assert.NotEqual(t, nil, err)
 }
@@ -58,5 +76,8 @@ func TestAll(t *testing.T) {
 		t.Skip()
 		return
 	}
+	client := store.Client()
+	assert.NotEqual(t, nil, client)
+
 	testutils.RunTests(t, store)
 }

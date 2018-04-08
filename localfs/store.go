@@ -194,6 +194,11 @@ func (l *LocalStore) Folders(ctx context.Context, csq cloudstorage.Query) ([]str
 	if !cloudstorage.Exists(spath) {
 		return nil, fmt.Errorf("That folder %q does not exist", spath)
 	}
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
 
 	folders := make([]string, 0)
 	files, _ := ioutil.ReadDir(spath)

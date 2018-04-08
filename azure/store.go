@@ -12,7 +12,6 @@ import (
 
 	az "github.com/Azure/azure-sdk-for-go/storage"
 	u "github.com/araddon/gou"
-	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/pborman/uuid"
 	"golang.org/x/net/context"
 
@@ -102,7 +101,6 @@ func NewClient(conf *cloudstorage.Config) (*az.Client, *az.BlobStorageClient, er
 	case AuthKey:
 		accessKey := conf.Settings.String(ConfKeyAuthKey)
 		if accessKey == "" {
-			u.Warnf("no access key %v", conf.Settings)
 			return nil, nil, ErrNoAccessKey
 		}
 		basicClient, err := az.NewBasicClient(conf.Project, accessKey)
@@ -123,7 +121,8 @@ func NewStore(c *az.Client, blobClient *az.BlobStorageClient, conf *cloudstorage
 	if conf.TmpDir == "" {
 		return nil, fmt.Errorf("unable to create cachepath. config.tmpdir=%q", conf.TmpDir)
 	}
-	err := os.MkdirAll(path.Dir(conf.TmpDir), 0775)
+
+	err := os.MkdirAll(conf.TmpDir, 0775)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create cachepath. config.tmpdir=%q err=%v", conf.TmpDir, err)
 	}
@@ -497,6 +496,8 @@ func newObject(f *FS, o *az.Blob) *object {
 	obj.o.Properties.Etag = cloudstorage.CleanETag(obj.o.Properties.Etag)
 	return obj
 }
+
+/*
 func newObjectFromHead(f *FS, name string, o *s3.HeadObjectOutput) *object {
 	obj := &object{
 		fs:        f,
@@ -511,7 +512,7 @@ func newObjectFromHead(f *FS, name string, o *s3.HeadObjectOutput) *object {
 	obj.metadata, _ = convertMetaData(o.Metadata)
 	return obj
 }
-
+*/
 func (o *object) StorageSource() string {
 	return StoreType
 }
@@ -624,9 +625,11 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 	return nil, fmt.Errorf("fetch error retry cnt reached: obj=%s tfile=%v errs:[%v]", o.name, o.cachepath, errs)
 }
 
+/*
 func (o *object) File() *os.File {
 	return o.cachedcopy
 }
+*/
 func (o *object) Read(p []byte) (n int, err error) {
 	return o.cachedcopy.Read(p)
 }

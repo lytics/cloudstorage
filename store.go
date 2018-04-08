@@ -139,6 +139,8 @@ type (
 		Write(p []byte) (n int, err error)
 		Sync() error
 		Close() error
+		// File returns the cached/local copy of the file
+		File() *os.File
 
 		// Delete removes the object from the cloud store.
 		Delete() error
