@@ -253,6 +253,21 @@ func Append(t TestingT, store cloudstorage.Store) {
 	assert.Equal(t, nil, err)
 
 	assert.Equal(t, testcsv+morerows, string(bytes), "not the rows we expected.")
+
+	// Now we are going to essentially repeat tests but now use the native
+	// interface object.Read(), Write() instead of OPen() -> os.File()
+
+	// Create a new object and write to it.
+	obj, err = store.NewObject("append_native.csv")
+	assert.Equal(t, nil, err)
+
+	writeCt, err := obj.Write([]byte(testcsv))
+	assert.Equal(t, nil, err)
+	assert.Equal(t, len(testcsv), writeCt)
+
+	err = obj.Close()
+	assert.Equal(t, nil, err)
+
 }
 
 func dumpfile(msg, file string) {

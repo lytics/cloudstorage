@@ -655,10 +655,6 @@ func (o *object) upload(body io.Reader) (int64, error) {
 	return wLength, nil
 }
 
-func (o *object) Write(p []byte) (n int, err error) {
-	return o.cachedcopy.Write(p)
-}
-
 func statinfo(msg, name string) {
 	fi, err := os.Stat(name)
 	if err != nil {
@@ -747,10 +743,6 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 	return o.cachedcopy, nil
 
 	//return nil, fmt.Errorf("fetch error retry cnt reached: obj=%s tfile=%v", o.name, o.cachepath)
-}
-
-func (o *object) Read(p []byte) (n int, err error) {
-	return o.cachedcopy.Read(p)
 }
 
 // Delete delete the underlying object from ftp server.
@@ -843,6 +835,15 @@ func (o *object) Release() error {
 	return os.Remove(o.cachepath)
 }
 
+func (o *object) File() *os.File {
+	return o.cachedcopy
+}
+func (o *object) Read(p []byte) (n int, err error) {
+	return o.cachedcopy.Read(p)
+}
+func (o *object) Write(p []byte) (n int, err error) {
+	return o.cachedcopy.Write(p)
+}
 func (o *object) MetaData() map[string]string {
 	return nil
 }
