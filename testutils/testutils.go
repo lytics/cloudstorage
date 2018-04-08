@@ -65,7 +65,7 @@ func Clearstore(t TestingT, store cloudstorage.Store) {
 	//t.Logf("----------------Clearstore-----------------\n")
 	q := cloudstorage.NewQueryAll()
 	q.Sorted()
-	ctx := context.Background()
+	ctx := gou.NewContext(context.Background(), "clearstore")
 	iter, _ := store.Objects(ctx, q)
 	objs, err := cloudstorage.ObjectsAll(iter)
 	if err != nil {
@@ -73,10 +73,12 @@ func Clearstore(t TestingT, store cloudstorage.Store) {
 	}
 	for _, o := range objs {
 		//t.Logf("clearstore(): deleting %v", o.Name())
-		store.Delete(ctx, o.Name())
+		err = store.Delete(ctx, o.Name())
+		assert.Equal(t, nil, err)
 	}
 
-	if store.Type() == "gcs" {
+	switch store.Type() {
+	case "gcs":
 		// GCS is lazy about deletes...
 		fmt.Println("doing GCS delete sleep 15")
 		time.Sleep(15 * time.Second)
@@ -84,21 +86,27 @@ func Clearstore(t TestingT, store cloudstorage.Store) {
 }
 
 func RunTests(t TestingT, s cloudstorage.Store) {
+
 	t.Logf("running basic rw")
 	BasicRW(t, s)
 	gou.Debugf("finished basicrw")
+
 	t.Logf("running Append")
 	Append(t, s)
 	gou.Debugf("finished append")
+
 	t.Logf("running ListObjsAndFolders")
 	ListObjsAndFolders(t, s)
 	gou.Debugf("finished ListObjsAndFolders")
+
 	t.Logf("running Truncate")
 	Truncate(t, s)
 	gou.Debugf("finished Truncate")
+
 	t.Logf("running NewObjectWithExisting")
 	NewObjectWithExisting(t, s)
 	gou.Debugf("finished NewObjectWithExisting")
+
 	t.Logf("running TestReadWriteCloser")
 	TestReadWriteCloser(t, s)
 	gou.Debugf("finished TestReadWriteCloser")
@@ -106,15 +114,22 @@ func RunTests(t TestingT, s cloudstorage.Store) {
 
 func BasicRW(t TestingT, store cloudstorage.Store) {
 
-	Clearstore(t, store)
-
+	// Ensure the store has a String identifying store type
 	assert.NotEqual(t, "", store.String())
+
+	// Read the object from store, delete if it exists
+	obj, _ := store.Get(context.Background(), "prefix/test.csv")
+	if obj != nil {
+		err := obj.Delete()
+		assert.Equal(t, nil, err)
+	}
 
 	// Create a new object and write to it.
 	obj, err := store.NewObject("prefix/test.csv")
 	assert.Equal(t, nil, err)
 	assert.NotEqual(t, nil, obj)
 
+	// Opening is required for new objects.
 	f, err := obj.Open(cloudstorage.ReadWrite)
 	assert.Equal(t, nil, err)
 	assert.NotEqual(t, nil, f)
@@ -126,10 +141,11 @@ func BasicRW(t TestingT, store cloudstorage.Store) {
 	assert.Equal(t, nil, err)
 	w.Flush()
 
+	// Close() actually does the upload/flush/write to cloud
 	err = obj.Close()
 	assert.Equal(t, nil, err)
 
-	// Read the object back out of the cloud storage.
+	// Read the object back out of the cloud store.
 	obj2, err := store.Get(context.Background(), "prefix/test.csv")
 	assert.Equal(t, nil, err)
 
@@ -140,13 +156,29 @@ func BasicRW(t TestingT, store cloudstorage.Store) {
 	assert.Equal(t, nil, err)
 
 	assert.Equal(t, testcsv, string(bytes))
+
+	// Now delete again
+	err = obj2.Delete()
+	assert.Equal(t, nil, err)
+	obj, err = store.Get(context.Background(), "prefix/test.csv")
+	assert.Equal(t, cloudstorage.ErrObjectNotFound, err)
+	assert.Equal(t, nil, obj)
 }
 
 func Append(t TestingT, store cloudstorage.Store) {
 
 	Clearstore(t, store)
+
 	now := time.Now()
-	time.Sleep(10 * time.Millisecond)
+
+	switch store.Type() {
+	case "sftp":
+		// the sftp service only has 1 second granularity
+		// on timestamps stored
+		time.Sleep(time.Millisecond * 1100)
+	default:
+		time.Sleep(10 * time.Millisecond)
+	}
 
 	// Create a new object and write to it.
 	obj, err := store.NewObject("append.csv")
@@ -178,7 +210,7 @@ func Append(t TestingT, store cloudstorage.Store) {
 		// azure doesn't have sub-second granularity so will always be equal
 		assert.True(t, updated.After(now.Add(-time.Second*2)), "updated time was not set")
 	default:
-		assert.True(t, updated.After(now), "updated time was not set")
+		assert.True(t, updated.After(now), "updated time was not set %v vs %v", now, updated)
 	}
 
 	time.Sleep(10 * time.Millisecond)
@@ -188,14 +220,20 @@ func Append(t TestingT, store cloudstorage.Store) {
 	assert.NotEqual(t, nil, f2)
 
 	w2 := bufio.NewWriter(f2)
-	_, err = w2.WriteString(morerows)
-	assert.Equal(t, nil, err)
+	ct, err := w2.WriteString(morerows)
 	w2.Flush()
+	//ct, err := f2.WriteString(morerows)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, len(morerows), ct)
+
 	switch store.Type() {
-	case "s3", "azure":
+	case "s3", "azure", "sftp":
 		// azure and s3 have 1 second granularity on LastModified.  wtf.
 		time.Sleep(time.Millisecond * 1000)
 	}
+	//u.Infof("about to call close on the appended file f p = %p", f2)
+	f2.Sync()
+
 	err = obj2.Close()
 	assert.Equal(t, nil, err)
 
@@ -203,7 +241,7 @@ func Append(t TestingT, store cloudstorage.Store) {
 	obj3, err := store.Get(context.Background(), "append.csv")
 	assert.Equal(t, nil, err)
 	updated3 := obj3.Updated()
-	assert.True(t, updated3.After(updated), "updated time not updated")
+	assert.True(t, updated3.After(updated), "updated wrong:  pre=%v post=%v", updated, updated3)
 	f3, err := obj3.Open(cloudstorage.ReadOnly)
 	assert.Equal(t, nil, err)
 
@@ -213,7 +251,21 @@ func Append(t TestingT, store cloudstorage.Store) {
 	assert.Equal(t, testcsv+morerows, string(bytes), "not the rows we expected.")
 }
 
+func dumpfile(msg, file string) {
+	f, err := os.OpenFile(file, os.O_RDWR|os.O_CREATE, 0666)
+	if err != nil {
+		panic(err.Error())
+	}
+	defer f.Close()
+	by, err := ioutil.ReadAll(f)
+	if err != nil {
+		panic(err.Error())
+	}
+	gou.Infof("dumpfile %s  %s\n%s", msg, file, string(by))
+}
+
 func ListObjsAndFolders(t TestingT, store cloudstorage.Store) {
+
 	Clearstore(t, store)
 
 	createObjects := func(names []string) {

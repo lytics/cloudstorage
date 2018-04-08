@@ -1,15 +1,15 @@
 # Introduction
-Cloudstorage is an abstraction layer for Cloud Storage (Google, AWS, Azure) and Local Files.
-It provides a unified api for local files and Cloud files that aids testing and operating on multiple cloud storage.
+Cloudstorage is an library for working with Cloud Storage (Google, AWS, Azure) and SFTP, Local Files.
+It provides a unified api for local files, sftp and Cloud files that aids testing and operating on multiple cloud storage.
 
 [![Code Coverage](https://codecov.io/gh/lytics/cloudstorage/branch/master/graph/badge.svg)](https://codecov.io/gh/lytics/cloudstorage)
 [![GoDoc](https://godoc.org/github.com/lytics/cloudstorage?status.svg)](http://godoc.org/github.com/lytics/cloudstorage)
 [![Build Status](https://travis-ci.org/lytics/cloudstorage.svg?branch=master)](https://travis-ci.org/lytics/cloudstorage)
 [![Go ReportCard](https://goreportcard.com/badge/lytics/cloudstorage)](https://goreportcard.com/report/lytics/cloudstorage)
 
-
 **Features**
 * Provide single unified api for multiple cloud (google, azure, aws) & local files.
+* Cloud Upload/Download is unified in api so you don't have to download file to local, work with it, then upload.
 * Buffer/Cache files from cloud local so speed of usage is very high.
 
 
@@ -19,7 +19,7 @@ It provides a unified api for local files and Cloud files that aids testing and 
 
 
 # Example usage:
-Note: For these examples Im ignoring all errors and using the `_` for them.
+Note: For these examples all errors are ignored, using the `_` for them.
 
 ##### Creating a Store object:
 ```go

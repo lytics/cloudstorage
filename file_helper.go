@@ -31,7 +31,6 @@ func CleanETag(etag string) string {
 			return etag
 		}
 	}
-	return etag
 }
 
 // ContentType check content type of file by looking
@@ -65,7 +64,7 @@ func EnsureContextType(o string, md map[string]string) string {
 	return ctype
 }
 
-// Exists does this file path exists?
+// Exists does this file path exists on the local file-system?
 func Exists(filename string) bool {
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
 		return false
