@@ -2,6 +2,7 @@ package cloudstorage_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -24,6 +25,8 @@ func TestAll(t *testing.T) {
 		return
 	}
 	testutils.RunTests(t, store)
+	// verify cleanup
+	cloudstorage.CleanupCacheFiles(time.Minute*1, localFsConf.TmpDir)
 }
 
 func TestStore(t *testing.T) {

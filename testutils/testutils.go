@@ -148,9 +148,13 @@ func BasicRW(t TestingT, store cloudstorage.Store) {
 	// Read the object back out of the cloud store.
 	obj2, err := store.Get(context.Background(), "prefix/test.csv")
 	assert.Equal(t, nil, err)
+	assert.Equal(t, store.Type(), obj2.StorageSource())
+	assert.Equal(t, "prefix/test.csv", obj2.Name())
+	assert.Equal(t, "prefix/test.csv", obj2.String())
 
 	f2, err := obj2.Open(cloudstorage.ReadOnly)
 	assert.Equal(t, nil, err)
+	assert.Equal(t, fmt.Sprintf("%p", f2), fmt.Sprintf("%p", obj2.File()))
 
 	bytes, err := ioutil.ReadAll(f2)
 	assert.Equal(t, nil, err)
@@ -249,6 +253,21 @@ func Append(t TestingT, store cloudstorage.Store) {
 	assert.Equal(t, nil, err)
 
 	assert.Equal(t, testcsv+morerows, string(bytes), "not the rows we expected.")
+
+	// Now we are going to essentially repeat tests but now use the native
+	// interface object.Read(), Write() instead of OPen() -> os.File()
+
+	// Create a new object and write to it.
+	obj, err = store.NewObject("append_native.csv")
+	assert.Equal(t, nil, err)
+
+	writeCt, err := obj.Write([]byte(testcsv))
+	assert.Equal(t, nil, err)
+	assert.Equal(t, len(testcsv), writeCt)
+
+	err = obj.Close()
+	assert.Equal(t, nil, err)
+
 }
 
 func dumpfile(msg, file string) {
@@ -308,6 +327,7 @@ func ListObjsAndFolders(t TestingT, store cloudstorage.Store) {
 	createObjects(names)
 
 	q := cloudstorage.NewQuery("list-test/")
+	q.PageSize = 500
 	q.Sorted()
 	iter, _ := store.Objects(context.Background(), q)
 	objs, err := cloudstorage.ObjectsAll(iter)
@@ -390,6 +410,7 @@ func ListObjsAndFolders(t TestingT, store cloudstorage.Store) {
 	createObjects(names)
 
 	q = cloudstorage.NewQueryForFolders("list-test/")
+	q.PageSize = 500
 	folders, err = store.Folders(context.Background(), q)
 	assert.Equal(t, nil, err)
 	assert.Equal(t, 3, len(folders), "incorrect list len. wanted 3 folders. %v", folders)
@@ -400,6 +421,12 @@ func ListObjsAndFolders(t TestingT, store cloudstorage.Store) {
 	assert.Equal(t, nil, err)
 	assert.Equal(t, 2, len(folders), "incorrect list len. wanted 2 folders. %v", folders)
 	assert.Equal(t, []string{"list-test/b/b1/", "list-test/b/b2/"}, folders)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	folders, err = store.Folders(ctx, q)
+	assert.NotEqual(t, nil, err)
+	assert.Equal(t, 0, len(folders), "incorrect list len. wanted 0 folders. %v", folders)
 }
 
 func Truncate(t TestingT, store cloudstorage.Store) {
@@ -505,10 +532,10 @@ func TestReadWriteCloser(t TestingT, store cloudstorage.Store) {
 	Clearstore(t, store)
 
 	gou.Debugf("starting TestReadWriteCloser")
-	object := "prefix/iorw.test"
+	fileName := "prefix/iorw.test"
 	data := fmt.Sprintf("pid:%v:time:%v", os.Getpid(), time.Now().Nanosecond())
 
-	wc, err := store.NewWriter(object, nil)
+	wc, err := store.NewWriter(fileName, nil)
 	assert.Equal(t, nil, err)
 	buf1 := bytes.NewBufferString(data)
 	_, err = buf1.WriteTo(wc)
@@ -517,7 +544,7 @@ func TestReadWriteCloser(t TestingT, store cloudstorage.Store) {
 	assert.Equal(t, nil, err)
 	time.Sleep(time.Millisecond * 100)
 
-	rc, err := store.NewReader(object)
+	rc, err := store.NewReader(fileName)
 	assert.Equal(t, nil, err)
 	if rc == nil {
 		t.Fatalf("could not create reader")
@@ -527,4 +554,7 @@ func TestReadWriteCloser(t TestingT, store cloudstorage.Store) {
 	_, err = buf2.ReadFrom(rc)
 	assert.Equal(t, nil, err)
 	assert.Equal(t, data, buf2.String(), "round trip data don't match")
+
+	_, err = store.NewReader("bogus/notreal.csv")
+	assert.Equal(t, cloudstorage.ErrObjectNotFound, err)
 }

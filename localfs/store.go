@@ -92,6 +92,7 @@ func (l *LocalStore) Client() interface{} {
 	return nil
 }
 
+// NewObject create new object of given name.
 func (l *LocalStore) NewObject(objectname string) (cloudstorage.Object, error) {
 	obj, err := l.Get(context.Background(), objectname)
 	if err != nil && err != cloudstorage.ErrObjectNotFound {
@@ -194,6 +195,11 @@ func (l *LocalStore) Folders(ctx context.Context, csq cloudstorage.Query) ([]str
 	if !cloudstorage.Exists(spath) {
 		return nil, fmt.Errorf("That folder %q does not exist", spath)
 	}
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
 
 	folders := make([]string, 0)
 	files, _ := ioutil.ReadDir(spath)
@@ -260,6 +266,7 @@ func (l *LocalStore) Get(ctx context.Context, o string) (cloudstorage.Object, er
 	}, nil
 }
 
+// Delete the object from underlying store.
 func (l *LocalStore) Delete(ctx context.Context, obj string) error {
 	fo := path.Join(l.storepath, obj)
 	os.Remove(fo)
@@ -392,7 +399,15 @@ func (o *object) File() *os.File {
 func (o *object) Read(p []byte) (n int, err error) {
 	return o.cachedcopy.Read(p)
 }
+
+// Write the given bytes to object.  Won't be writen until Close() or Sync() called.
 func (o *object) Write(p []byte) (n int, err error) {
+	if o.cachedcopy == nil {
+		_, err := o.Open(cloudstorage.ReadWrite)
+		if err != nil {
+			return 0, err
+		}
+	}
 	return o.cachedcopy.Write(p)
 }
 
