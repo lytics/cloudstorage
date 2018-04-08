@@ -89,7 +89,7 @@ func (l *LocalStore) Type() string {
 	return StoreType
 }
 func (l *LocalStore) Client() interface{} {
-	return nil
+	return l
 }
 
 // NewObject create new object of given name.

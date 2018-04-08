@@ -607,12 +607,17 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 	return nil, fmt.Errorf("fetch error retry cnt reached: obj=%s tfile=%v errs:[%v]", o.name, o.cachepath, errs)
 }
 
+// File get the current file handle for cached copy.
 func (o *object) File() *os.File {
 	return o.cachedcopy
 }
+
+// Read bytes from underlying/cached file
 func (o *object) Read(p []byte) (n int, err error) {
 	return o.cachedcopy.Read(p)
 }
+
+// Write bytes to local file, will be synced on close/sync.
 func (o *object) Write(p []byte) (n int, err error) {
 	if o.cachedcopy == nil {
 		_, err := o.Open(cloudstorage.ReadWrite)
@@ -623,6 +628,7 @@ func (o *object) Write(p []byte) (n int, err error) {
 	return o.cachedcopy.Write(p)
 }
 
+// Sync syncs any changes in file up to s3.
 func (o *object) Sync() error {
 
 	if !o.opened {
@@ -658,6 +664,7 @@ func (o *object) Sync() error {
 	return nil
 }
 
+// Close this object
 func (o *object) Close() error {
 	if !o.opened {
 		return nil
@@ -684,13 +691,12 @@ func (o *object) Close() error {
 	return nil
 }
 
+// Release this object, cleanup cached copy.
 func (o *object) Release() error {
-
 	if o.cachedcopy != nil {
 		o.cachedcopy.Close()
 		return os.Remove(o.cachepath)
-	} else {
-		os.Remove(o.cachepath)
 	}
+	os.Remove(o.cachepath)
 	return nil
 }
