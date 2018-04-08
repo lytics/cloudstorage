@@ -87,6 +87,10 @@ func Clearstore(t TestingT, store cloudstorage.Store) {
 
 func RunTests(t TestingT, s cloudstorage.Store) {
 
+	t.Logf("running store setup")
+	StoreSetup(t, s)
+	gou.Debugf("finished StoreSetup")
+
 	t.Logf("running basic rw")
 	BasicRW(t, s)
 	gou.Debugf("finished basicrw")
@@ -112,10 +116,16 @@ func RunTests(t TestingT, s cloudstorage.Store) {
 	gou.Debugf("finished TestReadWriteCloser")
 }
 
-func BasicRW(t TestingT, store cloudstorage.Store) {
+func StoreSetup(t TestingT, store cloudstorage.Store) {
 
 	// Ensure the store has a String identifying store type
 	assert.NotEqual(t, "", store.String())
+
+	// We should be able to get underlying client
+	assert.NotEqual(t, nil, store.Client())
+}
+
+func BasicRW(t TestingT, store cloudstorage.Store) {
 
 	// Read the object from store, delete if it exists
 	obj, _ := store.Get(context.Background(), "prefix/test.csv")
@@ -143,6 +153,9 @@ func BasicRW(t TestingT, store cloudstorage.Store) {
 
 	// Close() actually does the upload/flush/write to cloud
 	err = obj.Close()
+	assert.Equal(t, nil, err)
+
+	err = obj.Release()
 	assert.Equal(t, nil, err)
 
 	// Read the object back out of the cloud store.

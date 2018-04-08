@@ -161,7 +161,7 @@ func NewStore(c *s3.S3, sess *session.Session, conf *cloudstorage.Config) (*FS, 
 	if conf.TmpDir == "" {
 		return nil, fmt.Errorf("unable to create cachepath. config.tmpdir=%q", conf.TmpDir)
 	}
-	err := os.MkdirAll(path.Dir(conf.TmpDir), 0775)
+	err := os.MkdirAll(conf.TmpDir, 0775)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create cachepath. config.tmpdir=%q err=%v", conf.TmpDir, err)
 	}
@@ -685,8 +685,12 @@ func (o *object) Close() error {
 }
 
 func (o *object) Release() error {
+
 	if o.cachedcopy != nil {
 		o.cachedcopy.Close()
+		return os.Remove(o.cachepath)
+	} else {
+		os.Remove(o.cachepath)
 	}
-	return os.Remove(o.cachepath)
+	return nil
 }
