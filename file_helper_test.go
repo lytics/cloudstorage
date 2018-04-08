@@ -15,5 +15,5 @@ func TestETAG(t *testing.T) {
 func TestContentType(t *testing.T) {
 	assert.Equal(t, "text/csv; charset=utf-8", ContentType("data.csv"))
 	assert.Equal(t, "application/json", ContentType("data.json"))
-	assert.Equal(t, "application/octet-stream", ContentType("data.dat"))
+	assert.Equal(t, "application/octet-stream", ContentType("data.unknown"))
 }
