@@ -694,6 +694,7 @@ func (o *object) Close() error {
 // Release this object, cleanup cached copy.
 func (o *object) Release() error {
 	if o.cachedcopy != nil {
+		gou.Infof("release %q vs %q", o.cachedcopy.Name(), o.cachepath)
 		o.cachedcopy.Close()
 		return os.Remove(o.cachepath)
 	}
