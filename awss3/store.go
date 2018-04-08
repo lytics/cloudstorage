@@ -614,6 +614,12 @@ func (o *object) Read(p []byte) (n int, err error) {
 	return o.cachedcopy.Read(p)
 }
 func (o *object) Write(p []byte) (n int, err error) {
+	if o.cachedcopy == nil {
+		_, err := o.Open(cloudstorage.ReadWrite)
+		if err != nil {
+			return 0, err
+		}
+	}
 	return o.cachedcopy.Write(p)
 }
 
