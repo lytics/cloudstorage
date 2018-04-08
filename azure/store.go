@@ -625,11 +625,10 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 	return nil, fmt.Errorf("fetch error retry cnt reached: obj=%s tfile=%v errs:[%v]", o.name, o.cachepath, errs)
 }
 
-/*
 func (o *object) File() *os.File {
 	return o.cachedcopy
 }
-*/
+
 func (o *object) Read(p []byte) (n int, err error) {
 	return o.cachedcopy.Read(p)
 }
