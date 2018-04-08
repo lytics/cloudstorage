@@ -5,13 +5,14 @@ import (
 	"google.golang.org/api/storage/v1"
 )
 
-// ApiStore a google api store
-type ApiStore struct {
+// APIStore a google api store
+type APIStore struct {
 	service *storage.Service
 	project string
 }
 
-func NewApiStore(conf *cloudstorage.Config) (*ApiStore, error) {
+// NewAPIStore create api store.
+func NewAPIStore(conf *cloudstorage.Config) (*APIStore, error) {
 	googleClient, err := NewGoogleClient(conf)
 	if err != nil {
 		return nil, err
@@ -20,11 +21,11 @@ func NewApiStore(conf *cloudstorage.Config) (*ApiStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &ApiStore{service: service, project: conf.Project}, nil
+	return &APIStore{service: service, project: conf.Project}, nil
 }
 
 // BucketExists checks for the bucket name
-func (c *ApiStore) BucketExists(name string) bool {
+func (c *APIStore) BucketExists(name string) bool {
 	b, err := c.service.Buckets.Get(name).Do()
 	if err != nil {
 		return false
@@ -34,25 +35,22 @@ func (c *ApiStore) BucketExists(name string) bool {
 }
 
 // CreateBucket creates a new bucket in GCS
-func (c *ApiStore) CreateBucket(name string) error {
+func (c *APIStore) CreateBucket(name string) error {
 	bucket := &storage.Bucket{Name: name}
 	_, err := c.service.Buckets.Insert(c.project, bucket).Do()
-
 	return err
 }
 
 // AddOwner adds entity as a owner of the object
-func (c *ApiStore) AddOwner(bucket, object, entity string) error {
+func (c *APIStore) AddOwner(bucket, object, entity string) error {
 	ac := &storage.ObjectAccessControl{Entity: entity, Role: "OWNER"}
 	_, err := c.service.ObjectAccessControls.Insert(bucket, object, ac).Do()
-
 	return err
 }
 
 // AddReader adds enitty as a reader of the object
-func (c *ApiStore) AddReader(bucket, object, entity string) error {
+func (c *APIStore) AddReader(bucket, object, entity string) error {
 	ac := &storage.ObjectAccessControl{Entity: entity, Role: "READER"}
 	_, err := c.service.ObjectAccessControls.Insert(bucket, object, ac).Do()
-
 	return err
 }
