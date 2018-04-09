@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
+	"github.com/araddon/gou"
 	"github.com/pborman/uuid"
 	"golang.org/x/net/context"
 	"google.golang.org/api/iterator"
@@ -532,7 +533,13 @@ func (o *object) Close() error {
 
 func (o *object) Release() error {
 	if o.cachedcopy != nil {
+		gou.Debugf("release %q vs %q", o.cachedcopy.Name(), o.cachepath)
 		o.cachedcopy.Close()
+		o.cachedcopy = nil
+		o.opened = false
+		return os.Remove(o.cachepath)
 	}
-	return os.Remove(o.cachepath)
+	// most likely this doesn't exist so don't return error
+	os.Remove(o.cachepath)
+	return nil
 }
