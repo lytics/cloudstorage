@@ -11,7 +11,7 @@ import (
 	"time"
 
 	az "github.com/Azure/azure-sdk-for-go/storage"
-	u "github.com/araddon/gou"
+	"github.com/araddon/gou"
 	"github.com/pborman/uuid"
 	"golang.org/x/net/context"
 
@@ -105,7 +105,7 @@ func NewClient(conf *cloudstorage.Config) (*az.Client, *az.BlobStorageClient, er
 		}
 		basicClient, err := az.NewBasicClient(conf.Project, accessKey)
 		if err != nil {
-			u.Warnf("could not get azure client %v", err)
+			gou.Warnf("could not get azure client %v", err)
 			return nil, nil, err
 		}
 		client := basicClient.GetBlobService()
@@ -302,7 +302,7 @@ func (f *FS) Folders(ctx context.Context, q cloudstorage.Query) ([]string, error
 			// }
 			blobs, err := f.client.GetContainerReference(f.bucket).ListBlobs(params)
 			if err != nil {
-				u.Warnf("leaving %v", err)
+				gou.Warnf("leaving %v", err)
 				return nil, err
 			}
 			if len(blobs.BlobPrefixes) > 0 {
@@ -394,7 +394,7 @@ func (f *FS) NewWriterWithContext(ctx context.Context, name string, metadata map
 		// Do a multipart upload
 		err := f.uploadMultiPart(o, pr)
 		if err != nil {
-			u.Warnf("could not upload %v", err)
+			gou.Warnf("could not upload %v", err)
 		}
 	}()
 
@@ -436,7 +436,7 @@ func (f *FS) uploadMultiPart(o *object, r io.Reader) error {
 			if err == io.EOF {
 				break
 			}
-			u.Warnf("unknown err=%v", err)
+			gou.Warnf("unknown err=%v", err)
 			return err
 		}
 
@@ -456,13 +456,13 @@ func (f *FS) uploadMultiPart(o *object, r io.Reader) error {
 
 	err := blob.PutBlockList(blocks, nil)
 	if err != nil {
-		u.Warnf("could not put block list %v", err)
+		gou.Warnf("could not put block list %v", err)
 		return err
 	}
 
 	err = blob.GetProperties(nil)
 	if err != nil {
-		u.Warnf("could not load blog properties %v", err)
+		gou.Warnf("could not load blog properties %v", err)
 		return err
 	}
 
@@ -470,7 +470,7 @@ func (f *FS) uploadMultiPart(o *object, r io.Reader) error {
 
 	err = blob.SetMetadata(nil)
 	if err != nil {
-		u.Warnf("can't set metadata err=%v", err)
+		gou.Warnf("can't set metadata err=%v", err)
 		return err
 	}
 	return nil
@@ -663,7 +663,7 @@ func (o *object) Sync() error {
 
 	// Upload the file
 	if err = o.fs.uploadMultiPart(o, cachedcopy); err != nil {
-		u.Warnf("could not upload %v", err)
+		gou.Warnf("could not upload %v", err)
 		return fmt.Errorf("failed to upload file, %v", err)
 	}
 	return nil
@@ -688,7 +688,7 @@ func (o *object) Close() error {
 	if o.opened && !o.readonly {
 		err := o.Sync()
 		if err != nil {
-			u.Errorf("error on sync %v", err)
+			gou.Errorf("error on sync %v", err)
 			return err
 		}
 	}
@@ -697,7 +697,10 @@ func (o *object) Close() error {
 
 func (o *object) Release() error {
 	if o.cachedcopy != nil {
+		gou.Debugf("release %q vs %q", o.cachedcopy.Name(), o.cachepath)
 		o.cachedcopy.Close()
+		return os.Remove(o.cachepath)
 	}
-	return os.Remove(o.cachepath)
+	os.Remove(o.cachepath)
+	return nil
 }
