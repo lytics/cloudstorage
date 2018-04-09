@@ -23,6 +23,8 @@ import (
 var (
 	verbose   *bool
 	setupOnce = sync.Once{}
+
+	testcsv = "Year,Make,Model\n1997,Ford,E350\n2000,Mercury,Cougar\n"
 )
 
 func init() {
@@ -116,6 +118,13 @@ func RunTests(t TestingT, s cloudstorage.Store) {
 	gou.Debugf("finished TestReadWriteCloser")
 }
 
+func deleteIfExists(store cloudstorage.Store, filePath string) {
+	// Read the object from store, delete if it exists
+	obj, _ := store.Get(context.Background(), filePath)
+	if obj != nil {
+		obj.Delete()
+	}
+}
 func StoreSetup(t TestingT, store cloudstorage.Store) {
 
 	// Ensure the store has a String identifying store type
@@ -128,11 +137,7 @@ func StoreSetup(t TestingT, store cloudstorage.Store) {
 func BasicRW(t TestingT, store cloudstorage.Store) {
 
 	// Read the object from store, delete if it exists
-	obj, _ := store.Get(context.Background(), "prefix/test.csv")
-	if obj != nil {
-		err := obj.Delete()
-		assert.Equal(t, nil, err)
-	}
+	deleteIfExists(store, "prefix/test.csv")
 
 	// Create a new object and write to it.
 	obj, err := store.NewObject("prefix/test.csv")
@@ -143,8 +148,6 @@ func BasicRW(t TestingT, store cloudstorage.Store) {
 	f, err := obj.Open(cloudstorage.ReadWrite)
 	assert.Equal(t, nil, err)
 	assert.NotEqual(t, nil, f)
-
-	testcsv := "Year,Make,Model\n1997,Ford,E350\n2000,Mercury,Cougar\n"
 
 	w := bufio.NewWriter(f)
 	_, err = w.WriteString(testcsv)
@@ -182,9 +185,60 @@ func BasicRW(t TestingT, store cloudstorage.Store) {
 	assert.Equal(t, nil, obj)
 }
 
+func createFile(t TestingT, store cloudstorage.Store, name string) cloudstorage.Object {
+	obj, err := store.NewObject("from/test.csv")
+	assert.Equal(t, nil, err)
+	assert.NotEqual(t, nil, obj)
+
+	// Opening is required for new objects.
+	f, err := obj.Open(cloudstorage.ReadWrite)
+	assert.Equal(t, nil, err)
+	assert.NotEqual(t, nil, f)
+
+	w := bufio.NewWriter(f)
+	_, err = w.WriteString(testcsv)
+	assert.Equal(t, nil, err)
+	w.Flush()
+
+	// Close() actually does the upload/flush/write to cloud
+	err = obj.Close()
+	assert.Equal(t, nil, err)
+	return obj
+}
+func MoveCopy(t TestingT, store cloudstorage.Store) {
+
+	// Read the object from store, delete if it exists
+	deleteIfExists(store, "from/test.csv")
+	deleteIfExists(store, "to/test.csv")
+
+	// Create a new object and write to it.
+	obj := createFile(t, store, "from/test.csv")
+
+	dest, err := store.NewObject("to/test.csv")
+	assert.Equal(t, nil, err)
+
+	err = cloudstorage.Move(context.Background(), store, obj, dest)
+	assert.Equal(t, nil, err)
+
+	obj2, err := store.Get(context.Background(), "to/test.csv")
+	assert.Equal(t, nil, err)
+	assert.Equal(t, store.Type(), obj2.StorageSource())
+	assert.Equal(t, "to/test.csv", obj2.Name())
+
+	f2, err := obj2.Open(cloudstorage.ReadOnly)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, fmt.Sprintf("%p", f2), fmt.Sprintf("%p", obj2.File()))
+
+	bytes, err := ioutil.ReadAll(f2)
+	assert.Equal(t, nil, err)
+
+	assert.Equal(t, testcsv, string(bytes))
+}
+
 func Append(t TestingT, store cloudstorage.Store) {
 
-	Clearstore(t, store)
+	deleteIfExists(store, "append.csv")
+	deleteIfExists(store, "append_native.csv")
 
 	now := time.Now()
 
@@ -280,7 +334,6 @@ func Append(t TestingT, store cloudstorage.Store) {
 
 	err = obj.Close()
 	assert.Equal(t, nil, err)
-
 }
 
 func dumpfile(msg, file string) {
@@ -444,7 +497,7 @@ func ListObjsAndFolders(t TestingT, store cloudstorage.Store) {
 
 func Truncate(t TestingT, store cloudstorage.Store) {
 
-	Clearstore(t, store)
+	deleteIfExists(store, "test.csv")
 
 	// Create a new object and write to it.
 	obj, err := store.NewObject("test.csv")
@@ -501,7 +554,7 @@ func Truncate(t TestingT, store cloudstorage.Store) {
 
 func NewObjectWithExisting(t TestingT, store cloudstorage.Store) {
 
-	Clearstore(t, store)
+	deleteIfExists(store, "test.csv")
 
 	// Create a new object and write to it.
 	obj, err := store.NewObject("test.csv")
@@ -542,7 +595,7 @@ func NewObjectWithExisting(t TestingT, store cloudstorage.Store) {
 
 func TestReadWriteCloser(t TestingT, store cloudstorage.Store) {
 
-	Clearstore(t, store)
+	deleteIfExists(store, "prefix/iorw.test")
 
 	gou.Debugf("starting TestReadWriteCloser")
 	fileName := "prefix/iorw.test"
