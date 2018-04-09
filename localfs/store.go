@@ -486,5 +486,13 @@ func (o *object) Close() error {
 }
 
 func (o *object) Release() error {
-	return os.Remove(o.cachepath)
+	if o.cachedcopy != nil {
+		o.cachedcopy.Close()
+		o.cachedcopy = nil
+		o.opened = false
+		return os.Remove(o.cachepath)
+	}
+	// most likely this doesn't exist so don't return error
+	os.Remove(o.cachepath)
+	return nil
 }
