@@ -487,7 +487,6 @@ func (o *object) Close() error {
 
 func (o *object) Release() error {
 	if o.cachedcopy != nil {
-		gou.Debugf("release %q vs %q", o.cachedcopy.Name(), o.cachepath)
 		o.cachedcopy.Close()
 		o.cachedcopy = nil
 		o.opened = false
