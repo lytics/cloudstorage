@@ -98,8 +98,8 @@ func RunTests(t TestingT, s cloudstorage.Store) {
 	gou.Debugf("finished basicrw")
 
 	t.Logf("running MoveCopy")
-	Move(t, s)
-	Copy(t, s)
+	//Move(t, s)
+	//Copy(t, s)
 	gou.Debugf("finished MoveCopy")
 
 	t.Logf("running Append")
