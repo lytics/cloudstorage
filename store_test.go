@@ -1,6 +1,7 @@
 package cloudstorage_test
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -54,4 +55,55 @@ func TestStore(t *testing.T) {
 	store, err = cloudstorage.NewStore(localFsConf)
 	assert.Equal(t, nil, err)
 	assert.NotEqual(t, nil, store)
+}
+
+func TestJwtConf(t *testing.T) {
+	configInput := `
+	{
+		"JwtConf": {
+			"type": "service_account",
+			"project_id": "testing",
+			"private_key_id": "abcdefg",
+			"private_key": "aGVsbG8td29ybGQ=",
+			"client_email": "testing@testing.iam.gserviceaccount.com",
+			"client_id": "117058426251532209964",
+			"scopes": [
+				"https://www.googleapis.com/auth/devstorage.read_write"
+			]
+		}
+	}`
+
+	// v := base64.StdEncoding.EncodeToString([]byte("hello-world"))
+	// t.Logf("b64  %q", v)
+	conf := &cloudstorage.Config{}
+	err := json.Unmarshal([]byte(configInput), conf)
+	assert.Equal(t, nil, err)
+	conf.JwtConf.PrivateKey = "------helo-------\naGVsbG8td29ybGQ=\n-----------------end--------"
+	assert.NotEqual(t, nil, conf.JwtConf)
+	assert.Equal(t, nil, conf.JwtConf.Validate())
+	assert.Equal(t, "aGVsbG8td29ybGQ=", conf.JwtConf.PrivateKey)
+	assert.Equal(t, "service_account", conf.JwtConf.Type)
+
+	// note on this one the "keytype" & "private_keybase64"
+	configInput = `
+	{
+		"JwtConf": {
+			"keytype": "service_account",
+			"project_id": "testing",
+			"private_key_id": "abcdefg",
+			"private_keybase64": "aGVsbG8td29ybGQ=",
+			"client_email": "testing@testing.iam.gserviceaccount.com",
+			"client_id": "117058426251532209964",
+			"scopes": [
+				"https://www.googleapis.com/auth/devstorage.read_write"
+			]
+		}
+	}`
+	conf = &cloudstorage.Config{}
+	err = json.Unmarshal([]byte(configInput), conf)
+	assert.Equal(t, nil, err)
+	assert.NotEqual(t, nil, conf.JwtConf)
+	assert.Equal(t, nil, conf.JwtConf.Validate())
+	assert.Equal(t, "aGVsbG8td29ybGQ=", conf.JwtConf.PrivateKey)
+	assert.Equal(t, "service_account", conf.JwtConf.Type)
 }

@@ -60,6 +60,7 @@ func (it *ObjectPageIterator) returnPageNext() (Object, error) {
 	return it.page[it.cursor-1], nil
 }
 
+// Close the object iterator.
 func (it *ObjectPageIterator) Close() {
 	defer func() { recover() }()
 	select {

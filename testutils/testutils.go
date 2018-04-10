@@ -97,6 +97,11 @@ func RunTests(t TestingT, s cloudstorage.Store) {
 	BasicRW(t, s)
 	gou.Debugf("finished basicrw")
 
+	t.Logf("running MoveCopy")
+	Move(t, s)
+	Copy(t, s)
+	gou.Debugf("finished MoveCopy")
+
 	t.Logf("running Append")
 	Append(t, s)
 	gou.Debugf("finished append")
@@ -205,25 +210,67 @@ func createFile(t TestingT, store cloudstorage.Store, name string) cloudstorage.
 	assert.Equal(t, nil, err)
 	return obj
 }
-func MoveCopy(t TestingT, store cloudstorage.Store) {
+
+func Move(t TestingT, store cloudstorage.Store) {
 
 	// Read the object from store, delete if it exists
 	deleteIfExists(store, "from/test.csv")
-	deleteIfExists(store, "to/test.csv")
+	deleteIfExists(store, "to/testmove.csv")
 
 	// Create a new object and write to it.
 	obj := createFile(t, store, "from/test.csv")
 
-	dest, err := store.NewObject("to/test.csv")
+	dest, err := store.NewObject("to/testmove.csv")
 	assert.Equal(t, nil, err)
 
 	err = cloudstorage.Move(context.Background(), store, obj, dest)
 	assert.Equal(t, nil, err)
 
-	obj2, err := store.Get(context.Background(), "to/test.csv")
+	obj2, err := store.Get(context.Background(), "to/testmove.csv")
 	assert.Equal(t, nil, err)
 	assert.Equal(t, store.Type(), obj2.StorageSource())
-	assert.Equal(t, "to/test.csv", obj2.Name())
+	assert.Equal(t, "to/testmove.csv", obj2.Name())
+
+	f2, err := obj2.Open(cloudstorage.ReadOnly)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, fmt.Sprintf("%p", f2), fmt.Sprintf("%p", obj2.File()))
+
+	bytes, err := ioutil.ReadAll(f2)
+	assert.Equal(t, nil, err)
+
+	assert.Equal(t, testcsv, string(bytes))
+
+	// Ensure that after Move it no longer exists in from
+	_, err = store.Get(context.Background(), "from/test.csv")
+	assert.Equal(t, cloudstorage.ErrObjectNotFound, err)
+
+}
+
+func Copy(t TestingT, store cloudstorage.Store) {
+
+	// Read the object from store, delete if it exists
+	deleteIfExists(store, "from/test.csv")
+	deleteIfExists(store, "to/testcopy.csv")
+
+	// Create a new object and write to it.
+	obj := createFile(t, store, "from/test.csv")
+
+	dest, err := store.NewObject("to/testcopy.csv")
+	assert.Equal(t, nil, err)
+
+	err = cloudstorage.Copy(context.Background(), store, obj, dest)
+	assert.Equal(t, nil, err)
+
+	// After copy, old should exist
+	obj2, err := store.Get(context.Background(), "from/test.csv")
+	assert.Equal(t, nil, err)
+	assert.Equal(t, "from/test.csv", obj2.Name())
+
+	// And also to should exist
+	obj2, err = store.Get(context.Background(), "to/testcopy.csv")
+	assert.Equal(t, nil, err)
+	assert.Equal(t, store.Type(), obj2.StorageSource())
+	assert.Equal(t, "to/testcopy.csv", obj2.Name())
 
 	f2, err := obj2.Open(cloudstorage.ReadOnly)
 	assert.Equal(t, nil, err)
@@ -399,6 +446,12 @@ func ListObjsAndFolders(t TestingT, store cloudstorage.Store) {
 	objs, err := cloudstorage.ObjectsAll(iter)
 	assert.Equal(t, nil, err)
 	assert.Equal(t, 15, len(objs), "incorrect list len. wanted 15 got %d", len(objs))
+	iter.Close()
+
+	iter, _ = store.Objects(context.Background(), q)
+	objr, err := cloudstorage.ObjectResponseFromIter(iter)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 15, len(objr.Objects), "incorrect list len. wanted 15 got %d", len(objr.Objects))
 
 	// Now we are going to re-run this test using store.List() instead of store.Objects()
 	q = cloudstorage.NewQuery("list-test/")
