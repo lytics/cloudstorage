@@ -283,10 +283,14 @@ func Move(ctx context.Context, s Store, src, des Object) error {
 	// Slow path, copy locally then up to des
 	fout, err := des.Open(ReadWrite)
 	if err != nil {
+		gou.Warnf("Move could not open destination %v", src.Name())
 		return err
 	}
 
 	fin, err := src.Open(ReadOnly)
+	if err != nil {
+		gou.Warnf("Move could not open source %v err=%v", src.Name(), err)
+	}
 	if _, err = io.Copy(fout, fin); err != nil {
 		return err
 	}

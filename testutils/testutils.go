@@ -191,7 +191,7 @@ func BasicRW(t TestingT, store cloudstorage.Store) {
 }
 
 func createFile(t TestingT, store cloudstorage.Store, name string) cloudstorage.Object {
-	obj, err := store.NewObject("from/test.csv")
+	obj, err := store.NewObject(name)
 	assert.Equal(t, nil, err)
 	assert.NotEqual(t, nil, obj)
 
@@ -208,7 +208,21 @@ func createFile(t TestingT, store cloudstorage.Store, name string) cloudstorage.
 	// Close() actually does the upload/flush/write to cloud
 	err = obj.Close()
 	assert.Equal(t, nil, err)
-	return obj
+
+	obj2, err := store.Get(context.Background(), name)
+	assert.Equal(t, nil, err)
+
+	f2, err := obj2.Open(cloudstorage.ReadWrite)
+	assert.Equal(t, nil, err)
+
+	bytes, err := ioutil.ReadAll(f2)
+	assert.Equal(t, nil, err)
+
+	assert.Equal(t, testcsv, string(bytes))
+
+	obj3, err := store.Get(context.Background(), name)
+	assert.Equal(t, nil, err)
+	return obj3
 }
 
 func Move(t TestingT, store cloudstorage.Store) {
@@ -243,7 +257,6 @@ func Move(t TestingT, store cloudstorage.Store) {
 	// Ensure that after Move it no longer exists in from
 	_, err = store.Get(context.Background(), "from/test.csv")
 	assert.Equal(t, cloudstorage.ErrObjectNotFound, err)
-
 }
 
 func Copy(t TestingT, store cloudstorage.Store) {

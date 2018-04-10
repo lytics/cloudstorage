@@ -679,14 +679,13 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 	}
 
 	readonly := accesslevel == cloudstorage.ReadOnly
+	//gou.Infof("sftp object.Open(%q) readonly?%v", o.name, readonly)
 
 	err := cloudstorage.EnsureDir(o.cachepath)
 	if err != nil {
 		return nil, fmt.Errorf("could not create cachedcopy's dir. cachepath=%q err=%v", o.cachepath, err)
 	}
 
-	//statinfo("About to do first open() os.Create()", o.cachepath)
-	//os.Remove(o.cachepath)
 	cachedcopy, err := os.OpenFile(o.cachepath, os.O_RDWR|os.O_CREATE, 0665)
 	if err != nil {
 		return nil, fmt.Errorf("could not open cachedcopy file. cachepath=%q err=%v", o.cachepath, err)
@@ -710,7 +709,7 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 		}
 	} else if o.fi == nil {
 		// this is a new file
-		//gou.Debugf("new file ")
+		//gou.Debugf("new file %s", o.name)
 		//statinfo("new file statinfo", o.cachepath)
 	} else if o.fi != nil {
 		// existing file
@@ -744,7 +743,7 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 
 	// o.cachedcopy.Sync()
 	// o.cachedcopy.Close()
-	//gou.Debugf("opened %s", o.cachepath)
+	//gou.Debugf("opened %q  readonly?%v opened?%v", o.cachepath, o.readonly, o.opened)
 	//gou.Infof("Open() returning cache copy %p", o.cachedcopy)
 	return o.cachedcopy, nil
 
@@ -819,11 +818,11 @@ func (o *object) Close() error {
 	if o.opened && !o.readonly {
 		err := o.Sync()
 		if err != nil {
-			gou.Errorf("error on sync %v", err)
+			gou.Errorf("error on sync file=%q err=%v", o.name, err)
 			return err
 		}
 	} else {
-		gou.Warnf("not syncing on close? %v opened?%v  readonly?%v", o.name, o.opened, o.readonly)
+		gou.Debugf("not syncing on close? %v opened?%v  readonly?%v", o.name, o.opened, o.readonly)
 	}
 
 	err := o.cachedcopy.Close()
