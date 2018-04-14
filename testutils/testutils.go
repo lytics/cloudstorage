@@ -234,7 +234,7 @@ func Move(t TestingT, store cloudstorage.Store) {
 	deleteIfExists(store, "from/test.csv")
 	deleteIfExists(store, "to/testmove.csv")
 
-	switch s.Type() {
+	switch store.Type() {
 	case "azure":
 		// wtf, eff you azure.
 		time.Sleep(time.Millisecond * 1100)
@@ -280,7 +280,7 @@ func Copy(t TestingT, store cloudstorage.Store) {
 		// wtf, eff you azure.
 		time.Sleep(time.Millisecond * 1100)
 	}
-	
+
 	// Create a new object and write to it.
 	obj := createFile(t, store, "from/test.csv")
 
