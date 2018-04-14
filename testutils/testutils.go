@@ -89,23 +89,22 @@ func Clearstore(t TestingT, store cloudstorage.Store) {
 
 func RunTests(t TestingT, s cloudstorage.Store) {
 
-	// t.Logf("running store setup")
-	// StoreSetup(t, s)
-	// gou.Debugf("finished StoreSetup")
+	t.Logf("running store setup")
+	StoreSetup(t, s)
+	gou.Debugf("finished StoreSetup")
 
-	// t.Logf("running basic rw")
-	// BasicRW(t, s)
-	// gou.Debugf("finished basicrw")
+	t.Logf("running basic rw")
+	BasicRW(t, s)
+	gou.Debugf("finished basicrw")
 
-	// t.Logf("running MoveCopy")
-	// Move(t, s)
-	// Copy(t, s)
-	// gou.Debugf("finished MoveCopy")
+	t.Logf("running MoveCopy")
+	Move(t, s)
+	Copy(t, s)
+	gou.Debugf("finished MoveCopy")
 
 	t.Logf("running Append")
 	Append(t, s)
 	gou.Debugf("finished append")
-	return
 
 	t.Logf("running ListObjsAndFolders")
 	ListObjsAndFolders(t, s)
@@ -354,6 +353,11 @@ func Append(t TestingT, store cloudstorage.Store) {
 	f2, err := obj2.Open(cloudstorage.ReadWrite)
 	assert.Equal(t, nil, err)
 	assert.NotEqual(t, nil, f2)
+
+	// DANGER HERE BE DRAGONS.  This didn't used to be here
+	// so would our app have to implement this behavior?
+	_, err = f2.Seek(0, os.SEEK_END)
+	assert.Equal(t, nil, err)
 
 	w2 := bufio.NewWriter(f2)
 	ct, err := w2.WriteString(morerows)
