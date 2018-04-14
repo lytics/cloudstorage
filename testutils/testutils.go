@@ -275,7 +275,7 @@ func Copy(t TestingT, store cloudstorage.Store) {
 	deleteIfExists(store, "from/test.csv")
 	deleteIfExists(store, "to/testcopy.csv")
 
-	switch s.Type() {
+	switch store.Type() {
 	case "azure":
 		// wtf, eff you azure.
 		time.Sleep(time.Millisecond * 1100)
