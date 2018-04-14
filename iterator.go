@@ -112,7 +112,7 @@ func (it *ObjectPageIterator) Next() (Object, error) {
 	}
 }
 
-// backoff sleeps a random amount so we can.
+// Backoff sleeps a random amount so we can.
 // retry failed requests using a randomized exponential backoff:
 // wait a random period between [0..1] seconds and retry; if that fails,
 // wait a random period between [0..2] seconds and retry; if that fails,
