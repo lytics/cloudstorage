@@ -355,35 +355,34 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 
 	storecopy, err := os.OpenFile(o.storepath, os.O_RDWR|os.O_CREATE, 0665)
 	if err != nil {
-		return nil, fmt.Errorf("localfile: error occurred opening storecopy file. local=%s err=%v",
-			o.storepath, err)
+		return nil, fmt.Errorf("localfs: local=%q could not create storecopy err=%v", o.storepath, err)
 	}
 	defer storecopy.Close()
 
 	err = cloudstorage.EnsureDir(o.cachepath)
 	if err != nil {
-		return nil, fmt.Errorf("localfile: error occurred creating cachedcopy's dir. cachepath=%s err=%v",
-			o.cachepath, err)
+		return nil, fmt.Errorf("localfs: cachepath=%s could not create cachedcopy dir err=%v", o.cachepath, err)
 	}
 
 	cachedcopy, err := os.Create(o.cachepath)
 	if err != nil {
-		return nil, fmt.Errorf("localfile: error occurred opening cachedcopy file. cachepath=%s err=%v",
-			o.cachepath, err)
+		return nil, fmt.Errorf("localfs: cachepath=%s could not create cachedcopy err=%v", o.cachepath, err)
 	}
 
 	_, err = io.Copy(cachedcopy, storecopy)
 	if err != nil {
-		return nil, fmt.Errorf("localfile: error occurred reading the bytes returned from localfile. storepath=%s tfile=%v err=%v",
-			o.storepath, cachedcopy.Name(), err)
+		return nil, fmt.Errorf("localfs: storepath=%s cachedcopy=%v could not copy from store to cache err=%v", o.storepath, cachedcopy.Name(), err)
 	}
 
 	if readonly {
 		cachedcopy.Close()
 		cachedcopy, err = os.Open(o.cachepath)
 		if err != nil {
-			return nil, fmt.Errorf("localfile: error occurred opening file. storepath=%s tfile=%v err=%v",
-				o.storepath, cachedcopy.Name(), err)
+			return nil, fmt.Errorf("localfs: storepath=%s cachedcopy=%v could not opencache err=%v", o.storepath, cachedcopy.Name(), err)
+		}
+	} else {
+		if _, err := cachedcopy.Seek(0, os.SEEK_SET); err != nil {
+			return nil, fmt.Errorf("error seeking to start of cachedcopy err=%v", err) //don't retry on local fs errors
 		}
 	}
 

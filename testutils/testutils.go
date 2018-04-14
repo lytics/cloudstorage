@@ -98,8 +98,8 @@ func RunTests(t TestingT, s cloudstorage.Store) {
 	gou.Debugf("finished basicrw")
 
 	t.Logf("running MoveCopy")
-	//Move(t, s)
-	//Copy(t, s)
+	Move(t, s)
+	Copy(t, s)
 	gou.Debugf("finished MoveCopy")
 
 	t.Logf("running Append")
@@ -191,6 +191,7 @@ func BasicRW(t TestingT, store cloudstorage.Store) {
 }
 
 func createFile(t TestingT, store cloudstorage.Store, name string) cloudstorage.Object {
+
 	obj, err := store.NewObject(name)
 	assert.Equal(t, nil, err)
 	assert.NotEqual(t, nil, obj)
@@ -220,6 +221,8 @@ func createFile(t TestingT, store cloudstorage.Store, name string) cloudstorage.
 
 	assert.Equal(t, testcsv, string(bytes))
 
+	obj2.Close()
+
 	obj3, err := store.Get(context.Background(), name)
 	assert.Equal(t, nil, err)
 	return obj3
@@ -231,8 +234,15 @@ func Move(t TestingT, store cloudstorage.Store) {
 	deleteIfExists(store, "from/test.csv")
 	deleteIfExists(store, "to/testmove.csv")
 
+	switch store.Type() {
+	case "azure":
+		// wtf, eff you azure.
+		time.Sleep(time.Millisecond * 1100)
+	}
+
 	// Create a new object and write to it.
 	obj := createFile(t, store, "from/test.csv")
+	assert.NotEqual(t, nil, obj)
 
 	dest, err := store.NewObject("to/testmove.csv")
 	assert.Equal(t, nil, err)
@@ -264,6 +274,12 @@ func Copy(t TestingT, store cloudstorage.Store) {
 	// Read the object from store, delete if it exists
 	deleteIfExists(store, "from/test.csv")
 	deleteIfExists(store, "to/testcopy.csv")
+
+	switch store.Type() {
+	case "azure":
+		// wtf, eff you azure.
+		time.Sleep(time.Millisecond * 1100)
+	}
 
 	// Create a new object and write to it.
 	obj := createFile(t, store, "from/test.csv")
@@ -349,6 +365,11 @@ func Append(t TestingT, store cloudstorage.Store) {
 	f2, err := obj2.Open(cloudstorage.ReadWrite)
 	assert.Equal(t, nil, err)
 	assert.NotEqual(t, nil, f2)
+
+	// DANGER HERE BE DRAGONS.  This didn't used to be here
+	// so would our app have to implement this behavior?
+	_, err = f2.Seek(0, os.SEEK_END)
+	assert.Equal(t, nil, err)
 
 	w2 := bufio.NewWriter(f2)
 	ct, err := w2.WriteString(morerows)

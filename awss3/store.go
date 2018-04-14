@@ -596,6 +596,10 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 				}
 				return nil, fmt.Errorf("error opening file. local=%s object=%s tfile=%v err=%v", o.cachepath, o.name, name, err)
 			}
+		} else {
+			if _, err := cachedcopy.Seek(0, os.SEEK_SET); err != nil {
+				return nil, fmt.Errorf("error seeking to start of cachedcopy err=%v", err) //don't retry on local fs errors
+			}
 		}
 
 		o.cachedcopy = cachedcopy
