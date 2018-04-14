@@ -89,22 +89,23 @@ func Clearstore(t TestingT, store cloudstorage.Store) {
 
 func RunTests(t TestingT, s cloudstorage.Store) {
 
-	t.Logf("running store setup")
-	StoreSetup(t, s)
-	gou.Debugf("finished StoreSetup")
+	// t.Logf("running store setup")
+	// StoreSetup(t, s)
+	// gou.Debugf("finished StoreSetup")
 
-	t.Logf("running basic rw")
-	BasicRW(t, s)
-	gou.Debugf("finished basicrw")
+	// t.Logf("running basic rw")
+	// BasicRW(t, s)
+	// gou.Debugf("finished basicrw")
 
-	t.Logf("running MoveCopy")
-	//Move(t, s)
-	//Copy(t, s)
-	gou.Debugf("finished MoveCopy")
+	// t.Logf("running MoveCopy")
+	// Move(t, s)
+	// Copy(t, s)
+	// gou.Debugf("finished MoveCopy")
 
 	t.Logf("running Append")
 	Append(t, s)
 	gou.Debugf("finished append")
+	return
 
 	t.Logf("running ListObjsAndFolders")
 	ListObjsAndFolders(t, s)
@@ -191,6 +192,7 @@ func BasicRW(t TestingT, store cloudstorage.Store) {
 }
 
 func createFile(t TestingT, store cloudstorage.Store, name string) cloudstorage.Object {
+
 	obj, err := store.NewObject(name)
 	assert.Equal(t, nil, err)
 	assert.NotEqual(t, nil, obj)
@@ -220,6 +222,8 @@ func createFile(t TestingT, store cloudstorage.Store, name string) cloudstorage.
 
 	assert.Equal(t, testcsv, string(bytes))
 
+	obj2.Close()
+
 	obj3, err := store.Get(context.Background(), name)
 	assert.Equal(t, nil, err)
 	return obj3
@@ -233,6 +237,7 @@ func Move(t TestingT, store cloudstorage.Store) {
 
 	// Create a new object and write to it.
 	obj := createFile(t, store, "from/test.csv")
+	assert.NotEqual(t, nil, obj)
 
 	dest, err := store.NewObject("to/testmove.csv")
 	assert.Equal(t, nil, err)
