@@ -96,17 +96,7 @@ type (
 
 func init() {
 	// Register this Driver (s3) in cloudstorage driver registry.
-	cloudstorage.Register(StoreType, func(conf *cloudstorage.Config) (cloudstorage.Store, error) {
-		ctx := context.Background()
-		if conf.LogPrefix != "" {
-			ctx = gou.NewContext(ctx, conf.LogPrefix)
-		}
-		client, err := NewClientFromConfig(ctx, conf)
-		if err != nil {
-			return nil, err
-		}
-		return client, nil
-	})
+	cloudstorage.Register(StoreType, NewStore)
 }
 
 // NewClientFromConfig validates configuration then creates new client from token
@@ -181,6 +171,18 @@ func NewClient(clientCtx context.Context, conf *cloudstorage.Config, host string
 	return client, nil
 }
 
+func NewStore(conf *cloudstorage.Config) (cloudstorage.Store, error) {
+	ctx := context.Background()
+	if conf.LogPrefix != "" {
+		ctx = gou.NewContext(ctx, conf.LogPrefix)
+	}
+	client, err := NewClientFromConfig(ctx, conf)
+	if err != nil {
+		return nil, err
+	}
+	return client, nil
+}
+
 // ConfigUserPass creates ssh config with user/password
 // HostKeyCallback was added here
 // https://github.com/golang/crypto/commit/e4e2799dd7aab89f583e1d898300d96367750991
@@ -206,6 +208,7 @@ func ConfigUserPass(user, password string) *ssh.ClientConfig {
 // ConfigUserKey creates ssh config with ssh/private rsa key
 func ConfigUserKey(user, keyString string) (*ssh.ClientConfig, error) {
 	// Decode the RSA private key
+
 	key, err := ssh.ParsePrivateKey([]byte(keyString))
 	if err != nil {
 		return nil, fmt.Errorf("bad private key: %s", err)
@@ -278,6 +281,7 @@ func (m *Client) Get(ctx context.Context, name string) (cloudstorage.Object, err
 	return newObjectFromFile(m, get, f), nil
 }
 
+/*
 // Open opens a file for read or writing
 func (m *Client) Open(prefix, filename string) (io.ReadCloser, error) {
 	fn := Concat(prefix, filename)
@@ -289,7 +293,7 @@ func (m *Client) Open(prefix, filename string) (io.ReadCloser, error) {
 
 	return m.client.Open(get)
 }
-
+*/
 // Objects returns an iterator over the objects in the google bucket that match the Query q.
 // If q is nil, no filtering is done.
 func (m *Client) Objects(ctx context.Context, q cloudstorage.Query) (cloudstorage.ObjectIterator, error) {
@@ -307,6 +311,7 @@ func (m *Client) Delete(ctx context.Context, filename string) error {
 	return m.client.Remove(r)
 }
 
+/*
 // Rename renames a file
 func (m *Client) Rename(oldname, newname string) error {
 	if !m.Exists(oldname) {
@@ -319,7 +324,7 @@ func (m *Client) Rename(oldname, newname string) error {
 
 	return m.client.Rename(o, n)
 }
-
+*/
 // Exists checks to see if files exists
 func (m *Client) Exists(filename string) bool {
 	_, err := m.client.Stat(filename)
@@ -447,11 +452,12 @@ func (m *Client) Files(folder string) ([]os.FileInfo, error) {
 }
 */
 
+/*
 // ListFiles lists files in a directory
 func (m *Client) ListFiles(folder string, hidden bool) ([]string, error) {
 	return m.filterFileNames(folder, false, true, hidden)
 }
-
+*/
 // Folders lists directories in a directory
 func (m *Client) Folders(ctx context.Context, q cloudstorage.Query) ([]string, error) {
 	return m.listDirs(ctx, q.Prefix, "", q.ShowHidden)
