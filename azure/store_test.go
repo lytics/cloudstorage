@@ -30,6 +30,11 @@ var config = &cloudstorage.Config{
 }
 
 func TestConfig(t *testing.T) {
+	if config.Bucket == "" {
+		t.Logf("must provide AZURE_PROJECT, AZURE_KEY, AZURE_PROJECT  env vars")
+		t.Skip()
+		return
+	}
 	conf := &cloudstorage.Config{
 		Type:     azure.StoreType,
 		Project:  os.Getenv("AZURE_PROJECT"),

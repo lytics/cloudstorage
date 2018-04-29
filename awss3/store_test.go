@@ -82,6 +82,11 @@ func TestAll(t *testing.T) {
 	config.Settings[awss3.ConfKeyAccessKey] = os.Getenv("AWS_ACCESS_KEY")
 	config.Settings[awss3.ConfKeyAccessSecret] = os.Getenv("AWS_SECRET_KEY")
 	//gou.Debugf("config %v", config)
+	if config.Bucket == "" || os.Getenv("AWS_SECRET_KEY") == "" || os.Getenv("AWS_ACCESS_KEY") == "" {
+		t.Logf("No aws credentials, skipping")
+		t.Skip()
+		return
+	}
 	store, err := cloudstorage.NewStore(config)
 	if err != nil {
 		t.Logf("No valid auth provided, skipping awss3 testing %v", err)
