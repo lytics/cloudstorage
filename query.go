@@ -4,6 +4,9 @@ import (
 	"sort"
 )
 
+var stuff // will break
+
+
 // Filter func type definition for filtering objects
 type Filter func(objects Objects) Objects
 
