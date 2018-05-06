@@ -23,9 +23,16 @@ export AWS_BUCKET="bucket"
 */
 
 func TestS3(t *testing.T) {
+	if os.Getenv("AWS_SECRET_KEY") == "" || os.Getenv("AWS_ACCESS_KEY") == "" {
+		t.Logf("No aws credentials, skipping")
+		t.Skip()
+		return
+	}
 	conf := &cloudstorage.Config{
-		Type:     awss3.StoreType,
-		Settings: make(gou.JsonHelper),
+		Type: awss3.StoreType,
+		Settings: gou.JsonHelper{
+			"fake": "notused",
+		},
 	}
 	// Should error with empty config
 	_, err := cloudstorage.NewStore(conf)
