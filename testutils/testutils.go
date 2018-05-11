@@ -14,10 +14,9 @@ import (
 	"time"
 
 	"github.com/araddon/gou"
+	"github.com/lytics/cloudstorage"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/api/iterator"
-
-	"github.com/lytics/cloudstorage"
 )
 
 var (
@@ -157,7 +156,8 @@ func BasicRW(t TestingT, store cloudstorage.Store) {
 	w := bufio.NewWriter(f)
 	_, err = w.WriteString(testcsv)
 	assert.Equal(t, nil, err)
-	w.Flush()
+	err = w.Flush()
+	assert.Equal(t, nil, err)
 
 	// Close() actually does the upload/flush/write to cloud
 	err = obj.Close()
@@ -204,7 +204,8 @@ func createFile(t TestingT, store cloudstorage.Store, name string) cloudstorage.
 	w := bufio.NewWriter(f)
 	_, err = w.WriteString(testcsv)
 	assert.Equal(t, nil, err)
-	w.Flush()
+	err = w.Flush()
+	assert.Equal(t, nil, err)
 
 	// Close() actually does the upload/flush/write to cloud
 	err = obj.Close()
@@ -656,7 +657,8 @@ func NewObjectWithExisting(t TestingT, store cloudstorage.Store) {
 	w := bufio.NewWriter(f)
 	n, err := w.WriteString(testcsv)
 	assert.Equal(t, nil, err, "error. %d", n)
-	w.Flush()
+	err = w.Flush()
+	assert.Equal(t, nil, err)
 
 	err = obj.Close()
 	assert.Equal(t, nil, err)
@@ -684,30 +686,42 @@ func TestReadWriteCloser(t TestingT, store cloudstorage.Store) {
 
 	deleteIfExists(store, "prefix/iorw.test")
 
-	gou.Debugf("starting TestReadWriteCloser")
-	fileName := "prefix/iorw.test"
-	data := fmt.Sprintf("pid:%v:time:%v", os.Getpid(), time.Now().Nanosecond())
-
-	wc, err := store.NewWriter(fileName, nil)
-	assert.Equal(t, nil, err)
-	buf1 := bytes.NewBufferString(data)
-	_, err = buf1.WriteTo(wc)
-	assert.Equal(t, nil, err)
-	err = wc.Close()
-	assert.Equal(t, nil, err)
-	time.Sleep(time.Millisecond * 100)
-
-	rc, err := store.NewReader(fileName)
-	assert.Equal(t, nil, err)
-	if rc == nil {
-		t.Fatalf("could not create reader")
-		return
+	testdata := []string{
+		"",
+		"1234567890",
+		"12345678901234567890",
+		"1234567890",
+		"",
 	}
-	buf2 := bytes.Buffer{}
-	_, err = buf2.ReadFrom(rc)
-	assert.Equal(t, nil, err)
-	assert.Equal(t, data, buf2.String(), "round trip data don't match")
 
-	_, err = store.NewReader("bogus/notreal.csv")
-	assert.Equal(t, cloudstorage.ErrObjectNotFound, err)
+	// We do this twice because io writer should truncate and overwrite the object on
+	// the second loop.
+	for i, padding := range testdata {
+		gou.Debugf("starting TestReadWriteCloser (take:%v)", i)
+		fileName := "prefix/iorw.test"
+		data := fmt.Sprintf("%v:pid:%v:time:%v", padding, os.Getpid(), time.Now().Nanosecond())
+
+		wc, err := store.NewWriter(fileName, nil)
+		assert.Equal(t, nil, err)
+		buf1 := bytes.NewBufferString(data)
+		_, err = buf1.WriteTo(wc)
+		assert.Equal(t, nil, err)
+		err = wc.Close()
+		assert.Equal(t, nil, err)
+		time.Sleep(time.Millisecond * 100)
+
+		rc, err := store.NewReader(fileName)
+		assert.Equal(t, nil, err)
+		if rc == nil {
+			t.Fatalf("could not create reader")
+			return
+		}
+		buf2 := bytes.Buffer{}
+		_, err = buf2.ReadFrom(rc)
+		assert.Equal(t, nil, err)
+		assert.Equal(t, data, buf2.String(), "round trip data don't match") // extra data means we didn't truncate the file
+
+		_, err = store.NewReader("bogus/notreal.csv")
+		assert.Equal(t, cloudstorage.ErrObjectNotFound, err)
+	}
 }
