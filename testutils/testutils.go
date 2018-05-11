@@ -694,8 +694,8 @@ func TestReadWriteCloser(t TestingT, store cloudstorage.Store) {
 		"",
 	}
 
-	// We do this twice because io writer should truncate and overwrite the object on
-	// the second loop.
+	// We do this multiple times with variable length data because NewWriter
+	// should truncate and overwrite the object on each call.
 	for i, padding := range testdata {
 		gou.Debugf("starting TestReadWriteCloser (take:%v)", i)
 		fileName := "prefix/iorw.test"
