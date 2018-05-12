@@ -721,6 +721,9 @@ func TestReadWriteCloser(t TestingT, store cloudstorage.Store) {
 		assert.Equalf(t, nil, err, "at loop-cnt:%v", i)
 		assert.Equalf(t, data, buf2.String(), "round trip data don't match") // extra data means we didn't truncate the file
 
+		// make sure we clean up and close
+		assert.Equal(t, nil, rc.Close())
+
 		_, err = store.NewReader("bogus/notreal.csv")
 		assert.Equalf(t, cloudstorage.ErrObjectNotFound, err, "at loop-cnt:%v", i)
 	}
