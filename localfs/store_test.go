@@ -45,5 +45,4 @@ func TestAll(t *testing.T) {
 	store, err = cloudstorage.NewStore(localFsConf)
 	assert.NotEqual(t, nil, err)
 	assert.Equal(t, nil, store)
-
 }

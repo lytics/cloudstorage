@@ -557,6 +557,14 @@ func (m *Client) NewWriterWithContext(ctx context.Context, name string, metadata
 
 	name = strings.Replace(name, " ", "+", -1)
 
+	//	NewWriter should override/truncate any existing file
+	if m.Exists(name) {
+		if err := m.Delete(ctx, name); err != nil {
+			gou.Errorf("failed to delete existing file %v %v", name, err)
+			return nil, err
+		}
+	}
+
 	// pr, pw := io.Pipe()
 	// bw := csbufio.NewWriter(pw)
 
