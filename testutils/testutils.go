@@ -702,26 +702,26 @@ func TestReadWriteCloser(t TestingT, store cloudstorage.Store) {
 		data := fmt.Sprintf("%v:pid:%v:time:%v", padding, os.Getpid(), time.Now().Nanosecond())
 
 		wc, err := store.NewWriter(fileName, nil)
-		assert.Equal(t, nil, err)
+		assert.Equalf(t, nil, err, "at loop-cnt:%v", i)
 		buf1 := bytes.NewBufferString(data)
 		_, err = buf1.WriteTo(wc)
-		assert.Equal(t, nil, err)
+		assert.Equalf(t, nil, err, "at loop-cnt:%v", i)
 		err = wc.Close()
-		assert.Equal(t, nil, err)
+		assert.Equalf(t, nil, err, "at loop-cnt:%v", i)
 		time.Sleep(time.Millisecond * 100)
 
 		rc, err := store.NewReader(fileName)
-		assert.Equal(t, nil, err)
+		assert.Equalf(t, nil, err, "at loop-cnt:%v", i)
 		if rc == nil {
 			t.Fatalf("could not create reader")
 			return
 		}
 		buf2 := bytes.Buffer{}
 		_, err = buf2.ReadFrom(rc)
-		assert.Equal(t, nil, err)
-		assert.Equal(t, data, buf2.String(), "round trip data don't match") // extra data means we didn't truncate the file
+		assert.Equalf(t, nil, err, "at loop-cnt:%v", i)
+		assert.Equalf(t, data, buf2.String(), "round trip data don't match") // extra data means we didn't truncate the file
 
 		_, err = store.NewReader("bogus/notreal.csv")
-		assert.Equal(t, cloudstorage.ErrObjectNotFound, err)
+		assert.Equalf(t, cloudstorage.ErrObjectNotFound, err, "at loop-cnt:%v", i)
 	}
 }
