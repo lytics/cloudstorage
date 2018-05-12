@@ -184,7 +184,7 @@ func (f *FS) Type() string {
 	return StoreType
 }
 
-// Client gets access to the underlying google cloud storage client.
+// Client gets access to the underlying s3 cloud storage client.
 func (f *FS) Client() interface{} {
 	return f.client
 }
@@ -313,7 +313,7 @@ func (f *FS) List(ctx context.Context, q cloudstorage.Query) (*cloudstorage.Obje
 	return objResp, nil
 }
 
-// Objects returns an iterator over the objects in the google bucket that match the Query q.
+// Objects returns an iterator over the objects in the s3 bucket that match the Query q.
 // If q is nil, no filtering is done.
 func (f *FS) Objects(ctx context.Context, q cloudstorage.Query) (cloudstorage.ObjectIterator, error) {
 	return cloudstorage.NewObjectPageIterator(ctx, f, q), nil
