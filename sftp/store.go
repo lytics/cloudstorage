@@ -46,29 +46,20 @@ const (
 )
 
 type (
-	/*
-		Store interface {
-			Open(prefix, filename string) (io.ReadCloser, error)
-			NewFile(filename string) (Uploader, error)
-			Remove(filename string) error
-			Rename(old, new string) error
-			Exists(filename string) bool
-			Files(folder string) ([]os.FileInfo, error)
-			ListFiles(folder string, hidden bool) ([]string, error)
-			ListDirs(folder string, hidden bool) ([]string, error)
-			Cd(dir string)
-			FilesAfter(t time.Time) ([]os.FileInfo, error)
-			Close()
-		}
-	*/
-	Uploader interface {
-		Upload(io.Reader) (int64, error)
+	sftpClient interface {
+		Open(filename string) (*ftp.File, error)
+		Remove(filename string) error
+		Create(filename string) (*ftp.File, error)
+		Stat(filename string) (os.FileInfo, error)
+		Mkdir(path string) error
+		ReadDir(path string) ([]os.FileInfo, error)
+		Close() error
 	}
 	// Client is the sftp client
 	Client struct {
 		ID        string
 		clientCtx context.Context
-		client    *ftp.Client
+		client    sftpClient
 		cachepath string
 		host      string
 		port      int
