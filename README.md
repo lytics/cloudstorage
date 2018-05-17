@@ -26,8 +26,8 @@ Note: For these examples all errors are ignored, using the `_` for them.
 // This is an example of a local storage object:  
 // See(https://github.com/lytics/cloudstorage/blob/master/google/google_test.go) for a GCS example:
 config := &cloudstorage.Config{
-	Type: localfs.StoreType,
-	AuthMethod:     localfs.AuthFileSystem,
+	Type:            localfs.StoreType,
+	AuthMethod:      localfs.AuthFileSystem,
 	LocalFS:         "/tmp/mockcloud",
 	TmpDir:          "/tmp/localcache",
 }
@@ -86,7 +86,7 @@ fmt.Println(string(bytes)) // should print the CSV file from the block above...
 ```go
 var config = &storeutils.TransferConfig{
 	Type:                  google.StoreType,
-	AuthMethod:            google.AuthGCEDefaultOAuthToken
+	AuthMethod:            google.AuthGCEDefaultOAuthToken,
 	ProjectID:             "my-project",
 	DestBucket:            "my-destination-bucket",
 	Src:                   storeutils.NewGcsSource("my-source-bucket"),
