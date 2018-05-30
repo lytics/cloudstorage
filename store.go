@@ -263,11 +263,15 @@ func Copy(ctx context.Context, s Store, src, des Object) error {
 	}
 
 	fin, err := src.Open(ReadOnly)
+	if err != nil {
+		return err
+	}
 	if _, err = io.Copy(fout, fin); err != nil {
 		return err
 	}
-	defer src.Close()
-
+	if err := src.Close(); err != nil {
+		return err
+	}
 	return des.Close() //this will flush and sync the file.
 }
 
