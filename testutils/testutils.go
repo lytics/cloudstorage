@@ -190,7 +190,7 @@ func BasicRW(t TestingT, store cloudstorage.Store) {
 	assert.Equal(t, nil, obj)
 }
 
-func createFile(t TestingT, store cloudstorage.Store, name string) cloudstorage.Object {
+func createFile(t TestingT, store cloudstorage.Store, name, data string) cloudstorage.Object {
 
 	obj, err := store.NewObject(name)
 	assert.Equal(t, nil, err)
@@ -202,7 +202,7 @@ func createFile(t TestingT, store cloudstorage.Store, name string) cloudstorage.
 	assert.NotEqual(t, nil, f)
 
 	w := bufio.NewWriter(f)
-	_, err = w.WriteString(testcsv)
+	_, err = w.WriteString(data)
 	assert.Equal(t, nil, err)
 	err = w.Flush()
 	assert.Equal(t, nil, err)
@@ -220,7 +220,7 @@ func createFile(t TestingT, store cloudstorage.Store, name string) cloudstorage.
 	bytes, err := ioutil.ReadAll(f2)
 	assert.Equal(t, nil, err)
 
-	assert.Equal(t, testcsv, string(bytes))
+	assert.Equal(t, data, string(bytes))
 
 	obj2.Close()
 
@@ -230,44 +230,62 @@ func createFile(t TestingT, store cloudstorage.Store, name string) cloudstorage.
 }
 
 func Move(t TestingT, store cloudstorage.Store) {
-
-	// Read the object from store, delete if it exists
-	deleteIfExists(store, "from/test.csv")
-	deleteIfExists(store, "to/testmove.csv")
-
+	deleteIfExists(store, "to/testmove.txt")
 	switch store.Type() {
 	case "azure":
 		// wtf, eff you azure.
 		time.Sleep(time.Millisecond * 1100)
 	}
 
-	// Create a new object and write to it.
-	obj := createFile(t, store, "from/test.csv")
-	assert.NotEqual(t, nil, obj)
+	testdata := []string{
+		"",
+		"1_1234567890",
+		"2_12345678901234567890",
+		"3_1234567890",
+		"",
+	}
 
-	dest, err := store.NewObject("to/testmove.csv")
-	assert.Equal(t, nil, err)
+	dest, err := store.NewObject("to/testmove.txt")
+	assert.Equal(t, nil, err, "dest file")
 
-	err = cloudstorage.Move(context.Background(), store, obj, dest)
-	assert.Equal(t, nil, err)
+	// We do this multiple times with variable length data because Move
+	// should overwrite the desc object on each call.
+	for row, data := range testdata {
 
-	obj2, err := store.Get(context.Background(), "to/testmove.csv")
-	assert.Equal(t, nil, err)
-	assert.Equal(t, store.Type(), obj2.StorageSource())
-	assert.Equal(t, "to/testmove.csv", obj2.Name())
+		// Read the object from store, delete if it exists
+		deleteIfExists(store, "from/testmove.txt")
+		switch store.Type() {
+		case "azure":
+			// wtf, eff you azure.
+			time.Sleep(time.Millisecond * 1100)
+		}
+
+		// Create a new object and write to it.
+		obj := createFile(t, store, "from/testmove.txt", data)
+		assert.NotEqual(t, nil, obj, "at row:%v", row)
+
+		err = cloudstorage.Move(context.Background(), store, obj, dest)
+		assert.Equal(t, nil, err, "at row:%v", row)
+
+		ensureContents(t, store, "to/testmove.txt", data, fmt.Sprintf("move `to` file validation: at row:%v", row))
+
+		ensureContents(t, store, "from/testmove.txt", data, fmt.Sprintf("move `from` file validation: at row:%v", row))
+	}
+}
+
+func ensureContents(t TestingT, store cloudstorage.Store, name, data, msg string) {
+	obj2, err := store.Get(context.Background(), "to/testmove.txt")
+	assert.Equal(t, nil, err, msg)
+	assert.Equal(t, store.Type(), obj2.StorageSource(), msg)
+	assert.Equal(t, "to/testmove.txt", obj2.Name(), msg)
 
 	f2, err := obj2.Open(cloudstorage.ReadOnly)
-	assert.Equal(t, nil, err)
-	assert.Equal(t, fmt.Sprintf("%p", f2), fmt.Sprintf("%p", obj2.File()))
+	assert.Equal(t, nil, err, msg)
+	assert.Equal(t, fmt.Sprintf("%p", f2), fmt.Sprintf("%p", obj2.File()), msg)
 
 	bytes, err := ioutil.ReadAll(f2)
-	assert.Equal(t, nil, err)
-
-	assert.Equal(t, testcsv, string(bytes))
-
-	// Ensure that after Move it no longer exists in from
-	_, err = store.Get(context.Background(), "from/test.csv")
-	assert.Equal(t, cloudstorage.ErrObjectNotFound, err)
+	assert.Equal(t, nil, err, msg)
+	assert.Equal(t, data, string(bytes), msg)
 }
 
 func Copy(t TestingT, store cloudstorage.Store) {
@@ -283,7 +301,7 @@ func Copy(t TestingT, store cloudstorage.Store) {
 	}
 
 	// Create a new object and write to it.
-	obj := createFile(t, store, "from/test.csv")
+	obj := createFile(t, store, "from/test.csv", testcsv)
 
 	dest, err := store.NewObject("to/testcopy.csv")
 	assert.Equal(t, nil, err)
