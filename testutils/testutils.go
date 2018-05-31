@@ -267,6 +267,8 @@ func Move(t TestingT, store cloudstorage.Store) {
 		err = cloudstorage.Move(context.Background(), store, obj, dest)
 		assert.Equal(t, nil, err, "at row:%v", row)
 
+		time.Sleep(time.Millisecond * 500) //uggg
+
 		ensureContents(t, store, "to/testmove.txt", data, fmt.Sprintf("move `to` file validation: at row:%v", row))
 
 		_, err := store.Get(context.Background(), "from/testmove.txt")
