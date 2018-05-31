@@ -277,6 +277,9 @@ func Move(t TestingT, store cloudstorage.Store) {
 func ensureContents(t TestingT, store cloudstorage.Store, name, data, msg string) {
 	obj, err := store.Get(context.Background(), name)
 	assert.Equal(t, nil, err, msg)
+	if err != nil {
+		return
+	}
 	assert.Equal(t, store.Type(), obj.StorageSource(), msg)
 	assert.Equal(t, name, obj.Name(), msg)
 
