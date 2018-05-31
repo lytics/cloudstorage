@@ -281,27 +281,31 @@ func Move(ctx context.Context, s Store, src, des Object) error {
 	}
 
 	// Slow path, copy locally then up to des
-	fout, err := des.Open(ReadWrite)
+	srcPath := src.Name()
+	desPath := des.Name()
+	fout, err := s.NewWriterWithContext(ctx, desPath, src.MetaData())
 	if err != nil {
 		gou.Warnf("Move could not open destination %v", src.Name())
 		return err
 	}
-
-	fin, err := src.Open(ReadOnly)
+	fin, err := s.NewReaderWithContext(ctx, srcPath)
 	if err != nil {
 		gou.Warnf("Move could not open source %v err=%v", src.Name(), err)
 	}
 	if _, err = io.Copy(fout, fin); err != nil {
 		return err
 	}
-	if err := src.Close(); err != nil {
+	if err := fin.Close(); err != nil {
 		return err
 	}
-	if err := src.Delete(); err != nil {
+	if err := fout.Close(); err != nil { //this will flush and sync the file.
+		return err
+	}
+	if err := src.Delete(); err != nil { //delete the src, after des has been flushed/synced
 		return err
 	}
 
-	return des.Close() //this will flush and sync the file.
+	return nil
 }
 
 func NewObjectsResponse() *ObjectsResponse {

@@ -269,21 +269,22 @@ func Move(t TestingT, store cloudstorage.Store) {
 
 		ensureContents(t, store, "to/testmove.txt", data, fmt.Sprintf("move `to` file validation: at row:%v", row))
 
-		ensureContents(t, store, "from/testmove.txt", data, fmt.Sprintf("move `from` file validation: at row:%v", row))
+		_, err := store.Get(context.Background(), "from/testmove.txt")
+		assert.Equal(t, cloudstorage.ErrObjectNotFound, err, "move `from` file validation: at row:%v", row)
 	}
 }
 
 func ensureContents(t TestingT, store cloudstorage.Store, name, data, msg string) {
-	obj2, err := store.Get(context.Background(), "to/testmove.txt")
+	obj, err := store.Get(context.Background(), name)
 	assert.Equal(t, nil, err, msg)
-	assert.Equal(t, store.Type(), obj2.StorageSource(), msg)
-	assert.Equal(t, "to/testmove.txt", obj2.Name(), msg)
+	assert.Equal(t, store.Type(), obj.StorageSource(), msg)
+	assert.Equal(t, name, obj.Name(), msg)
 
-	f2, err := obj2.Open(cloudstorage.ReadOnly)
+	f, err := obj.Open(cloudstorage.ReadOnly)
 	assert.Equal(t, nil, err, msg)
-	assert.Equal(t, fmt.Sprintf("%p", f2), fmt.Sprintf("%p", obj2.File()), msg)
+	assert.Equal(t, fmt.Sprintf("%p", f), fmt.Sprintf("%p", obj.File()), msg)
 
-	bytes, err := ioutil.ReadAll(f2)
+	bytes, err := ioutil.ReadAll(f)
 	assert.Equal(t, nil, err, msg)
 	assert.Equal(t, data, string(bytes), msg)
 }
