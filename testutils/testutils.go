@@ -284,6 +284,10 @@ func ensureContents(t TestingT, store cloudstorage.Store, name, data, msg string
 	assert.Equal(t, name, obj.Name(), msg)
 
 	f, err := obj.Open(cloudstorage.ReadOnly)
+	defer func() {
+		err = obj.Close()
+		assert.Equal(t, nil, err, msg)
+	}()
 	assert.Equal(t, nil, err, msg)
 	assert.Equal(t, fmt.Sprintf("%p", f), fmt.Sprintf("%p", obj.File()), msg)
 
