@@ -320,7 +320,7 @@ func Move(ctx context.Context, s Store, src, des Object) error {
 		gou.Warnf("Move could not open source %v err=%v", src.Name(), err)
 		return err
 	}
-	if _, err = io.Copy(fout, fin); err != nil {
+	if _, err := io.Copy(fout, fin); err != nil {
 		return err
 	}
 	if err := des.Close(); err != nil {

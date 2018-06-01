@@ -174,6 +174,7 @@ func BasicRW(t TestingT, store cloudstorage.Store) {
 	assert.Equal(t, "prefix/test.csv", obj2.String())
 
 	f2, err := obj2.Open(cloudstorage.ReadOnly)
+	defer f2.Close()
 	assert.Equal(t, nil, err)
 	assert.Equal(t, fmt.Sprintf("%p", f2), fmt.Sprintf("%p", obj2.File()))
 
@@ -267,8 +268,6 @@ func Move(t TestingT, store cloudstorage.Store) {
 		err = cloudstorage.Move(context.Background(), store, obj, dest)
 		assert.Equal(t, nil, err, "at row:%v", row)
 
-		time.Sleep(time.Millisecond * 500) //uggg
-
 		ensureContents(t, store, "to/testmove.txt", data, fmt.Sprintf("move `to` file validation: at row:%v", row))
 
 		_, err := store.Get(context.Background(), "from/testmove.txt")
@@ -325,19 +324,7 @@ func Copy(t TestingT, store cloudstorage.Store) {
 	assert.Equal(t, "from/test.csv", obj2.Name())
 
 	// And also to should exist
-	obj2, err = store.Get(context.Background(), "to/testcopy.csv")
-	assert.Equal(t, nil, err)
-	assert.Equal(t, store.Type(), obj2.StorageSource())
-	assert.Equal(t, "to/testcopy.csv", obj2.Name())
-
-	f2, err := obj2.Open(cloudstorage.ReadOnly)
-	assert.Equal(t, nil, err)
-	assert.Equal(t, fmt.Sprintf("%p", f2), fmt.Sprintf("%p", obj2.File()))
-
-	bytes, err := ioutil.ReadAll(f2)
-	assert.Equal(t, nil, err)
-
-	assert.Equal(t, testcsv, string(bytes))
+	ensureContents(t, store, "to/testcopy.csv", testcsv, "target file validation")
 }
 
 func Append(t TestingT, store cloudstorage.Store) {
@@ -430,6 +417,9 @@ func Append(t TestingT, store cloudstorage.Store) {
 	assert.Equal(t, nil, err)
 
 	assert.Equal(t, testcsv+morerows, string(bytes), "not the rows we expected.")
+
+	err = obj3.Close()
+	assert.Equal(t, nil, err)
 
 	// Now we are going to essentially repeat tests but now use the native
 	// interface object.Read(), Write() instead of OPen() -> os.File()
@@ -708,6 +698,9 @@ func NewObjectWithExisting(t TestingT, store cloudstorage.Store) {
 	assert.Equal(t, nil, err)
 
 	assert.Equal(t, testcsv, string(bytes))
+
+	err = obj3.Close()
+	assert.Equal(t, nil, err)
 }
 
 func TestReadWriteCloser(t TestingT, store cloudstorage.Store) {
