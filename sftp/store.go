@@ -816,6 +816,12 @@ func (o *object) Sync() error {
 	}
 	o.cachedcopy = cachedcopy
 	//gou.DebugCtx(o.client.clientCtx, "Uploaded %q size=%d", o.name, size)
+
+	err = cachedcopy.Close()
+	if err != nil {
+		return fmt.Errorf("error on closing localfile. %q err=%v", o.cachepath, err)
+	}
+
 	return nil
 }
 
@@ -835,10 +841,10 @@ func (o *object) Close() error {
 			gou.Errorf("error on sync file=%q err=%v", o.name, err)
 			return err
 		}
-	} else {
-		gou.Debugf("not syncing on close? %v opened?%v  readonly?%v", o.name, o.opened, o.readonly)
+		return nil
 	}
 
+	gou.Debugf("not syncing on close? %v opened?%v  readonly?%v", o.name, o.opened, o.readonly)
 	err := o.cachedcopy.Close()
 	if err != nil {
 		return fmt.Errorf("error on sync and closing localfile. %q err=%v", o.cachepath, err)
