@@ -31,7 +31,7 @@ var config = &cloudstorage.Config{
 func TestConfig(t *testing.T) {
 
 	if config.Bucket == "" {
-		t.Logf("must provide BACKBLAZE_BUCKET, BACKBLAZE_ACCESS,  BACKBLAZE_KEY  env vars")
+		t.Logf("must provide BACKBLAZE_BUCKET, BACKBLAZE_ACCOUNT,  BACKBLAZE_KEY  env vars")
 		t.Skip()
 		return
 	}
@@ -82,7 +82,7 @@ func TestConfig(t *testing.T) {
 func TestUpload(t *testing.T) {
 
 	if config.Bucket == "" {
-		t.Logf("must provide BACKBLAZE_BUCKET, BACKBLAZE_ACCESS,  BACKBLAZE_KEY  env vars")
+		t.Logf("must provide BACKBLAZE_BUCKET, BACKBLAZE_ACCOUNT,  BACKBLAZE_KEY  env vars")
 		t.Skip()
 		return
 	}
@@ -119,7 +119,7 @@ func TestUpload(t *testing.T) {
 func TestDownload(t *testing.T) {
 
 	if config.Bucket == "" {
-		t.Logf("must provide BACKBLAZE_BUCKET, BACKBLAZE_ACCESS,  BACKBLAZE_KEY  env vars")
+		t.Logf("must provide BACKBLAZE_BUCKET, BACKBLAZE_ACCOUNT,  BACKBLAZE_KEY  env vars")
 		t.Skip()
 		return
 	}
