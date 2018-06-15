@@ -158,7 +158,23 @@ func (f *FS) Client() interface{} {
 // isn't opened already, see Object.Open()
 // ObjectNotFound will be returned if the object is not found.
 func (f *FS) Get(ctx context.Context, o string) (cloudstorage.Object, error) {
-	return nil, ErrNotSupported
+
+	bucket, err := f.client.Bucket(f.bucket)
+	if err != nil {
+		return nil, err
+	}
+
+	cf := cloudstorage.CachePathObj(f.cachepath, o, f.ID)
+
+	blobRef := &blobRef{fs: f,
+		bucket:    bucket,
+		name:      o,
+		cachepath: cf,
+		metadata:  map[string]string{cloudstorage.ContentTypeKey: cloudstorage.ContentType(o)},
+	}
+
+	return blobRef, nil
+
 }
 
 // Objects returns an object Iterator to allow paging through object
