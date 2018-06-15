@@ -14,7 +14,7 @@ import (
 
 	bz "gopkg.in/kothar/go-backblaze.v0"
 
-	"github.com/lytics/cloudstorage"
+	"github.com/dvriesman/cloudstorage"
 )
 
 const (
