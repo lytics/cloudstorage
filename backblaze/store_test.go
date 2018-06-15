@@ -8,8 +8,8 @@ import (
 
 	"github.com/araddon/gou"
 	"github.com/bmizerany/assert"
-	"github.com/dvriesman/cloudstorage/backblaze"
 	"github.com/lytics/cloudstorage"
+	"github.com/lytics/cloudstorage/backblaze"
 )
 
 var config = &cloudstorage.Config{
