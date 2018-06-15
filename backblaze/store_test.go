@@ -12,6 +12,14 @@ import (
 	"github.com/lytics/cloudstorage/backblaze"
 )
 
+/*
+# to use backblaze tests ensure you have exported
+
+export BACKBLAZE_BUCKET="bucket"
+export BACKBLAZE_ACCOUNT="alfa"
+export BACKBLAZE_KEY="my-hex-key-afea1d"
+*/
+
 var config = &cloudstorage.Config{
 	Type:       backblaze.StoreType,
 	AuthMethod: backblaze.AuthKey,
@@ -73,6 +81,12 @@ func TestConfig(t *testing.T) {
 
 func TestUpload(t *testing.T) {
 
+	if config.Bucket == "" {
+		t.Logf("must provide BACKBLAZE_BUCKET, BACKBLAZE_ACCESS,  BACKBLAZE_KEY  env vars")
+		t.Skip()
+		return
+	}
+
 	conf := &cloudstorage.Config{
 		Type:       backblaze.StoreType,
 		Bucket:     os.Getenv("BACKBLAZE_BUCKET"),
@@ -103,6 +117,12 @@ func TestUpload(t *testing.T) {
 }
 
 func TestDownload(t *testing.T) {
+
+	if config.Bucket == "" {
+		t.Logf("must provide BACKBLAZE_BUCKET, BACKBLAZE_ACCESS,  BACKBLAZE_KEY  env vars")
+		t.Skip()
+		return
+	}
 
 	conf := &cloudstorage.Config{
 		Type:       backblaze.StoreType,
