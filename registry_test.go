@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/lytics/cloudstorage"
+	"github.com/dvriesman/cloudstorage"
 )
 
 func TestRegistry(t *testing.T) {

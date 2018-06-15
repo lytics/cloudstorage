@@ -15,8 +15,8 @@ import (
 	"github.com/pborman/uuid"
 	"golang.org/x/net/context"
 
-	"github.com/lytics/cloudstorage"
-	"github.com/lytics/cloudstorage/csbufio"
+	"github.com/dvriesman/cloudstorage"
+	"github.com/dvriesman/cloudstorage/csbufio"
 )
 
 const (

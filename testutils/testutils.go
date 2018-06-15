@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/araddon/gou"
-	"github.com/lytics/cloudstorage"
+	"github.com/dvriesman/cloudstorage"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/api/iterator"
 )

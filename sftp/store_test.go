@@ -12,9 +12,9 @@ import (
 	"github.com/araddon/gou"
 	"github.com/bmizerany/assert"
 
-	"github.com/lytics/cloudstorage"
-	"github.com/lytics/cloudstorage/sftp"
-	"github.com/lytics/cloudstorage/testutils"
+	"github.com/dvriesman/cloudstorage"
+	"github.com/dvriesman/cloudstorage/sftp"
+	"github.com/dvriesman/cloudstorage/testutils"
 )
 
 /*

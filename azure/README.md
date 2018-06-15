@@ -29,8 +29,8 @@ import (
 	"github.com/araddon/gou"
 	"google.golang.org/api/iterator"
 
-	"github.com/lytics/cloudstorage"
-	"github.com/lytics/cloudstorage/azure"
+	"github.com/dvriesman/cloudstorage"
+	"github.com/dvriesman/cloudstorage/azure"
 )
 
 /*

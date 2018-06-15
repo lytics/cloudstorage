@@ -7,9 +7,9 @@ import (
 	"github.com/araddon/gou"
 	"github.com/bmizerany/assert"
 
-	"github.com/lytics/cloudstorage"
-	"github.com/lytics/cloudstorage/awss3"
-	"github.com/lytics/cloudstorage/testutils"
+	"github.com/dvriesman/cloudstorage"
+	"github.com/dvriesman/cloudstorage/awss3"
+	"github.com/dvriesman/cloudstorage/testutils"
 )
 
 /*

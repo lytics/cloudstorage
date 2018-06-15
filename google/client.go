@@ -13,7 +13,7 @@ import (
 	"golang.org/x/oauth2/jwt"
 	"google.golang.org/api/option"
 
-	"github.com/lytics/cloudstorage"
+	"github.com/dvriesman/cloudstorage"
 )
 
 const (
@@ -155,7 +155,7 @@ func NewGoogleClient(conf *cloudstorage.Config) (client GoogleOAuthClient, err e
 	switch conf.AuthMethod {
 	case AuthGCEDefaultOAuthToken:
 		// This token method uses the default OAuth token with GCS created by tools like gsutils, gcloud, etc...
-		// See github.com/lytics/lio/src/ext_svcs/google/google_transporter.go : BuildDefaultGoogleTransporter
+		// See github.com/dvriesman/lio/src/ext_svcs/google/google_transporter.go : BuildDefaultGoogleTransporter
 		client, err = BuildDefaultGoogleTransporter("")
 		if err != nil {
 			return nil, err
