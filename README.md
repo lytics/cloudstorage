@@ -77,6 +77,7 @@ obj.Close()
 ```go
 // Calling Get on an existing object will return a cloudstorage object or the cloudstorage.ErrObjectNotFound error.
 obj2, _ := store.Get(context.Background(), "prefix/test.csv")
+// Note, the file is not yet open
 f2, _ := obj2.Open(cloudstorage.ReadOnly)
 bytes, _ := ioutil.ReadAll(f2)
 fmt.Println(string(bytes)) // should print the CSV file from the block above...
