@@ -7,7 +7,7 @@ import (
 	"cloud.google.com/go/storage"
 	"golang.org/x/net/context"
 
-	"github.com/lytics/cloudstorage"
+	"github.com/dvriesman/cloudstorage"
 )
 
 // GetObject Gets a single object's bytes based on bucket and name parameters

@@ -15,7 +15,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/api/iterator"
 
-	"github.com/lytics/cloudstorage"
+	"github.com/dvriesman/cloudstorage"
 )
 
 func init() {

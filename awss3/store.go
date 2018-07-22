@@ -20,8 +20,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 
-	"github.com/lytics/cloudstorage"
-	"github.com/lytics/cloudstorage/csbufio"
+	"github.com/dvriesman/cloudstorage"
+	"github.com/dvriesman/cloudstorage/csbufio"
 )
 
 const (

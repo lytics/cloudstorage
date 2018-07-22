@@ -1,7 +1,7 @@
 package google
 
 import (
-	"github.com/lytics/cloudstorage"
+	"github.com/dvriesman/cloudstorage"
 	"google.golang.org/api/storage/v1"
 )
 

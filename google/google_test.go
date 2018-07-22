@@ -5,9 +5,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/lytics/cloudstorage"
-	"github.com/lytics/cloudstorage/google"
-	"github.com/lytics/cloudstorage/testutils"
+	"github.com/dvriesman/cloudstorage"
+	"github.com/dvriesman/cloudstorage/google"
+	"github.com/dvriesman/cloudstorage/testutils"
 )
 
 /*

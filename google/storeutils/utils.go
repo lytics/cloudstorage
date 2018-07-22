@@ -1,7 +1,7 @@
 package storeutils
 
 import (
-	"github.com/lytics/cloudstorage"
+	"github.com/dvriesman/cloudstorage"
 	"golang.org/x/net/context"
 )
 

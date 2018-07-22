@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lytics/cloudstorage"
-	"github.com/lytics/cloudstorage/csbufio"
+	"github.com/dvriesman/cloudstorage"
+	"github.com/dvriesman/cloudstorage/csbufio"
 	"github.com/pborman/uuid"
 	"golang.org/x/net/context"
 	"google.golang.org/api/iterator"
