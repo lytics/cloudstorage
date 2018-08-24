@@ -307,7 +307,8 @@ func (f *FS) List(ctx context.Context, q cloudstorage.Query) (*cloudstorage.Obje
 	}
 
 	if resp.IsTruncated != nil && *resp.IsTruncated {
-		q.Marker = *resp.Contents[len(resp.Contents)-1].Key
+		lastObj := *resp.Contents[len(resp.Contents)-1].Key
+		objResp.NextMarker = lastObj
 	}
 
 	return objResp, nil
