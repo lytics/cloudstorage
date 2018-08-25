@@ -474,6 +474,7 @@ func ListObjsAndFolders(t TestingT, store cloudstorage.Store) {
 
 	createObjects(names)
 
+	// Test that we can get the full list of 15 objects
 	q := cloudstorage.NewQuery("list-test/")
 	q.PageSize = 500
 	q.Sorted()
@@ -483,6 +484,7 @@ func ListObjsAndFolders(t TestingT, store cloudstorage.Store) {
 	assert.Equal(t, 15, len(objs), "incorrect list len. wanted 15 got %d", len(objs))
 	iter.Close()
 
+	// Now test the response from iter
 	iter, _ = store.Objects(context.Background(), q)
 	objr, err := cloudstorage.ObjectResponseFromIter(iter)
 	assert.Equal(t, nil, err)
@@ -494,6 +496,21 @@ func ListObjsAndFolders(t TestingT, store cloudstorage.Store) {
 	objResp, err := store.List(context.Background(), q)
 	assert.Equal(t, nil, err)
 	assert.Equal(t, 15, len(objResp.Objects), "incorrect list len. wanted 15 got %d", len(objResp.Objects))
+
+	// Now we are going to test page-sizing, ie set page size below known list
+	q = cloudstorage.NewQuery("list-test/")
+	q.PageSize = 3
+	iter, _ = store.Objects(context.Background(), q)
+	objr, err = cloudstorage.ObjectResponseFromIter(iter)
+	// Even though page size=3, we actually want 15 because it is going
+	// to page through multiple pages.
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 15, len(objr.Objects), "incorrect list len. wanted 15 got %d", len(objr.Objects))
+	// Now ensure we can get only 3
+	objr, err = store.List(context.Background(), q)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 3, len(objr.Objects), "incorrect list len. wanted 3 got %d", len(objr.Objects))
+	assert.NotEqual(t, "", objr.NextMarker)
 
 	// Now we are going to re-run this test using an Object Iterator
 	// that uses store.List() instead of store.Objects()
