@@ -3,8 +3,6 @@
 set -e
 echo "" > coverage.txt
 
-go test `go list ./... | grep localfs`
-
 for d in $(go list ./... | grep -v vendor  | sort -r); do
     go test -race -coverprofile=profile.out -covermode=atomic $d
     if [ -f profile.out ]; then

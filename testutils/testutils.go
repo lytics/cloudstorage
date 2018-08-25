@@ -723,7 +723,7 @@ func TestReadWriteCloser(t TestingT, store cloudstorage.Store) {
 	for i, padding := range testdata {
 		gou.Debugf("starting TestReadWriteCloser (take:%v)", i)
 		fileName := "prefix/iorw.test"
-		data := fmt.Sprintf("%v:pid:%v:time:%v", padding, os.Getpid(), time.Now().Nanosecond())
+		data := fmt.Sprintf("pad:%v:pid:%v:time:%v:index:%v:", padding, os.Getpid(), time.Now().Nanosecond(), i)
 
 		wc, err := store.NewWriter(fileName, nil)
 		assert.Equalf(t, nil, err, "at loop-cnt:%v", i)
