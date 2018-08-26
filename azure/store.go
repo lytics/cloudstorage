@@ -1,6 +1,7 @@
 package azure
 
 import (
+	"bufio"
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
@@ -12,11 +13,10 @@ import (
 
 	az "github.com/Azure/azure-sdk-for-go/storage"
 	"github.com/araddon/gou"
+	"github.com/lytics/cloudstorage"
 	"github.com/pborman/uuid"
 	"golang.org/x/net/context"
-
-	"github.com/lytics/cloudstorage"
-	"github.com/lytics/cloudstorage/csbufio"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -383,22 +383,62 @@ func (f *FS) NewWriterWithContext(ctx context.Context, name string, metadata map
 
 	name = strings.Replace(name, " ", "+", -1)
 
-	pr, pw := io.Pipe()
-	bw := csbufio.NewWriter(pw)
 	o := &object{name: name, metadata: metadata}
 
-	go func() {
-		// TODO:  this needs to be managed, ie shutdown signals, close, handler err etc.
+	rwc := newAzureWriteCloser(f, o)
 
+	return rwc, nil
+}
+
+type azureWriteCloser struct {
+	pr *io.PipeReader
+	pw *io.PipeWriter
+	wc *bufio.Writer
+	g  errgroup.Group
+}
+
+// azureWriteCloser is a io.WriteCloser that manages the azure connection pipe
+func newAzureWriteCloser(f *FS, obj *object) io.WriteCloser {
+	pr, pw := io.Pipe()
+	bw := bufio.NewWriter(pw)
+
+	var g errgroup.Group
+
+	g.Go(func() error {
 		// Upload the file to azure.
 		// Do a multipart upload
-		err := f.uploadMultiPart(o, pr)
+		err := f.uploadMultiPart(obj, pr)
 		if err != nil {
 			gou.Warnf("could not upload %v", err)
+			return err
 		}
-	}()
+		return nil
+	})
 
-	return bw, nil
+	return azureWriteCloser{
+		pr, pw, bw, g,
+	}
+}
+
+func (bc azureWriteCloser) Write(p []byte) (nn int, err error) {
+	return bc.wc.Write(p)
+}
+
+func (bc azureWriteCloser) Close() error {
+	//Flush buffered data to the pipe writer
+	if err := bc.wc.Flush(); err != nil {
+		return err
+	}
+	//Close the pipe writer so that the pipe reader will return nil, EOF
+	//This will cause uploadMultiPart to complete and return.
+	if err := bc.pw.Close(); err != nil {
+		return err
+	}
+	//use the error group's Wait method to block until uploadMultPart has completed
+	if err := bc.g.Wait(); err != nil {
+		return err
+	}
+	return nil
 }
 
 const (
