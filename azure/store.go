@@ -385,7 +385,7 @@ func (f *FS) NewWriterWithContext(ctx context.Context, name string, metadata map
 
 	o := &object{name: name, metadata: metadata}
 
-	rwc := newAzureWriteCloser(f, o)
+	rwc := newAzureWriteCloser(ctx, f, o)
 
 	return rwc, nil
 }
@@ -394,15 +394,15 @@ type azureWriteCloser struct {
 	pr *io.PipeReader
 	pw *io.PipeWriter
 	wc *bufio.Writer
-	g  errgroup.Group
+	g  *errgroup.Group
 }
 
 // azureWriteCloser is a io.WriteCloser that manages the azure connection pipe
-func newAzureWriteCloser(f *FS, obj *object) io.WriteCloser {
+func newAzureWriteCloser(ctx context.Context, f *FS, obj *object) io.WriteCloser {
 	pr, pw := io.Pipe()
 	bw := bufio.NewWriter(pw)
 
-	var g errgroup.Group
+	g, _ := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
 		// Upload the file to azure.
