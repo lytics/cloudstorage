@@ -256,23 +256,28 @@ func Copy(ctx context.Context, s Store, src, des Object) error {
 		}
 	}
 
-	// Slow path, copy locally then up to des
-	fout, err := des.Open(ReadWrite)
+	// Slow path, open an io.Reader from the source and copy it to an
+	// io.Writer as the destination
+	fout, err := s.NewWriterWithContext(ctx, des.Name(), src.MetaData())
 	if err != nil {
+		gou.Warnf("Move could not open destination %v", src.Name())
 		return err
 	}
-
-	fin, err := src.Open(ReadOnly)
+	fin, err := s.NewReaderWithContext(ctx, src.Name())
 	if err != nil {
+		gou.Warnf("Move could not open source %v err=%v", src.Name(), err)
 		return err
 	}
 	if _, err = io.Copy(fout, fin); err != nil {
 		return err
 	}
-	if err := src.Close(); err != nil {
+	if err := fin.Close(); err != nil {
 		return err
 	}
-	return des.Close() //this will flush and sync the file.
+	if err := fout.Close(); err != nil { //this will flush and sync the file.
+		return err
+	}
+	return nil
 }
 
 // Move source object to destination.
@@ -284,58 +289,13 @@ func Move(ctx context.Context, s Store, src, des Object) error {
 		}
 	}
 
-	// Slow path, copy locally then up to des
-	srcPath := src.Name()
-	desPath := des.Name()
-	fout, err := s.NewWriterWithContext(ctx, desPath, src.MetaData())
-	if err != nil {
-		gou.Warnf("Move could not open destination %v", src.Name())
-		return err
-	}
-	fin, err := s.NewReaderWithContext(ctx, srcPath)
-	if err != nil {
-		gou.Warnf("Move could not open source %v err=%v", src.Name(), err)
-	}
-	if _, err = io.Copy(fout, fin); err != nil {
-		return err
-	}
-	if err := fin.Close(); err != nil {
-		return err
-	}
-	if err := fout.Close(); err != nil { //this will flush and sync the file.
-		return err
-	}
-	if err := src.Delete(); err != nil { //delete the src, after des has been flushed/synced
+	if err := Copy(ctx, s, src, des); err != nil { // use Copy() to copy the files
 		return err
 	}
 
-	//	// Slow path, copy locally then up to des
-	//	fout, err := des.Open(ReadWrite)
-	//	if err != nil {
-	//		gou.Warnf("Move could not open destination %v", src.Name())
-	//		return err
-	//	}
-	//	if err := fout.Truncate(0); err != nil {
-	//		return err
-	//	}
-	//
-	//	fin, err := src.Open(ReadOnly)
-	//	if err != nil {
-	//		gou.Warnf("Move could not open source %v err=%v", src.Name(), err)
-	//		return err
-	//	}
-	//	if _, err := io.Copy(fout, fin); err != nil {
-	//		return err
-	//	}
-	//	if err := des.Close(); err != nil {
-	//		return err
-	//	}
-	//	if err := src.Close(); err != nil {
-	//		return err
-	//	}
-	//	if err := src.Delete(); err != nil {
-	//		return err
-	//	}
+	if err := src.Delete(); err != nil { //delete the src, after des has been flushed/synced
+		return err
+	}
 
 	return nil
 }
