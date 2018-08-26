@@ -241,8 +241,9 @@ func Move(t TestingT, store cloudstorage.Store) {
 		// wtf, eff you azure.
 		time.Sleep(time.Millisecond * 1100)
 	case "sftp":
-		t.Logf("SKIPPING MOVE tests for SFTP")
-		return
+		time.Sleep(time.Millisecond * 1100)
+		//t.Logf("SKIPPING MOVE tests for SFTP")
+		//return
 	}
 
 	testdata := []string{
