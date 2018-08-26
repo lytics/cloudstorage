@@ -14,6 +14,7 @@ It provides a unified api for local files, sftp and Cloud files that aids testin
 
 
 ### Similar/Related works
+* https://github.com/google/go-cloud Came out after this, similar allowing blob storage through unified API.  Also does other things besides blob.
 * https://github.com/graymeta/stow similar to this pkg, library for interacting with cloud services.  Less of the buffer/local cache.  Different clouds.
 * https://github.com/ncw/rclone great cli sync tool, many connections (30+), well tested.  Designed as cli tool, config is less suited for use as library.
 
