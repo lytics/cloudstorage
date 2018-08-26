@@ -380,16 +380,16 @@ func (f *FS) NewWriter(objectName string, metadata map[string]string) (io.WriteC
 
 // NewWriterWithContext create writer with provided context and metadata.
 func (f *FS) NewWriterWithContext(ctx context.Context, name string, metadata map[string]string) (io.WriteCloser, error) {
-
 	name = strings.Replace(name, " ", "+", -1)
-
 	o := &object{name: name, metadata: metadata}
-
 	rwc := newAzureWriteCloser(ctx, f, o)
 
 	return rwc, nil
 }
 
+// azureWriteCloser - manages data and go routines used to pipe data to azures, calling Close
+// will flush data to azures and block until all inflight data has been written or
+// we get an error.
 type azureWriteCloser struct {
 	pr *io.PipeReader
 	pw *io.PipeWriter
@@ -397,7 +397,8 @@ type azureWriteCloser struct {
 	g  *errgroup.Group
 }
 
-// azureWriteCloser is a io.WriteCloser that manages the azure connection pipe
+// azureWriteCloser is a io.WriteCloser that manages the azure connection pipe and when Close is called
+// it blocks until all data is flushed to azure via a background go routine call to uploadMultiPart.
 func newAzureWriteCloser(ctx context.Context, f *FS, obj *object) io.WriteCloser {
 	pr, pw := io.Pipe()
 	bw := bufio.NewWriter(pw)
@@ -420,21 +421,26 @@ func newAzureWriteCloser(ctx context.Context, f *FS, obj *object) io.WriteCloser
 	}
 }
 
+// Write writes data to our write buffer, which writes to the backing io pipe.
+// If an error is encountered while writting we may not see it here, my guess is
+// we wouldn't see it until someone calls close and the error is returned from the
+// error group.
 func (bc azureWriteCloser) Write(p []byte) (nn int, err error) {
 	return bc.wc.Write(p)
 }
 
+// Close and block until we flush inflight data to azures
 func (bc azureWriteCloser) Close() error {
-	//Flush buffered data to the pipe writer
+	//Flush buffered data to the backing pipe writer.
 	if err := bc.wc.Flush(); err != nil {
 		return err
 	}
-	//Close the pipe writer so that the pipe reader will return nil, EOF
-	//This will cause uploadMultiPart to complete and return.
+	//Close the pipe writer so that the pipe reader will return EOF,
+	// doing so will cause uploadMultiPart to complete and return.
 	if err := bc.pw.Close(); err != nil {
 		return err
 	}
-	//use the error group's Wait method to block until uploadMultPart has completed
+	//Use the error group's Wait method to block until uploadMultPart has completed
 	if err := bc.g.Wait(); err != nil {
 		return err
 	}
