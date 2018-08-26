@@ -88,6 +88,8 @@ func Clearstore(t TestingT, store cloudstorage.Store) {
 
 func RunTests(t TestingT, s cloudstorage.Store) {
 
+	gou.SetLogger(log.New(os.Stderr, "", log.Ldate|log.Lmicroseconds|log.Lshortfile), "debug")
+
 	t.Logf("running store setup: type:%v", s.Type())
 	StoreSetup(t, s)
 	gou.Debugf("finished StoreSetup")
