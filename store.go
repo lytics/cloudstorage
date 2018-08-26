@@ -257,7 +257,9 @@ func Copy(ctx context.Context, s Store, src, des Object) error {
 	}
 
 	// Slow path, open an io.Reader from the source and copy it to an
-	// io.Writer as the destination
+	// io.Writer to the destination.  This is considered a "slow path" because we
+	// have to act as a broker to relay bytes between the two objects.  Some
+	// stores support moving data using an API call.
 	fout, err := s.NewWriterWithContext(ctx, des.Name(), src.MetaData())
 	if err != nil {
 		gou.Warnf("Move could not open destination %v", src.Name())
