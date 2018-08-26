@@ -79,6 +79,10 @@ func Clearstore(t TestingT, store cloudstorage.Store) {
 	}
 
 	switch store.Type() {
+	case "s3":
+		// S3 maybe lazy about deletes...
+		fmt.Println("doing s3 delete sleep 5")
+		time.Sleep(5 * time.Second)
 	case "gcs":
 		// GCS is lazy about deletes...
 		fmt.Println("doing GCS delete sleep 15")
@@ -87,8 +91,6 @@ func Clearstore(t TestingT, store cloudstorage.Store) {
 }
 
 func RunTests(t TestingT, s cloudstorage.Store) {
-
-	gou.SetLogger(log.New(os.Stderr, "", log.Ldate|log.Lmicroseconds|log.Lshortfile), "debug")
 
 	t.Logf("running store setup: type:%v", s.Type())
 	StoreSetup(t, s)
@@ -461,7 +463,7 @@ func ListObjsAndFolders(t TestingT, store cloudstorage.Store) {
 	createObjects := func(names []string) {
 		for _, n := range names {
 			obj, err := store.NewObject(n)
-			assert.Equal(t, nil, err)
+			assert.Equalf(t, nil, err, "failed trying to call new object on:%v of %v", n, names)
 			if obj == nil {
 				continue
 			}
