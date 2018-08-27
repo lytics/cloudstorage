@@ -84,5 +84,5 @@ func TestAll(t *testing.T) {
 	client := store.Client()
 	assert.NotEqual(t, nil, client)
 
-	testutils.RunTests(t, store)
+	testutils.RunTests(t, store, config)
 }
