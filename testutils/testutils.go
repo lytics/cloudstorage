@@ -79,6 +79,10 @@ func Clearstore(t TestingT, store cloudstorage.Store) {
 	}
 
 	switch store.Type() {
+	case "s3":
+		// S3 maybe lazy about deletes...
+		fmt.Println("doing s3 delete sleep 5")
+		time.Sleep(5 * time.Second)
 	case "gcs":
 		// GCS is lazy about deletes...
 		fmt.Println("doing GCS delete sleep 15")
@@ -88,7 +92,7 @@ func Clearstore(t TestingT, store cloudstorage.Store) {
 
 func RunTests(t TestingT, s cloudstorage.Store) {
 
-	t.Logf("running store setup")
+	t.Logf("running store setup: type:%v", s.Type())
 	StoreSetup(t, s)
 	gou.Debugf("finished StoreSetup")
 
@@ -174,6 +178,7 @@ func BasicRW(t TestingT, store cloudstorage.Store) {
 	assert.Equal(t, "prefix/test.csv", obj2.String())
 
 	f2, err := obj2.Open(cloudstorage.ReadOnly)
+	defer f2.Close()
 	assert.Equal(t, nil, err)
 	assert.Equal(t, fmt.Sprintf("%p", f2), fmt.Sprintf("%p", obj2.File()))
 
@@ -190,7 +195,7 @@ func BasicRW(t TestingT, store cloudstorage.Store) {
 	assert.Equal(t, nil, obj)
 }
 
-func createFile(t TestingT, store cloudstorage.Store, name string) cloudstorage.Object {
+func createFile(t TestingT, store cloudstorage.Store, name, data string) cloudstorage.Object {
 
 	obj, err := store.NewObject(name)
 	assert.Equal(t, nil, err)
@@ -202,7 +207,7 @@ func createFile(t TestingT, store cloudstorage.Store, name string) cloudstorage.
 	assert.NotEqual(t, nil, f)
 
 	w := bufio.NewWriter(f)
-	_, err = w.WriteString(testcsv)
+	_, err = w.WriteString(data)
 	assert.Equal(t, nil, err)
 	err = w.Flush()
 	assert.Equal(t, nil, err)
@@ -220,7 +225,7 @@ func createFile(t TestingT, store cloudstorage.Store, name string) cloudstorage.
 	bytes, err := ioutil.ReadAll(f2)
 	assert.Equal(t, nil, err)
 
-	assert.Equal(t, testcsv, string(bytes))
+	assert.Equal(t, data, string(bytes))
 
 	obj2.Close()
 
@@ -230,44 +235,74 @@ func createFile(t TestingT, store cloudstorage.Store, name string) cloudstorage.
 }
 
 func Move(t TestingT, store cloudstorage.Store) {
-
-	// Read the object from store, delete if it exists
-	deleteIfExists(store, "from/test.csv")
-	deleteIfExists(store, "to/testmove.csv")
-
+	deleteIfExists(store, "to/testmove.txt")
 	switch store.Type() {
 	case "azure":
 		// wtf, eff you azure.
 		time.Sleep(time.Millisecond * 1100)
+	case "sftp":
+		time.Sleep(time.Millisecond * 1100)
+		//t.Logf("SKIPPING MOVE tests for SFTP")
+		//return
 	}
 
-	// Create a new object and write to it.
-	obj := createFile(t, store, "from/test.csv")
-	assert.NotEqual(t, nil, obj)
+	testdata := []string{
+		"",
+		"1_1234567890",
+		"2_12345678901234567890",
+		"3_1234567890",
+		"",
+	}
 
-	dest, err := store.NewObject("to/testmove.csv")
-	assert.Equal(t, nil, err)
+	dest, err := store.NewObject("to/testmove.txt")
+	assert.Equal(t, nil, err, "dest file")
 
-	err = cloudstorage.Move(context.Background(), store, obj, dest)
-	assert.Equal(t, nil, err)
+	// We do this multiple times with variable length data because Move
+	// should overwrite the desc object on each call.
+	for row, data := range testdata {
 
-	obj2, err := store.Get(context.Background(), "to/testmove.csv")
-	assert.Equal(t, nil, err)
-	assert.Equal(t, store.Type(), obj2.StorageSource())
-	assert.Equal(t, "to/testmove.csv", obj2.Name())
+		// Read the object from store, delete if it exists
+		deleteIfExists(store, "from/testmove.txt")
+		switch store.Type() {
+		case "azure":
+			// wtf, eff you azure.
+			time.Sleep(time.Millisecond * 1100)
+		}
 
-	f2, err := obj2.Open(cloudstorage.ReadOnly)
-	assert.Equal(t, nil, err)
-	assert.Equal(t, fmt.Sprintf("%p", f2), fmt.Sprintf("%p", obj2.File()))
+		// Create a new object and write to it.
+		obj := createFile(t, store, "from/testmove.txt", data)
+		assert.NotEqual(t, nil, obj, "at row:%v", row)
 
-	bytes, err := ioutil.ReadAll(f2)
-	assert.Equal(t, nil, err)
+		err = cloudstorage.Move(context.Background(), store, obj, dest)
+		assert.Equal(t, nil, err, "at row:%v", row)
 
-	assert.Equal(t, testcsv, string(bytes))
+		ensureContents(t, store, "to/testmove.txt", data, fmt.Sprintf("move `to` file validation: at row:%v", row))
 
-	// Ensure that after Move it no longer exists in from
-	_, err = store.Get(context.Background(), "from/test.csv")
-	assert.Equal(t, cloudstorage.ErrObjectNotFound, err)
+		_, err := store.Get(context.Background(), "from/testmove.txt")
+		assert.Equal(t, cloudstorage.ErrObjectNotFound, err, "move `from` file validation: at row:%v", row)
+	}
+}
+
+func ensureContents(t TestingT, store cloudstorage.Store, name, data, msg string) {
+	obj, err := store.Get(context.Background(), name)
+	assert.Equal(t, nil, err, msg)
+	if err != nil {
+		return
+	}
+	assert.Equal(t, store.Type(), obj.StorageSource(), msg)
+	assert.Equal(t, name, obj.Name(), msg)
+
+	f, err := obj.Open(cloudstorage.ReadOnly)
+	defer func() {
+		err = obj.Close()
+		assert.Equal(t, nil, err, msg)
+	}()
+	assert.Equal(t, nil, err, msg)
+	assert.Equal(t, fmt.Sprintf("%p", f), fmt.Sprintf("%p", obj.File()), msg)
+
+	bytes, err := ioutil.ReadAll(f)
+	assert.Equal(t, nil, err, msg)
+	assert.Equal(t, data, string(bytes), msg)
 }
 
 func Copy(t TestingT, store cloudstorage.Store) {
@@ -283,7 +318,7 @@ func Copy(t TestingT, store cloudstorage.Store) {
 	}
 
 	// Create a new object and write to it.
-	obj := createFile(t, store, "from/test.csv")
+	obj := createFile(t, store, "from/test.csv", testcsv)
 
 	dest, err := store.NewObject("to/testcopy.csv")
 	assert.Equal(t, nil, err)
@@ -297,19 +332,7 @@ func Copy(t TestingT, store cloudstorage.Store) {
 	assert.Equal(t, "from/test.csv", obj2.Name())
 
 	// And also to should exist
-	obj2, err = store.Get(context.Background(), "to/testcopy.csv")
-	assert.Equal(t, nil, err)
-	assert.Equal(t, store.Type(), obj2.StorageSource())
-	assert.Equal(t, "to/testcopy.csv", obj2.Name())
-
-	f2, err := obj2.Open(cloudstorage.ReadOnly)
-	assert.Equal(t, nil, err)
-	assert.Equal(t, fmt.Sprintf("%p", f2), fmt.Sprintf("%p", obj2.File()))
-
-	bytes, err := ioutil.ReadAll(f2)
-	assert.Equal(t, nil, err)
-
-	assert.Equal(t, testcsv, string(bytes))
+	ensureContents(t, store, "to/testcopy.csv", testcsv, "target file validation")
 }
 
 func Append(t TestingT, store cloudstorage.Store) {
@@ -403,6 +426,9 @@ func Append(t TestingT, store cloudstorage.Store) {
 
 	assert.Equal(t, testcsv+morerows, string(bytes), "not the rows we expected.")
 
+	err = obj3.Close()
+	assert.Equal(t, nil, err)
+
 	// Now we are going to essentially repeat tests but now use the native
 	// interface object.Read(), Write() instead of OPen() -> os.File()
 
@@ -438,7 +464,7 @@ func ListObjsAndFolders(t TestingT, store cloudstorage.Store) {
 	createObjects := func(names []string) {
 		for _, n := range names {
 			obj, err := store.NewObject(n)
-			assert.Equal(t, nil, err)
+			assert.Equalf(t, nil, err, "failed trying to call new object on:%v of %v", n, names)
 			if obj == nil {
 				continue
 			}
@@ -680,6 +706,9 @@ func NewObjectWithExisting(t TestingT, store cloudstorage.Store) {
 	assert.Equal(t, nil, err)
 
 	assert.Equal(t, testcsv, string(bytes))
+
+	err = obj3.Close()
+	assert.Equal(t, nil, err)
 }
 
 func TestReadWriteCloser(t TestingT, store cloudstorage.Store) {
@@ -699,7 +728,7 @@ func TestReadWriteCloser(t TestingT, store cloudstorage.Store) {
 	for i, padding := range testdata {
 		gou.Debugf("starting TestReadWriteCloser (take:%v)", i)
 		fileName := "prefix/iorw.test"
-		data := fmt.Sprintf("%v:pid:%v:time:%v", padding, os.Getpid(), time.Now().Nanosecond())
+		data := fmt.Sprintf("pad:%v:pid:%v:time:%v:index:%v:", padding, os.Getpid(), time.Now().Nanosecond(), i)
 
 		wc, err := store.NewWriter(fileName, nil)
 		assert.Equalf(t, nil, err, "at loop-cnt:%v", i)
@@ -719,7 +748,7 @@ func TestReadWriteCloser(t TestingT, store cloudstorage.Store) {
 		buf2 := bytes.Buffer{}
 		_, err = buf2.ReadFrom(rc)
 		assert.Equalf(t, nil, err, "at loop-cnt:%v", i)
-		assert.Equalf(t, data, buf2.String(), "round trip data don't match") // extra data means we didn't truncate the file
+		assert.Equalf(t, data, buf2.String(), "round trip data don't match: loop-cnt:%v", i) // extra data means we didn't truncate the file
 
 		// make sure we clean up and close
 		assert.Equal(t, nil, rc.Close())
