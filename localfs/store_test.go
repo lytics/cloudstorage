@@ -1,6 +1,7 @@
 package localfs_test
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,6 +12,10 @@ import (
 )
 
 func TestAll(t *testing.T) {
+
+	os.RemoveAll("/tmp/mockcloud")
+	os.RemoveAll("/tmp/localcache")
+
 	localFsConf := &cloudstorage.Config{
 		Type:       localfs.StoreType,
 		AuthMethod: localfs.AuthFileSystem,
