@@ -765,7 +765,7 @@ func TestReadWriteCloser(t TestingT, store cloudstorage.Store) {
 }
 
 func MultipleRW(t TestingT, store cloudstorage.Store, conf *cloudstorage.Config) {
-	const TestFileName = "multi_rw_test.csv" //no prefix path, so we can find the file correct in the cache dir.
+	const TestFileName = "multi_rw/multi_rw_test.csv"
 
 	// Read the object from store, delete if it exists
 	deleteIfExists(store, TestFileName)
@@ -809,7 +809,7 @@ func MultipleRW(t TestingT, store cloudstorage.Store, conf *cloudstorage.Config)
 		err = obj.Close()
 		assert.Equal(t, nil, err)
 
-		files, err := filepath.Glob(conf.TmpDir + "/*")
+		files, err := filepath.Glob(conf.TmpDir + "/multi_rw/*")
 		assert.Equal(t, nil, err)
 		for _, f := range files {
 			if strings.Contains(f, TestFileName) {
