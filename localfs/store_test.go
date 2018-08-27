@@ -28,7 +28,7 @@ func TestAll(t *testing.T) {
 		t.Fatalf("Could not create store: config=%+v  err=%v", localFsConf, err)
 		return
 	}
-	testutils.RunTests(t, store)
+	testutils.RunTests(t, store, localFsConf)
 
 	// invalid config:  empty/missing LocalFS
 	localFsConf = &cloudstorage.Config{

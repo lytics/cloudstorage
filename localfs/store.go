@@ -465,6 +465,12 @@ func (o *object) Close() error {
 		return nil
 	}
 
+	defer func() {
+		os.Remove(o.cachepath)
+		o.cachedcopy = nil
+		o.opened = false
+	}()
+
 	err := o.cachedcopy.Sync()
 	if err != nil {
 		return err

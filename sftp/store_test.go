@@ -89,5 +89,5 @@ func TestAll(t *testing.T) {
 	if store == nil {
 		t.Fatalf("No store???")
 	}
-	testutils.RunTests(t, store)
+	testutils.RunTests(t, store, config)
 }
