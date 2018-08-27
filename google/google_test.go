@@ -47,5 +47,5 @@ func TestAll(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Could not create store: config=%+v  err=%v", config, err)
 	}
-	testutils.RunTests(t, store)
+	testutils.RunTests(t, store, config)
 }
