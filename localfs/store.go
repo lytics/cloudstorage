@@ -488,9 +488,6 @@ func (o *object) Close() error {
 		}
 	}
 
-	o.cachedcopy = nil
-	o.opened = false
-
 	return nil
 }
 

@@ -809,7 +809,6 @@ func MultipleRW(t TestingT, store cloudstorage.Store, conf *cloudstorage.Config)
 		err = obj.Close()
 		assert.Equal(t, nil, err)
 
-		//files, err := ioutil.ReadDir(conf.TmpDir)
 		files, err := filepath.Glob(conf.TmpDir + "/*")
 		assert.Equal(t, nil, err)
 		for _, f := range files {
