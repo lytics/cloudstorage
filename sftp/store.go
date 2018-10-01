@@ -166,7 +166,7 @@ func NewClient(clientCtx context.Context, conf *cloudstorage.Config, host string
 		paths:     make(map[string]struct{}),
 	}
 
-	//gou.Infof("%p created sftp client %#v", client, ftpClient)
+	gou.Infof("%p created sftp client %#v", client, ftpClient)
 
 	return client, nil
 }
@@ -844,6 +844,13 @@ func (o *object) Close() error {
 		return nil
 	}
 
+	if o.file != nil {
+		if err := o.file.Close(); err != nil {
+			gou.Errorf("error on sync file=%q err=%v", o.name, err)
+			return err
+		}
+	}
+
 	gou.Debugf("not syncing on close? %v opened?%v  readonly?%v", o.name, o.opened, o.readonly)
 	err := o.cachedcopy.Close()
 	if err != nil {
@@ -860,6 +867,12 @@ func (o *object) Release() error {
 		o.cachedcopy = nil
 		o.opened = false
 		return os.Remove(o.cachepath)
+	}
+	if o.file != nil {
+		if err := o.file.Close(); err != nil {
+			gou.Errorf("error on sync file=%q err=%v", o.name, err)
+			return err
+		}
 	}
 	// most likely this doesn't exist so don't return error
 	os.Remove(o.cachepath)

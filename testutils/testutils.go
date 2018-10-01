@@ -199,6 +199,7 @@ func BasicRW(t TestingT, store cloudstorage.Store) {
 	obj, err = store.Get(context.Background(), "prefix/test.csv")
 	assert.Equal(t, cloudstorage.ErrObjectNotFound, err)
 	assert.Equal(t, nil, obj)
+	obj.Close()
 }
 
 func createFile(t TestingT, store cloudstorage.Store, name, data string) cloudstorage.Object {
