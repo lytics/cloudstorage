@@ -813,7 +813,7 @@ func MultipleRW(t TestingT, store cloudstorage.Store, conf *cloudstorage.Config)
 		assert.Equal(t, nil, err)
 		for _, f := range files {
 			if f != "" && strings.Contains(f, TestFileName) {
-				t.Fatalf("the cache files should have been cleaned up for the: found-file:%v cachefile:%v allfiles:%v", TestFileName, f, files)
+				t.Fatalf("tc:%v the cache files should have been cleaned up for the: test-file:%v cachefile:%v allfiles:%v", i, TestFileName, f, files)
 			}
 		}
 

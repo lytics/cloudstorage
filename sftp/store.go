@@ -166,7 +166,7 @@ func NewClient(clientCtx context.Context, conf *cloudstorage.Config, host string
 		paths:     make(map[string]struct{}),
 	}
 
-	gou.Infof("%p created sftp client %#v", client, ftpClient)
+	//gou.Infof("%p created sftp client %#v", client, ftpClient)
 
 	return client, nil
 }
