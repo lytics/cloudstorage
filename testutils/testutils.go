@@ -767,6 +767,17 @@ func TestReadWriteCloser(t TestingT, store cloudstorage.Store) {
 func MultipleRW(t TestingT, store cloudstorage.Store, conf *cloudstorage.Config) {
 	const TestFileName = "multi_rw/multi_rw_test.csv"
 
+	oldFiles, err := filepath.Glob(conf.TmpDir + "/multi_rw/*")
+	assert.Equal(t, nil, err)
+	for _, f := range oldFiles {
+		if f != "" && strings.Contains(f, TestFileName) {
+			gou.Warnf("should have been cleaned up for the: test-file:%v cachefile:%v allfiles:%v", TestFileName, f, oldFiles)
+		}
+	}
+
+	err = os.RemoveAll(conf.TmpDir + "/multi_rw/")
+	assert.Equal(t, nil, err)
+
 	// Read the object from store, delete if it exists
 	deleteIfExists(store, TestFileName)
 
@@ -814,6 +825,7 @@ func MultipleRW(t TestingT, store cloudstorage.Store, conf *cloudstorage.Config)
 		for _, f := range files {
 			if f != "" && strings.Contains(f, TestFileName) {
 				t.Fatalf("tc:%v the cache files should have been cleaned up for the: test-file:%v cachefile:%v allfiles:%v", i, TestFileName, f, files)
+				return
 			}
 		}
 
@@ -834,5 +846,7 @@ func MultipleRW(t TestingT, store cloudstorage.Store, conf *cloudstorage.Config)
 
 		assert.Equal(t, data, string(bytes))
 
+		err = obj2.Close()
+		assert.Equal(t, nil, err)
 	}
 }
