@@ -812,8 +812,8 @@ func MultipleRW(t TestingT, store cloudstorage.Store, conf *cloudstorage.Config)
 		files, err := filepath.Glob(conf.TmpDir + "/multi_rw/*")
 		assert.Equal(t, nil, err)
 		for _, f := range files {
-			if strings.Contains(f, TestFileName) {
-				t.Fatalf("the cache files should have been cleaned up for the file:%v : cachefile:%v", TestFileName, f)
+			if f != "" && strings.Contains(f, TestFileName) {
+				t.Fatalf("the cache files should have been cleaned up for the: found-file:%v cachefile:%v allfiles:%v", TestFileName, f, files)
 			}
 		}
 
