@@ -680,16 +680,24 @@ func (o *object) Close() error {
 		o.opened = false
 	}()
 
-	serr := o.cachedcopy.Sync()
-	cerr := o.cachedcopy.Close()
-	if serr != nil || cerr != nil {
-		return fmt.Errorf("error on sync and closing localfile. %s sync=%v, err=%v", o.cachepath, serr, cerr)
+	if !o.readonly {
+		err := o.cachedcopy.Sync()
+		if err != nil {
+			return err
+		}
+	}
+
+	err := o.cachedcopy.Close()
+	if err != nil {
+		if !strings.Contains(err.Error(), os.ErrClosed.Error()) {
+			return err
+		}
 	}
 
 	if o.opened && !o.readonly {
 		err := o.Sync()
 		if err != nil {
-			gou.Errorf("error on sync %v", err)
+			gou.Errorf("error on sync %v err=%v", o.cachepath, err)
 			return err
 		}
 	}
