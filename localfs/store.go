@@ -471,7 +471,6 @@ func (o *object) Close() error {
 	defer func() {
 		if o.cachedcopy != nil {
 			n := o.cachedcopy.Name()
-			fmt.Println("TODO REMOVE: Close: cached name", n)
 			os.Remove(n)
 		}
 

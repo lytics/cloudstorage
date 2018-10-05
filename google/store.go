@@ -530,7 +530,7 @@ func (o *object) Close() error {
 	err := o.cachedcopy.Close()
 	if err != nil {
 		if !strings.Contains(err.Error(), "already closed") {
-			gou.Warnf("%v", err)
+			gou.Warnf("error closing cached copy %v", err)
 			return fmt.Errorf("error on sync and closing localfile. %q err=%v", o.cachepath, err)
 		}
 	}
