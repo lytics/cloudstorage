@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/araddon/gou"
 	"github.com/lytics/cloudstorage"
 	"github.com/lytics/cloudstorage/csbufio"
 	"github.com/pborman/uuid"
@@ -337,7 +338,9 @@ func (o *object) SetMetaData(meta map[string]string) {
 }
 
 func (o *object) Delete() error {
-	o.Release()
+	if err := o.Release(); err != nil {
+		gou.Errorf("could not release %v", err)
+	}
 	if err := os.Remove(o.storepath); err != nil {
 		return err
 	}
@@ -465,14 +468,28 @@ func (o *object) Close() error {
 		return nil
 	}
 
-	err := o.cachedcopy.Sync()
-	if err != nil {
-		return err
+	defer func() {
+		if o.cachedcopy != nil {
+			n := o.cachedcopy.Name()
+			os.Remove(n)
+		}
+
+		o.cachedcopy = nil
+		o.opened = false
+	}()
+
+	if !o.readonly {
+		err := o.cachedcopy.Sync()
+		if err != nil {
+			return err
+		}
 	}
 
-	err = o.cachedcopy.Close()
+	err := o.cachedcopy.Close()
 	if err != nil {
-		return err
+		if !strings.Contains(err.Error(), os.ErrClosed.Error()) {
+			return err
+		}
 	}
 
 	if o.opened && !o.readonly {
@@ -482,9 +499,6 @@ func (o *object) Close() error {
 		}
 	}
 
-	o.cachedcopy = nil
-	o.opened = false
-
 	return nil
 }
 
@@ -493,7 +507,10 @@ func (o *object) Release() error {
 		o.cachedcopy.Close()
 		o.cachedcopy = nil
 		o.opened = false
-		return os.Remove(o.cachepath)
+		err := os.Remove(o.cachepath)
+		if err != nil {
+			return err
+		}
 	}
 	// most likely this doesn't exist so don't return error
 	os.Remove(o.cachepath)

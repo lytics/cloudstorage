@@ -25,7 +25,7 @@ func TestAll(t *testing.T) {
 		t.Fatalf("Could not create store: config=%+v  err=%v", localFsConf, err)
 		return
 	}
-	testutils.RunTests(t, store)
+	testutils.RunTests(t, store, localFsConf)
 	// verify cleanup
 	cloudstorage.CleanupCacheFiles(time.Minute*1, localFsConf.TmpDir)
 }

@@ -538,7 +538,7 @@ func (m *Client) NewReaderWithContext(ctx context.Context, name string) (io.Read
 		return nil, cloudstorage.ErrObjectNotFound
 	}
 	get := Concat(m.bucket, name)
-	gou.InfoCtx(m.clientCtx, "getting file %s", get)
+	gou.DebugCtx(m.clientCtx, "NewReaderWithContext getting file %s", get)
 	f, err := m.client.Open(get)
 	if err != nil {
 		return nil, err
@@ -844,10 +844,20 @@ func (o *object) Close() error {
 		return nil
 	}
 
+	if o.file != nil {
+		if err := o.file.Close(); err != nil {
+			gou.Errorf("error on sync file=%q err=%v", o.name, err)
+			return err
+		}
+	}
+
 	gou.Debugf("not syncing on close? %v opened?%v  readonly?%v", o.name, o.opened, o.readonly)
 	err := o.cachedcopy.Close()
 	if err != nil {
-		return fmt.Errorf("error on sync and closing localfile. %q err=%v", o.cachepath, err)
+		if !strings.Contains(err.Error(), "already closed") {
+			gou.Warnf("error closing cached copy %v", err)
+			return fmt.Errorf("error on sync and closing localfile. %q err=%v", o.cachepath, err)
+		}
 	}
 
 	return nil
@@ -860,6 +870,12 @@ func (o *object) Release() error {
 		o.cachedcopy = nil
 		o.opened = false
 		return os.Remove(o.cachepath)
+	}
+	if o.file != nil {
+		if err := o.file.Close(); err != nil {
+			gou.Errorf("error on sync file=%q err=%v", o.name, err)
+			return err
+		}
 	}
 	// most likely this doesn't exist so don't return error
 	os.Remove(o.cachepath)
