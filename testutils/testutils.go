@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -289,29 +290,40 @@ func Move(t TestingT, store cloudstorage.Store) {
 	}
 }
 
+func caller(calldepth int) string {
+	_, _, line, ok := runtime.Caller(calldepth)
+	if !ok {
+		line = 0
+	}
+	return fmt.Sprintf("caller-LN%v", line)
+}
+
 func ensureContents(t TestingT, store cloudstorage.Store, name, data, msg string) {
+	caller := caller(2)
+
 	obj, err := store.Get(context.Background(), name)
-	assert.Equal(t, nil, err, msg)
+	assert.Equalf(t, nil, err, msg, caller)
 	if err != nil {
 		return
 	}
-	assert.Equal(t, store.Type(), obj.StorageSource(), msg)
-	assert.Equal(t, name, obj.Name(), msg)
+	assert.Equalf(t, store.Type(), obj.StorageSource(), msg, caller)
+	assert.Equalf(t, name, obj.Name(), msg, caller)
 
 	f, err := obj.Open(cloudstorage.ReadOnly)
 	defer func() {
 		err = obj.Close()
-		assert.Equal(t, nil, err, msg)
+		assert.Equalf(t, nil, err, msg, caller)
 	}()
-	assert.Equal(t, nil, err, msg)
-	assert.Equal(t, fmt.Sprintf("%p", f), fmt.Sprintf("%p", obj.File()), msg)
+	assert.Equalf(t, nil, err, msg, caller)
+	assert.Equalf(t, fmt.Sprintf("%p", f), fmt.Sprintf("%p", obj.File()), msg, caller)
 
 	bytes, err := ioutil.ReadAll(f)
-	assert.Equal(t, nil, err, msg)
-	assert.Equal(t, data, string(bytes), msg)
+	assert.Equalf(t, nil, err, msg, caller)
+	assert.Equalf(t, data, string(bytes), msg, caller)
 }
 
 func Copy(t TestingT, store cloudstorage.Store) {
+	caller := caller(2)
 
 	// Read the object from store, delete if it exists
 	deleteIfExists(store, "from/test.csv")
@@ -327,15 +339,15 @@ func Copy(t TestingT, store cloudstorage.Store) {
 	obj := createFile(t, store, "from/test.csv", testcsv)
 
 	dest, err := store.NewObject("to/testcopy.csv")
-	assert.Equal(t, nil, err)
+	assert.Equalf(t, nil, err, caller)
 
 	err = cloudstorage.Copy(context.Background(), store, obj, dest)
-	assert.Equal(t, nil, err)
+	assert.Equalf(t, nil, err, caller)
 
 	// After copy, old should exist
 	obj2, err := store.Get(context.Background(), "from/test.csv")
-	assert.Equal(t, nil, err)
-	assert.Equal(t, "from/test.csv", obj2.Name())
+	assert.Equalf(t, nil, err, caller)
+	assert.Equalf(t, "from/test.csv", obj2.Name(), caller)
 
 	// And also to should exist
 	ensureContents(t, store, "to/testcopy.csv", testcsv, "target file validation")
