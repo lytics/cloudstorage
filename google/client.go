@@ -76,8 +76,7 @@ func BuildGoogleJWTTransporter(jwtConf *cloudstorage.JwtConf) (GoogleOAuthClient
 	}, nil
 }
 
-// BuildGoogleFileJWTTransporter Build a Google Storage Client from a path to
-// a json file that has JWT.
+// BuildGoogleFileJWTTransporter creates a Google Storage Client using a JWT file for the jwt config.
 func BuildGoogleFileJWTTransporter(keyPath string, scope string) (GoogleOAuthClient, error) {
 	jsonKey, err := ioutil.ReadFile(os.ExpandEnv(keyPath))
 	if err != nil {
@@ -166,12 +165,20 @@ func NewGoogleClient(conf *cloudstorage.Config) (client GoogleOAuthClient, err e
 			return nil, err
 		}
 	case AuthJWTKeySource:
+		if conf.JwtConf == nil {
+			return nil, fmt.Errorf("invalid config: missing jwt config struct")
+		}
 		// used if you are providing string of json
 		client, err = BuildGoogleJWTTransporter(conf.JwtConf)
 		if err != nil {
 			return nil, err
 		}
 	case AuthGoogleJWTKeySource:
+		switch conf.Scope {
+		case "":
+			// See the list here: https://github.com/GoogleCloudPlatform/google-cloud-go/blob/master/storage/storage.go#L58-L68
+			return nil, fmt.Errorf("invalid config: missing devstorage scope")
+		}
 		client, err = BuildGoogleFileJWTTransporter(conf.JwtFile, conf.Scope)
 		if err != nil {
 			return nil, err
