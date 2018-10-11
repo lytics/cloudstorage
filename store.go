@@ -341,5 +341,8 @@ func (j *JwtConf) fixKey() {
 	}
 }
 func (j *JwtConf) KeyBytes() ([]byte, error) {
+	if j.PrivateKey == "" {
+		return nil, fmt.Errorf("invalid config, private key empty")
+	}
 	return base64.StdEncoding.DecodeString(j.PrivateKey)
 }
