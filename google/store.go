@@ -232,8 +232,14 @@ func (g *GcsFS) NewWriter(o string, metadata map[string]string) (io.WriteCloser,
 }
 
 // NewWriterWithContext create writer with provided context and metadata.
-func (g *GcsFS) NewWriterWithContext(ctx context.Context, o string, metadata map[string]string) (io.WriteCloser, error) {
-	wc := g.gcsb().Object(o).NewWriter(ctx)
+func (g *GcsFS) NewWriterWithContext(ctx context.Context, o string, metadata map[string]string, opts ...cloudstorage.Opts) (io.WriteCloser, error) {
+	obj := g.gcsb().Object(o)
+	if len(opts) > 0 && opts[0].IfNotExists {
+		// https://cloud.google.com/storage/docs/json_api/v1/objects/insert
+		// See ifGenerationMatch "Setting to 0 makes the operation succeed only if there are no live versions of the object"
+		obj = obj.Generation(0)
+	}
+	wc := obj.NewWriter(ctx)
 	if metadata != nil {
 		wc.Metadata = metadata
 		//contenttype is only used for viewing the file in a browser. (i.e. the GCS Object browser).

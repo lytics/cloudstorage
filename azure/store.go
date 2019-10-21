@@ -379,7 +379,7 @@ func (f *FS) NewWriter(objectName string, metadata map[string]string) (io.WriteC
 }
 
 // NewWriterWithContext create writer with provided context and metadata.
-func (f *FS) NewWriterWithContext(ctx context.Context, name string, metadata map[string]string) (io.WriteCloser, error) {
+func (f *FS) NewWriterWithContext(ctx context.Context, name string, metadata map[string]string, opts ...cloudstorage.Opts) (io.WriteCloser, error) {
 	name = strings.Replace(name, " ", "+", -1)
 	o := &object{name: name, metadata: metadata}
 	rwc := newAzureWriteCloser(ctx, f, o)

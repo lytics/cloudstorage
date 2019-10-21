@@ -41,6 +41,10 @@ var (
 )
 
 type (
+	Opts struct {
+		IfNotExists bool
+	}
+
 	// StoreReader interface to define the Storage Interface abstracting
 	// the GCS, S3, LocalFile, etc interfaces
 	StoreReader interface {
@@ -98,7 +102,7 @@ type (
 		// until Close has been called
 		NewWriter(o string, metadata map[string]string) (io.WriteCloser, error)
 		// NewWriter but with context.
-		NewWriterWithContext(ctx context.Context, o string, metadata map[string]string) (io.WriteCloser, error)
+		NewWriterWithContext(ctx context.Context, o string, metadata map[string]string, opts ...Opts) (io.WriteCloser, error)
 
 		// NewObject creates a new empty object backed by the cloud store
 		// This new object isn't' synced/created in the backing store

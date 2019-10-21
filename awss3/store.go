@@ -403,6 +403,7 @@ func (f *FS) Move(ctx context.Context, src, des cloudstorage.Object) error {
 	return oh.Delete(ctx)
 }
 */
+
 // NewReader create file reader.
 func (f *FS) NewReader(o string) (io.ReadCloser, error) {
 	return f.NewReaderWithContext(context.Background(), o)
@@ -430,7 +431,7 @@ func (f *FS) NewWriter(objectName string, metadata map[string]string) (io.WriteC
 }
 
 // NewWriterWithContext create writer with provided context and metadata.
-func (f *FS) NewWriterWithContext(ctx context.Context, objectName string, metadata map[string]string) (io.WriteCloser, error) {
+func (f *FS) NewWriterWithContext(ctx context.Context, objectName string, metadata map[string]string, opts ...cloudstorage.Opts) (io.WriteCloser, error) {
 
 	// Create an uploader with the session and default options
 	uploader := s3manager.NewUploader(f.sess)

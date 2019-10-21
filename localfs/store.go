@@ -227,7 +227,7 @@ func (l *LocalStore) NewReaderWithContext(ctx context.Context, o string) (io.Rea
 func (l *LocalStore) NewWriter(o string, metadata map[string]string) (io.WriteCloser, error) {
 	return l.NewWriterWithContext(context.Background(), o, metadata)
 }
-func (l *LocalStore) NewWriterWithContext(ctx context.Context, o string, metadata map[string]string) (io.WriteCloser, error) {
+func (l *LocalStore) NewWriterWithContext(ctx context.Context, o string, metadata map[string]string, opts ...cloudstorage.Opts) (io.WriteCloser, error) {
 
 	fo := path.Join(l.storepath, o)
 
@@ -245,7 +245,12 @@ func (l *LocalStore) NewWriterWithContext(ctx context.Context, o string, metadat
 		return nil, err
 	}
 
-	f, err := os.OpenFile(fo, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0665)
+	flag := os.O_RDWR | os.O_CREATE | os.O_TRUNC
+	if len(opts) > 0 && opts[0].IfNotExists {
+		flag = flag | os.O_EXCL
+	}
+	f, err := os.OpenFile(fo, flag, 0665)
+	fmt.Println(fo, err)
 	if err != nil {
 		return nil, err
 	}
