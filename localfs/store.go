@@ -250,7 +250,6 @@ func (l *LocalStore) NewWriterWithContext(ctx context.Context, o string, metadat
 		flag = flag | os.O_EXCL
 	}
 	f, err := os.OpenFile(fo, flag, 0665)
-	fmt.Println(fo, err)
 	if err != nil {
 		return nil, err
 	}
