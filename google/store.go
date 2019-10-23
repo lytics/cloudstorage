@@ -235,9 +235,7 @@ func (g *GcsFS) NewWriter(o string, metadata map[string]string) (io.WriteCloser,
 func (g *GcsFS) NewWriterWithContext(ctx context.Context, o string, metadata map[string]string, opts ...cloudstorage.Opts) (io.WriteCloser, error) {
 	obj := g.gcsb().Object(o)
 	if len(opts) > 0 && opts[0].IfNotExists {
-		// https://cloud.google.com/storage/docs/json_api/v1/objects/insert
-		// See ifGenerationMatch "Setting to 0 makes the operation succeed only if there are no live versions of the object"
-		obj = obj.Generation(0)
+		obj = obj.If(storage.Conditions{DoesNotExist: true})
 	}
 	wc := obj.NewWriter(ctx)
 	if metadata != nil {
