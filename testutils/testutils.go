@@ -754,7 +754,14 @@ func TestReadWriteCloser(t TestingT, store cloudstorage.Store) {
 		assert.Equalf(t, nil, err, "at loop-cnt:%v", i)
 		time.Sleep(time.Millisecond * 100)
 
-		_, err = store.NewWriterWithContext(context.Background(), fileName, nil, cloudstorage.Opts{IfNotExists: true})
+		wc, err = store.NewWriterWithContext(context.Background(), fileName, nil, cloudstorage.Opts{IfNotExists: true})
+		if err == nil {
+			// If err == nil then we're gcs so try writing
+			_, err = bytes.NewBufferString(data).WriteTo(wc)
+			assert.NoErrorf(t, err, "at loop-cnt:%v", i)
+			err = wc.Close()
+			time.Sleep(time.Millisecond * 100)
+		}
 		assert.Error(t, err)
 
 		// Read the object from store, delete if it exists
