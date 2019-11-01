@@ -432,6 +432,9 @@ func (f *FS) NewWriter(objectName string, metadata map[string]string) (io.WriteC
 
 // NewWriterWithContext create writer with provided context and metadata.
 func (f *FS) NewWriterWithContext(ctx context.Context, objectName string, metadata map[string]string, opts ...cloudstorage.Opts) (io.WriteCloser, error) {
+	if len(opts) > 0 && opts[0].IfNotExists {
+		return nil, fmt.Errorf("options IfNotExists not supported for store type")
+	}
 
 	// Create an uploader with the session and default options
 	uploader := s3manager.NewUploader(f.sess)
