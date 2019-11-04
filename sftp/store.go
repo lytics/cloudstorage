@@ -553,7 +553,10 @@ func (m *Client) NewWriter(objectName string, metadata map[string]string) (io.Wr
 }
 
 // NewWriterWithContext create writer with provided context and metadata.
-func (m *Client) NewWriterWithContext(ctx context.Context, name string, metadata map[string]string) (io.WriteCloser, error) {
+func (m *Client) NewWriterWithContext(ctx context.Context, name string, metadata map[string]string, opts ...cloudstorage.Opts) (io.WriteCloser, error) {
+	if len(opts) > 0 && opts[0].IfNotExists {
+		return nil, fmt.Errorf("options IfNotExists not supported for store type")
+	}
 
 	name = strings.Replace(name, " ", "+", -1)
 

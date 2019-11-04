@@ -30,6 +30,7 @@ var (
 )
 
 func init() {
+	verbose = flag.Bool("vv", false, "Verbose Logging?")
 	Setup()
 }
 
@@ -44,11 +45,6 @@ type TestingT interface {
 func Setup() {
 	setupOnce.Do(func() {
 
-		if flag.CommandLine.Lookup("vv") == nil {
-			verbose = flag.Bool("vv", false, "Verbose Logging?")
-		}
-
-		flag.Parse()
 		logger := gou.GetLogger()
 		if logger != nil {
 			// don't re-setup
@@ -200,6 +196,7 @@ func BasicRW(t TestingT, store cloudstorage.Store) {
 	obj, err = store.Get(context.Background(), "prefix/test.csv")
 	assert.Equal(t, cloudstorage.ErrObjectNotFound, err)
 	assert.Equal(t, nil, obj)
+
 }
 
 func createFile(t TestingT, store cloudstorage.Store, name, data string) cloudstorage.Object {
@@ -756,6 +753,19 @@ func TestReadWriteCloser(t TestingT, store cloudstorage.Store) {
 		err = wc.Close()
 		assert.Equalf(t, nil, err, "at loop-cnt:%v", i)
 		time.Sleep(time.Millisecond * 100)
+
+		wc, err = store.NewWriterWithContext(context.Background(), fileName, nil, cloudstorage.Opts{IfNotExists: true})
+		if err == nil {
+			// If err == nil then we're gcs so try writing
+			_, err = bytes.NewBufferString(data).WriteTo(wc)
+			assert.NoErrorf(t, err, "at loop-cnt:%v", i)
+			err = wc.Close()
+			time.Sleep(time.Millisecond * 100)
+		}
+		assert.Error(t, err)
+
+		// Read the object from store, delete if it exists
+		deleteIfExists(store, "prefix/test.csv")
 
 		rc, err := store.NewReader(fileName)
 		assert.Equalf(t, nil, err, "at loop-cnt:%v", i)
