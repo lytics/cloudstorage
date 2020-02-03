@@ -143,7 +143,10 @@ type (
 		File() *os.File
 		// Delete removes the object from the cloud store and local cache.
 		Delete() error
+		AcquireLease(uid string) (string, error)
 	}
+
+
 
 	// ObjectIterator interface to page through objects
 	// See go doc for examples https://github.com/GoogleCloudPlatform/google-cloud-go/wiki/Iterator-Guidelines

@@ -547,3 +547,7 @@ func (o *object) Release() error {
 	os.Remove(o.cachepath)
 	return nil
 }
+
+func (o *object) AcquireLease(uid string) (string, error) {
+	return "", nil
+}

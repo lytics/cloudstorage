@@ -395,6 +395,8 @@ func (b *blobRef) Release() error {
 	return nil
 }
 
+
+
 // Implement io.ReadWriteCloser Open most be called before using these
 // functions.
 func (b *blobRef) Read(p []byte) (n int, err error) {
@@ -471,4 +473,8 @@ func (b *blobRef) File() *os.File {
 // Delete removes the object from the cloud store and local cache.
 func (b *blobRef) Delete() error {
 	return ErrNotImplemented
+}
+
+func (b *blobRef) AcquireLease(uid string) (string, error) {
+	return "", nil
 }

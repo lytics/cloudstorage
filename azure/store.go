@@ -532,6 +532,13 @@ func (o *object) SetMetaData(meta map[string]string) {
 	o.metadata = meta
 }
 
+
+func (o *object) AcquireLease(uid string) (string, error) {
+	options := &az.LeaseOptions{}
+	return o.o.AcquireLease(-1, uid, options)
+}
+
+
 func (o *object) Delete() error {
 	return o.fs.Delete(context.Background(), o.name)
 }
