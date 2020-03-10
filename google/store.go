@@ -310,6 +310,9 @@ type object struct {
 
 func newObject(g *GcsFS, o *storage.ObjectAttrs) *object {
 	metadata := o.Metadata
+	if metadata == nil {
+		metadata = make(map[string]string)
+	}
 	metadata["content_length"] = strconv.FormatInt(o.Size, 10)
 	return &object{
 		name:      o.Name,
