@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -308,10 +309,12 @@ type object struct {
 }
 
 func newObject(g *GcsFS, o *storage.ObjectAttrs) *object {
+	metadata := o.Metadata
+	metadata["content_length"] = strconv.FormatInt(o.Size, 10)
 	return &object{
 		name:      o.Name,
 		updated:   o.Updated,
-		metadata:  o.Metadata,
+		metadata:  metadata,
 		gcsb:      g.gcsb(),
 		bucket:    g.bucket,
 		cachepath: cloudstorage.CachePathObj(g.cachepath, o.Name, g.Id),
