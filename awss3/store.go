@@ -40,6 +40,8 @@ const (
 	ConfKeyARN = "arn"
 	// ConfKeyDisableSSL config key name of disabling ssl flag
 	ConfKeyDisableSSL = "disable_ssl"
+	// ConfKeyDebugLog config key to enable LogDebug log level
+	ConfKeyDebugLog = "debug_log"
 	// Authentication Source's
 
 	// AuthAccessKey is for using aws access key/secret pairs
@@ -138,6 +140,10 @@ func NewClient(conf *cloudstorage.Config) (*s3.S3, *session.Session, error) {
 
 	if conf.BaseUrl != "" {
 		awsConf.WithEndpoint(conf.BaseUrl).WithS3ForcePathStyle(true)
+	}
+
+	if conf.Settings.Bool(ConfKeyDebugLog) {
+		awsConf.WithLogLevel(aws.LogDebug)
 	}
 
 	disableSSL := conf.Settings.Bool(ConfKeyDisableSSL)
