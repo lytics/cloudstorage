@@ -407,7 +407,7 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 				return nil, fmt.Errorf("error seeking to start of cachedcopy err=%v", err) //don't retry on local fs errors
 			}
 
-			_, err = io.Copy(cachedcopy, rc)
+			writtenBytes, err = io.Copy(cachedcopy, rc)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error coping bytes. err=%v", err))
 				//recreate the cachedcopy file incase it has incomplete data
@@ -420,6 +420,12 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 
 				cloudstorage.Backoff(try)
 				continue
+			}
+			// make sure the whole object was downloaded from google
+			if contentLength, ok := o.metadata["content_length"]; ok {
+				if contentLength != writtenBytes {
+					return nil, fmt.Errorf("partial file download error. tfile=%v", o.name)
+				}
 			}
 		}
 
