@@ -423,7 +423,7 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 			}
 			// make sure the whole object was downloaded from google
 			if contentLength, ok := o.metadata["content_length"]; ok {
-				if contentLengthInt, err := strconv.ParseInt(contentLength, 10, 64); err != nil {
+				if contentLengthInt, err := strconv.ParseInt(contentLength, 10, 64); err == nil {
 					if contentLengthInt != writtenBytes {
 						return nil, fmt.Errorf("partial file download error. tfile=%v", o.name)
 					}
