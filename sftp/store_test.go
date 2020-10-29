@@ -10,11 +10,11 @@ import (
 	"testing"
 
 	"github.com/araddon/gou"
-	"github.com/bmizerany/assert"
 
 	"github.com/lytics/cloudstorage"
 	"github.com/lytics/cloudstorage/sftp"
 	"github.com/lytics/cloudstorage/testutils"
+	"github.com/stretchr/testify/assert"
 )
 
 /*

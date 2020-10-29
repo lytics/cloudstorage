@@ -9,7 +9,6 @@ require (
 	github.com/Azure/go-autorest/autorest/to v0.4.0 // indirect
 	github.com/araddon/gou v0.0.0-20190110011759-c797efecbb61
 	github.com/aws/aws-sdk-go v1.29.34
-	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869
 	github.com/dnaeon/go-vcr v1.1.0 // indirect
 	github.com/pborman/uuid v1.2.1
 	github.com/pkg/sftp v1.11.0

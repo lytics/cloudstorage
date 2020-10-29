@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/araddon/gou"
-	"github.com/bmizerany/assert"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/lytics/cloudstorage"
 	"github.com/lytics/cloudstorage/awss3"
