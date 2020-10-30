@@ -15,7 +15,7 @@ import (
 const (
 	// StoreCacheFileExt = ".cache"
 	StoreCacheFileExt = ".cache"
-	// ContentTypeKey
+	// ContentTypeKey = "content_type"
 	ContentTypeKey = "content_type"
 	// MaxResults default number of objects to retrieve during a list-objects request,
 	// if more objects exist, then they will need to be paged
@@ -27,7 +27,8 @@ type AccessLevel int
 
 const (
 	// ReadOnly File Permissions Levels
-	ReadOnly  AccessLevel = 0
+	ReadOnly AccessLevel = 0
+	// ReadWrite File Permissions Levels
 	ReadWrite AccessLevel = 1
 )
 
@@ -115,8 +116,10 @@ type (
 
 	// Object is a handle to a cloud stored file/object.  Calling Open will pull the remote file onto
 	// your local filesystem for reading/writing.  Calling Sync/Close will push the local copy
-	// backup to the cloud store.
+	// back up to the cloud store.
 	Object interface {
+		// Open most be called before using these functions.
+		io.ReadWriteCloser
 		// Name of object/file.
 		Name() string
 		// String is default descriptor.
@@ -133,16 +136,12 @@ type (
 		// for read/writing.  Calling Close/Sync will push the copy back to the
 		// backing store.
 		Open(readonly AccessLevel) (*os.File, error)
-		// Release will remove the locally cached copy of the file.  You most call Close
+		// Release will remove the locally cached copy of the file.  You must call Close
 		// before releasing.  Release will call os.Remove(local_copy_file) so opened
 		// filehandles need to be closed.
 		Release() error
-		// Implement io.ReadWriteCloser Open most be called before using these
-		// functions.
-		Read(p []byte) (n int, err error)
-		Write(p []byte) (n int, err error)
+		// Sync pushes the local copy back up to the cloud store.
 		Sync() error
-		Close() error
 		// File returns the cached/local copy of the file
 		File() *os.File
 		// Delete removes the object from the cloud store and local cache.

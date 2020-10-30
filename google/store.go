@@ -555,13 +555,6 @@ func (o *object) Close() error {
 		}
 	}
 
-	if o.opened && !o.readonly {
-		err := o.Sync()
-		if err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
