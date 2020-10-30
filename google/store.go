@@ -136,7 +136,7 @@ func (g *GcsFS) Objects(ctx context.Context, csq cloudstorage.Query) (cloudstora
 	return &objectIterator{g, ctx, iter}, nil
 }
 
-// Objects returns an iterator over the objects in the google bucket that match the Query q.
+// List returns an iterator over the objects in the google bucket that match the Query q.
 // If q is nil, no filtering is done.
 func (g *GcsFS) List(ctx context.Context, csq cloudstorage.Query) (*cloudstorage.ObjectsResponse, error) {
 	iter, err := g.Objects(ctx, csq)
@@ -407,7 +407,7 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 				return nil, fmt.Errorf("error seeking to start of cachedcopy err=%v", err) //don't retry on local fs errors
 			}
 
-			_, err = io.Copy(cachedcopy, rc)
+			writtenBytes, err := io.Copy(cachedcopy, rc)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error coping bytes. err=%v", err))
 				//recreate the cachedcopy file incase it has incomplete data
@@ -420,6 +420,16 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 
 				cloudstorage.Backoff(try)
 				continue
+			}
+			// make sure the whole object was downloaded from google
+			if contentLength, ok := o.metadata["content_length"]; ok {
+				if contentLengthInt, err := strconv.ParseInt(contentLength, 10, 64); err == nil {
+					if contentLengthInt != writtenBytes {
+						return nil, fmt.Errorf("partial file download error. tfile=%v", o.name)
+					}
+				} else {
+					return nil, fmt.Errorf("content_length is not a number. tfile=%v", o.name)
+				}
 			}
 		}
 
