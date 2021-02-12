@@ -36,7 +36,12 @@ func (c *APIStore) BucketExists(name string) bool {
 
 // CreateBucket creates a new bucket in GCS
 func (c *APIStore) CreateBucket(name string) error {
-	bucket := &storage.Bucket{Name: name}
+	return c.CreateBucketWithLocation(name, "")
+}
+
+// CreateBucketWithLocation creates a new bucket in GCS with the specified location
+func (c *APIStore) CreateBucketWithLocation(name, location string) error {
+	bucket := &storage.Bucket{Name: name, Location: location}
 	_, err := c.service.Buckets.Insert(c.project, bucket).Do()
 	return err
 }
