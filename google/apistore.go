@@ -60,7 +60,7 @@ func (c *APIStore) AddReader(bucket, object, entity string) error {
 	return err
 }
 
-// AddBucketReader adds a writer of the bucket
+// AddBucketReader adds a reader of the bucket
 func (c *APIStore) AddBucketReader(bucket, entity string) error {
 	ac := &storage.BucketAccessControl{Entity: entity, Role: "READER"}
 	_, err := c.service.BucketAccessControls.Insert(bucket, ac).Do()
