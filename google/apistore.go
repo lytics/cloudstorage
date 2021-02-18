@@ -74,8 +74,8 @@ func (c *APIStore) AddBucketWriter(bucket, entity string) error {
 	return err
 }
 
-// SetBucketLifecycle updates a bucket lifecycle policy in days
-func (c *APIStore) SetBucketLifecycle(name string, days int64) error {
+// SetBucketAgeLifecycle updates a bucket-level lifecycle policy for object age in days
+func (c *APIStore) SetBucketAgeLifecycle(name string, days int64) error {
 	bucket := &storage.Bucket{Name: name}
 	bucket.Lifecycle = new(storage.BucketLifecycle)
 	action := &storage.BucketLifecycleRuleAction{Type: "Delete"}
