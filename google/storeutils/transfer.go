@@ -61,7 +61,7 @@ func (t *Transferer) List(project string, statuses ...Status) ([]*storagetransfe
 	}
 
 	for {
-		call := t.svc.List().Filter(string(body))
+		call := t.svc.List(string(body))
 		if token != "" {
 			call = call.PageToken(token)
 		}
@@ -85,7 +85,7 @@ func (t *Transferer) List(project string, statuses ...Status) ([]*storagetransfe
 
 // GetJob returns the transferJob with the specified project and job ID
 func (t *Transferer) GetJob(project, job string) (*storagetransfer.TransferJob, error) {
-	resp, err := t.svc.Get(job).ProjectId(project).Do()
+	resp, err := t.svc.Get(job, project).Do()
 	if err != nil {
 		return nil, err
 	}
