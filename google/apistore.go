@@ -123,6 +123,7 @@ func (c *APIStore) grantRole(bucket, member, role string) error {
 			}
 			b.Members = append(b.Members, member)
 			added = true
+			break
 		}
 	}
 
