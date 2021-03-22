@@ -106,6 +106,8 @@ func (c *APIStore) GrantObjectAdmin(bucket, member string) error {
 	return c.grantRole(bucket, member, "roles/storage.objectAdmin")
 }
 
+// grantRole updates the IAM policy for @bucket in order to rant @role to @member
+// we have to retrieve the existing policy in order to modify it, per https://cloud.google.com/storage/docs/json_api/v1/buckets/setIamPolicy
 func (c *APIStore) grantRole(bucket, member, role string) error {
 	existingPolicy, err := c.service.Buckets.GetIamPolicy(bucket).Do()
 	if err != nil {
@@ -130,7 +132,7 @@ func (c *APIStore) grantRole(bucket, member, role string) error {
 	if !added {
 		b := new(storage.PolicyBindings)
 		b.Role = role
-		b.Members = append(b.Members, member)
+		b.Members = []string{member}
 		existingPolicy.Bindings = append(existingPolicy.Bindings, b)
 	}
 	_, err = c.service.Buckets.SetIamPolicy(bucket, existingPolicy).Do()
