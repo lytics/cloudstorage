@@ -60,14 +60,16 @@ func (c *APIStore) AddReader(bucket, object, entity string) error {
 	return err
 }
 
-// AddBucketReader adds a reader of the bucket
+// AddBucketReader updates the bucket ACL to add entity as a reader on the bucket
+// The bucket must be in fine-grained access control mode, or this will produce an error
 func (c *APIStore) AddBucketReader(bucket, entity string) error {
 	ac := &storage.BucketAccessControl{Entity: entity, Role: "READER"}
 	_, err := c.service.BucketAccessControls.Insert(bucket, ac).Do()
 	return err
 }
 
-// AddBucketWriter adds a writer of the bucket
+// AddBucketWriter updates the bucket ACL to add entity as a writer on the bucket
+// The bucket must be in fine-grained access control mode, or this will produce an error
 func (c *APIStore) AddBucketWriter(bucket, entity string) error {
 	ac := &storage.BucketAccessControl{Entity: entity, Role: "WRITER"}
 	_, err := c.service.BucketAccessControls.Insert(bucket, ac).Do()
@@ -83,5 +85,56 @@ func (c *APIStore) SetBucketAgeLifecycle(name string, days int64) error {
 	bucket.Lifecycle.Rule = make([]*storage.BucketLifecycleRule, 1)
 	bucket.Lifecycle.Rule[0] = &storage.BucketLifecycleRule{Action: action, Condition: condition}
 	_, err := c.service.Buckets.Patch(name, bucket).Do()
+	return err
+}
+
+// GrantObjectViewer updates the IAM policy on the bucket to grant member the roles/storage.objectViewer role
+// The existing policy attributes on the bucket are preserved
+func (c *APIStore) GrantObjectViewer(bucket, member string) error {
+	return c.grantRole(bucket, member, "roles/storage.objectViewer")
+}
+
+// GrantObjectCreator updates the IAM policy on the bucket to grant member the roles/storage.objectCreator role
+// The existing policy attributes on the bucket are preserved
+func (c *APIStore) GrantObjectCreator(bucket, member string) error {
+	return c.grantRole(bucket, member, "roles/storage.objectCreator")
+}
+
+// GrantObjectAdmin updates the IAM policy on the bucket to grant member the roles/storage.objectAdmin role
+// The existing policy attributes on the bucket are preserved
+func (c *APIStore) GrantObjectAdmin(bucket, member string) error {
+	return c.grantRole(bucket, member, "roles/storage.objectAdmin")
+}
+
+// grantRole updates the IAM policy for @bucket in order to rant @role to @member
+// we have to retrieve the existing policy in order to modify it, per https://cloud.google.com/storage/docs/json_api/v1/buckets/setIamPolicy
+func (c *APIStore) grantRole(bucket, member, role string) error {
+	existingPolicy, err := c.service.Buckets.GetIamPolicy(bucket).Do()
+	if err != nil {
+		return err
+	}
+
+	var added bool
+	for _, b := range existingPolicy.Bindings {
+		if b.Role == role {
+			for _, m := range b.Members {
+				if m == member {
+					// already granted
+					return nil
+				}
+			}
+			b.Members = append(b.Members, member)
+			added = true
+			break
+		}
+	}
+
+	if !added {
+		b := new(storage.PolicyBindings)
+		b.Role = role
+		b.Members = []string{member}
+		existingPolicy.Bindings = append(existingPolicy.Bindings, b)
+	}
+	_, err = c.service.Buckets.SetIamPolicy(bucket, existingPolicy).Do()
 	return err
 }
