@@ -181,6 +181,8 @@ type (
 		Project string
 		// Region is the cloud region
 		Region string
+		// Endpoint is the api endpoint
+		Endpoint string
 		// Bucket is the "path" or named bucket in cloud
 		Bucket string
 		// the page size to use with api requests (default 1000)
