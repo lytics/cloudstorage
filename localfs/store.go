@@ -2,6 +2,7 @@ package localfs
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -278,11 +279,32 @@ func (l *LocalStore) Get(ctx context.Context, o string) (cloudstorage.Object, er
 // Delete the object from underlying store.
 func (l *LocalStore) Delete(ctx context.Context, obj string) error {
 	fo := path.Join(l.storepath, obj)
-	os.Remove(fo)
+	if err := os.Remove(fo); err != nil {
+		return err
+	}
 	mf := fo + ".metadata"
 	if cloudstorage.Exists(mf) {
-		os.Remove(mf)
+		if err := os.Remove(mf); err != nil {
+			return err
+		}
 	}
+
+	// When the last item in a folder is deleted, the folder
+	// should also be deleted. This matches the behavior in GCS.
+	dir, err := os.Open(l.storepath)
+	if err != nil {
+		return fmt.Errorf("failed to open store dir=%s err=%w", l.storepath, err)
+	}
+	if _, err = dir.Readdirnames(1); errors.Is(err, io.EOF) {
+		dir.Close()
+		// it's empty, so remove it.
+		if err := os.Remove(l.storepath); err != nil {
+			return err
+		}
+	} else {
+		dir.Close()
+	}
+
 	return nil
 }
 
