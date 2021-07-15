@@ -90,6 +90,9 @@ func Clearstore(t TestingT, store cloudstorage.Store) {
 }
 
 func RunTests(t TestingT, s cloudstorage.Store, conf *cloudstorage.Config) {
+	// Ensure testing dirs are clean.
+	Clearstore(t, s)
+	defer Clearstore(t, s)
 
 	t.Logf("running store setup: type:%v", s.Type())
 	StoreSetup(t, s)
@@ -136,6 +139,7 @@ func deleteIfExists(store cloudstorage.Store, filePath string) {
 		obj.Delete()
 	}
 }
+
 func StoreSetup(t TestingT, store cloudstorage.Store) {
 
 	// Ensure the store has a String identifying store type
@@ -149,6 +153,12 @@ func BasicRW(t TestingT, store cloudstorage.Store) {
 
 	// Read the object from store, delete if it exists
 	deleteIfExists(store, "prefix/test.csv")
+
+	// Store should be empty
+	all, err := store.List(context.Background(), cloudstorage.NewQueryAll())
+	assert.NoError(t, err)
+	assert.NotNil(t, all)
+	assert.Empty(t, all.Objects)
 
 	// Create a new object and write to it.
 	obj, err := store.NewObject("prefix/test.csv")
@@ -189,6 +199,12 @@ func BasicRW(t TestingT, store cloudstorage.Store) {
 	assert.Equal(t, nil, err)
 
 	assert.Equal(t, testcsv, string(bytes))
+
+	// Store should be not empty
+	all, err = store.List(context.Background(), cloudstorage.NewQueryAll())
+	assert.NoError(t, err)
+	assert.NotNil(t, all)
+	assert.NotEmpty(t, all.Objects)
 
 	// Now delete again
 	err = obj2.Delete()
