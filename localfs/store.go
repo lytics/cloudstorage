@@ -280,12 +280,12 @@ func (l *LocalStore) Get(ctx context.Context, o string) (cloudstorage.Object, er
 func (l *LocalStore) Delete(ctx context.Context, obj string) error {
 	fo := path.Join(l.storepath, obj)
 	if err := os.Remove(fo); err != nil {
-		return err
+		return fmt.Errorf("removing dir=%s: %w", fo, err)
 	}
 	mf := fo + ".metadata"
 	if cloudstorage.Exists(mf) {
 		if err := os.Remove(mf); err != nil {
-			return err
+			return fmt.Errorf("removing dir=%s: %w", mf, err)
 		}
 	}
 
@@ -299,7 +299,7 @@ func (l *LocalStore) Delete(ctx context.Context, obj string) error {
 		dir.Close()
 		// it's empty, so remove it.
 		if err := os.Remove(l.storepath); err != nil {
-			return err
+			return fmt.Errorf("failed to remove store dir=%s err=%w", l.storepath, err)
 		}
 	} else {
 		dir.Close()
