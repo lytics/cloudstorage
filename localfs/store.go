@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/araddon/gou"
@@ -299,26 +301,27 @@ func (l *LocalStore) Delete(ctx context.Context, obj string) error {
 func (l *LocalStore) deleteParentDirs(filePath string) error {
 
 	for dirName := path.Dir(filePath); len(dirName) > 0; dirName = path.Dir(dirName) {
-		dir, err := os.Open(dirName)
-		if os.IsNotExist(err) {
+		if dirName == l.storepath {
+			// top level, stop deleting
+			return nil
+		}
+		err := os.Remove(dirName)
+		if errors.Is(err, os.ErrNotExist) {
 			// it's already deleted; nothing to do.
 			return nil
 		}
-		if err != nil {
-			return fmt.Errorf("failed to open store dir=%s err=%w", dirName, err)
-		}
-		files, err := dir.Readdirnames(1)
-		if len(files) == 0 && errors.Is(err, io.EOF) {
-			dir.Close()
-			// it's empty, so remove it.
-			if err := os.Remove(dirName); err != nil {
-				return fmt.Errorf("failed to remove store dir=%s err=%w", dirName, err)
+		// There is no equivalent os.ErrNotEmpty in this version of go.
+		if pathErr, ok := err.(*fs.PathError); ok {
+			if sysErr, ok := pathErr.Err.(syscall.Errno); ok && sysErr == syscall.ENOTEMPTY {
+				// not empty; quit.
+				return nil
 			}
-		} else {
-			dir.Close()
-			// it's not empty.
-			return nil
 		}
+		// unknown error, return it.
+		if err != nil {
+			return fmt.Errorf("failed to remove store dir=%s err=%w", dirName, err)
+		}
+		// we deleted an empty folder, so continue
 	}
 	return nil
 }

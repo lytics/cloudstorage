@@ -53,7 +53,7 @@ func TestDirectoryCleanup(t *testing.T) {
 	d3 := makeDummyFile("a/dummyfile3")
 	d4 := makeDummyFile("a/d/dummyfile4")
 
-	l := &LocalStore{}
+	l := &LocalStore{storepath: testDir}
 
 	t.Run("delete-nonempty-dir", func(t *testing.T) {
 		err = l.deleteParentDirs(path.Join(testDir, "a/d"))
@@ -108,4 +108,11 @@ func TestDirectoryCleanup(t *testing.T) {
 		require.False(t, fileExists(d4))
 		require.False(t, fileExists(path.Join(testDir, "a/d")))
 	})
+
+	t.Run("delete-missing-dir", func(t *testing.T) {
+		err = l.deleteParentDirs(path.Join(testDir, "doesntexist/what"))
+		require.NoError(t, err)
+	})
+
+	require.True(t, fileExists(testDir))
 }
