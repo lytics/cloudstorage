@@ -280,31 +280,46 @@ func (l *LocalStore) Get(ctx context.Context, o string) (cloudstorage.Object, er
 func (l *LocalStore) Delete(ctx context.Context, obj string) error {
 	fo := path.Join(l.storepath, obj)
 	if err := os.Remove(fo); err != nil {
-		return fmt.Errorf("removing dir=%s: %w", fo, err)
+		return fmt.Errorf("removing file=%s: %w", fo, err)
 	}
 	mf := fo + ".metadata"
 	if cloudstorage.Exists(mf) {
 		if err := os.Remove(mf); err != nil {
-			return fmt.Errorf("removing dir=%s: %w", mf, err)
+			return fmt.Errorf("removing file=%s: %w", mf, err)
 		}
 	}
 
 	// When the last item in a folder is deleted, the folder
 	// should also be deleted. This matches the behavior in GCS.
-	dir, err := os.Open(l.storepath)
-	if err != nil {
-		return fmt.Errorf("failed to open store dir=%s err=%w", l.storepath, err)
-	}
-	if _, err = dir.Readdirnames(1); errors.Is(err, io.EOF) {
-		dir.Close()
-		// it's empty, so remove it.
-		if err := os.Remove(l.storepath); err != nil {
-			return fmt.Errorf("failed to remove store dir=%s err=%w", l.storepath, err)
-		}
-	} else {
-		dir.Close()
-	}
+	return l.deleteParentDirs(fo)
+}
 
+// deleteParentDirs deletes all the parent dirs of some filepath
+// if those dirs are empty.
+func (l *LocalStore) deleteParentDirs(filePath string) error {
+
+	for dirName := path.Dir(filePath); len(dirName) > 0; dirName = path.Dir(dirName) {
+		dir, err := os.Open(dirName)
+		if os.IsNotExist(err) {
+			// it's already deleted; nothing to do.
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("failed to open store dir=%s err=%w", dirName, err)
+		}
+		files, err := dir.Readdirnames(1)
+		if len(files) == 0 && errors.Is(err, io.EOF) {
+			dir.Close()
+			// it's empty, so remove it.
+			if err := os.Remove(dirName); err != nil {
+				return fmt.Errorf("failed to remove store dir=%s err=%w", dirName, err)
+			}
+		} else {
+			dir.Close()
+			// it's not empty.
+			return nil
+		}
+	}
 	return nil
 }
 

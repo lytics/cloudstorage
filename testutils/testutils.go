@@ -213,6 +213,11 @@ func BasicRW(t TestingT, store cloudstorage.Store) {
 	assert.Equal(t, cloudstorage.ErrObjectNotFound, err)
 	assert.Equal(t, nil, obj)
 
+	// Store should be empty again
+	all, err = store.List(context.Background(), cloudstorage.NewQueryAll())
+	assert.NoError(t, err)
+	assert.NotNil(t, all)
+	assert.Empty(t, all.Objects)
 }
 
 func createFile(t TestingT, store cloudstorage.Store, name, data string) cloudstorage.Object {
