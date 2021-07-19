@@ -311,8 +311,9 @@ func (l *LocalStore) deleteParentDirs(filePath string) error {
 			return nil
 		}
 		// There is no equivalent os.ErrNotEmpty in this version of go.
-		if pathErr, ok := err.(*fs.PathError); ok {
-			if sysErr, ok := pathErr.Err.(syscall.Errno); ok && sysErr == syscall.ENOTEMPTY {
+		var perr *fs.PathError
+		if ok := errors.As(err, &perr); ok {
+			if sysErr, ok := perr.Err.(syscall.Errno); ok && sysErr == syscall.ENOTEMPTY {
 				// not empty; quit.
 				return nil
 			}

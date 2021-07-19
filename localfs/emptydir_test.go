@@ -9,11 +9,9 @@ import (
 )
 
 func TestDirectoryCleanup(t *testing.T) {
-	testDir, err := os.MkdirTemp("/tmp", "dirtest")
-	require.NoError(t, err)
-	defer os.RemoveAll(testDir)
+	testDir := t.TempDir()
 
-	makeDummyFile := func(filePath string) string {
+	makeDummyFile := func(t *testing.T, filePath string) string {
 		fullPath := path.Join(testDir, filePath)
 		dir := path.Dir(fullPath)
 		require.NotEmpty(t, dir)
@@ -24,7 +22,7 @@ func TestDirectoryCleanup(t *testing.T) {
 		return fullPath
 	}
 
-	fileExists := func(filePath string) bool {
+	fileExists := func(t *testing.T, filePath string) bool {
 		_, err := os.Stat(filePath)
 		if err == nil {
 			return true
@@ -36,7 +34,7 @@ func TestDirectoryCleanup(t *testing.T) {
 		return false
 	}
 
-	require.False(t, fileExists("/heythisdoesntexist/overhere"))
+	require.False(t, fileExists(t, "/heythisdoesntexist/overhere"))
 
 	// /testDir
 	//   a/
@@ -48,71 +46,71 @@ func TestDirectoryCleanup(t *testing.T) {
 	//     d/
 	//           dummyfile4
 
-	d1 := makeDummyFile("a/b/c/dummyfile1")
-	d2 := makeDummyFile("a/b/c/dummyfile2")
-	d3 := makeDummyFile("a/dummyfile3")
-	d4 := makeDummyFile("a/d/dummyfile4")
+	d1 := makeDummyFile(t, "a/b/c/dummyfile1")
+	d2 := makeDummyFile(t, "a/b/c/dummyfile2")
+	d3 := makeDummyFile(t, "a/dummyfile3")
+	d4 := makeDummyFile(t, "a/d/dummyfile4")
 
 	l := &LocalStore{storepath: testDir}
 
 	t.Run("delete-nonempty-dir", func(t *testing.T) {
-		err = l.deleteParentDirs(path.Join(testDir, "a/d"))
+		err := l.deleteParentDirs(path.Join(testDir, "a/d"))
 		require.NoError(t, err)
-		require.True(t, fileExists(d1))
-		require.True(t, fileExists(d2))
-		require.True(t, fileExists(d3))
-		require.True(t, fileExists(d4))
+		require.True(t, fileExists(t, d1))
+		require.True(t, fileExists(t, d2))
+		require.True(t, fileExists(t, d3))
+		require.True(t, fileExists(t, d4))
 	})
 
 	t.Run("delete-nonempty-nested-child-dir", func(t *testing.T) {
-		err = l.deleteParentDirs(path.Join(testDir, "a/b/c"))
+		err := l.deleteParentDirs(path.Join(testDir, "a/b/c"))
 		require.NoError(t, err)
-		require.True(t, fileExists(d1))
-		require.True(t, fileExists(d2))
-		require.True(t, fileExists(d3))
-		require.True(t, fileExists(d4))
+		require.True(t, fileExists(t, d1))
+		require.True(t, fileExists(t, d2))
+		require.True(t, fileExists(t, d3))
+		require.True(t, fileExists(t, d4))
 	})
 
 	t.Run("delete-nonempty-nested-parent-dir", func(t *testing.T) {
-		err = l.deleteParentDirs(path.Join(testDir, "a/b"))
+		err := l.deleteParentDirs(path.Join(testDir, "a/b"))
 		require.NoError(t, err)
-		require.True(t, fileExists(d1))
-		require.True(t, fileExists(d2))
-		require.True(t, fileExists(d3))
-		require.True(t, fileExists(d4))
+		require.True(t, fileExists(t, d1))
+		require.True(t, fileExists(t, d2))
+		require.True(t, fileExists(t, d3))
+		require.True(t, fileExists(t, d4))
 	})
 
 	require.NoError(t, os.Remove(d4))
 
 	t.Run("delete-empty-dir", func(t *testing.T) {
-		err = l.deleteParentDirs(d4)
+		err := l.deleteParentDirs(d4)
 		require.NoError(t, err)
-		require.True(t, fileExists(d1))
-		require.True(t, fileExists(d2))
-		require.True(t, fileExists(d3))
-		require.False(t, fileExists(d4))
-		require.False(t, fileExists(path.Join(testDir, "a/d")))
+		require.True(t, fileExists(t, d1))
+		require.True(t, fileExists(t, d2))
+		require.True(t, fileExists(t, d3))
+		require.False(t, fileExists(t, d4))
+		require.False(t, fileExists(t, path.Join(testDir, "a/d")))
 	})
 
 	require.NoError(t, os.Remove(d1))
 	require.NoError(t, os.Remove(d2))
 
 	t.Run("delete-empty-nested-dir", func(t *testing.T) {
-		err = l.deleteParentDirs(d2)
+		err := l.deleteParentDirs(d2)
 		require.NoError(t, err)
-		require.False(t, fileExists(d1))
-		require.False(t, fileExists(d2))
-		require.False(t, fileExists(path.Join(testDir, "a/b/c")))
-		require.False(t, fileExists(path.Join(testDir, "a/b")))
-		require.True(t, fileExists(d3))
-		require.False(t, fileExists(d4))
-		require.False(t, fileExists(path.Join(testDir, "a/d")))
+		require.False(t, fileExists(t, d1))
+		require.False(t, fileExists(t, d2))
+		require.False(t, fileExists(t, path.Join(testDir, "a/b/c")))
+		require.False(t, fileExists(t, path.Join(testDir, "a/b")))
+		require.True(t, fileExists(t, d3))
+		require.False(t, fileExists(t, d4))
+		require.False(t, fileExists(t, path.Join(testDir, "a/d")))
 	})
 
 	t.Run("delete-missing-dir", func(t *testing.T) {
-		err = l.deleteParentDirs(path.Join(testDir, "doesntexist/what"))
+		err := l.deleteParentDirs(path.Join(testDir, "doesntexist/what"))
 		require.NoError(t, err)
 	})
 
-	require.True(t, fileExists(testDir))
+	require.True(t, fileExists(t, testDir))
 }
