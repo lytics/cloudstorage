@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/araddon/gou"
@@ -280,31 +282,48 @@ func (l *LocalStore) Get(ctx context.Context, o string) (cloudstorage.Object, er
 func (l *LocalStore) Delete(ctx context.Context, obj string) error {
 	fo := path.Join(l.storepath, obj)
 	if err := os.Remove(fo); err != nil {
-		return fmt.Errorf("removing dir=%s: %w", fo, err)
+		return fmt.Errorf("removing file=%s: %w", fo, err)
 	}
 	mf := fo + ".metadata"
 	if cloudstorage.Exists(mf) {
 		if err := os.Remove(mf); err != nil {
-			return fmt.Errorf("removing dir=%s: %w", mf, err)
+			return fmt.Errorf("removing file=%s: %w", mf, err)
 		}
 	}
 
 	// When the last item in a folder is deleted, the folder
 	// should also be deleted. This matches the behavior in GCS.
-	dir, err := os.Open(l.storepath)
-	if err != nil {
-		return fmt.Errorf("failed to open store dir=%s err=%w", l.storepath, err)
-	}
-	if _, err = dir.Readdirnames(1); errors.Is(err, io.EOF) {
-		dir.Close()
-		// it's empty, so remove it.
-		if err := os.Remove(l.storepath); err != nil {
-			return fmt.Errorf("failed to remove store dir=%s err=%w", l.storepath, err)
-		}
-	} else {
-		dir.Close()
-	}
+	return l.deleteParentDirs(fo)
+}
 
+// deleteParentDirs deletes all the parent dirs of some filepath
+// if those dirs are empty.
+func (l *LocalStore) deleteParentDirs(filePath string) error {
+
+	for dirName := path.Dir(filePath); len(dirName) > 0; dirName = path.Dir(dirName) {
+		if dirName == l.storepath {
+			// top level, stop deleting
+			return nil
+		}
+		err := os.Remove(dirName)
+		if errors.Is(err, os.ErrNotExist) {
+			// it's already deleted; nothing to do.
+			return nil
+		}
+		// There is no equivalent os.ErrNotEmpty in this version of go.
+		var perr *fs.PathError
+		if ok := errors.As(err, &perr); ok {
+			if sysErr, ok := perr.Err.(syscall.Errno); ok && sysErr == syscall.ENOTEMPTY {
+				// not empty; quit.
+				return nil
+			}
+		}
+		// unknown error, return it.
+		if err != nil {
+			return fmt.Errorf("failed to remove store dir=%s err=%w", dirName, err)
+		}
+		// we deleted an empty folder, so continue
+	}
 	return nil
 }
 
