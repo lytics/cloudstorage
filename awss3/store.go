@@ -109,7 +109,24 @@ type (
 // NewClient create new AWS s3 Client.  Uses cloudstorage.Config to read
 // necessary config settings such as bucket, region, auth.
 func NewClient(conf *cloudstorage.Config) (*s3.S3, *session.Session, error) {
+	awsConf, err := makeAWSConf(conf)
+	if err != nil {
+		return nil, nil, err
+	}
 
+	sess := session.New(awsConf)
+	if sess == nil {
+		return nil, nil, ErrNoS3Session
+	}
+
+	s3Client := s3.New(sess)
+
+	ensureBucket(s3Client, conf.Bucket)
+
+	return s3Client, sess, nil
+}
+
+func makeAWSConf(conf *cloudstorage.Config) (*aws.Config, error) {
 	awsConf := aws.NewConfig().
 		WithHTTPClient(http.DefaultClient).
 		WithMaxRetries(aws.UseServiceDefaultRetries).
@@ -127,15 +144,15 @@ func NewClient(conf *cloudstorage.Config) (*s3.S3, *session.Session, error) {
 	case AuthAccessKey:
 		accessKey := conf.Settings.String(ConfKeyAccessKey)
 		if accessKey == "" {
-			return nil, nil, ErrNoAccessKey
+			return nil, ErrNoAccessKey
 		}
 		secretKey := conf.Settings.String(ConfKeyAccessSecret)
 		if secretKey == "" {
-			return nil, nil, ErrNoAccessSecret
+			return nil, ErrNoAccessSecret
 		}
 		awsConf.WithCredentials(credentials.NewStaticCredentials(accessKey, secretKey, ""))
 	default:
-		return nil, nil, ErrNoAuth
+		return nil, ErrNoAuth
 	}
 
 	if conf.BaseUrl != "" {
@@ -151,14 +168,14 @@ func NewClient(conf *cloudstorage.Config) (*s3.S3, *session.Session, error) {
 		awsConf.WithDisableSSL(true)
 	}
 
-	sess := session.New(awsConf)
-	if sess == nil {
-		return nil, nil, ErrNoS3Session
-	}
+	return awsConf, nil
+}
 
-	s3Client := s3.New(sess)
-
-	return s3Client, sess, nil
+func ensureBucket(s3Client *s3.S3, bucket string) error {
+	_, err := s3Client.CreateBucket(&s3.CreateBucketInput{
+		Bucket: aws.String(bucket),
+	})
+	return err
 }
 
 // NewStore Create AWS S3 storage client of type cloudstorage.Store
