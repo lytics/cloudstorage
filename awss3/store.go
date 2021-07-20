@@ -123,6 +123,10 @@ func NewClient(conf *cloudstorage.Config) (*s3.S3, *session.Session, error) {
 		awsConf.WithRegion("us-east-1")
 	}
 
+	if conf.Endpoint != "" {
+		awsConf.WithEndpoint(conf.Endpoint)
+	}
+
 	switch conf.AuthMethod {
 	case AuthAccessKey:
 		accessKey := conf.Settings.String(ConfKeyAccessKey)
