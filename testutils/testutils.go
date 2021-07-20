@@ -643,6 +643,16 @@ func ListObjsAndFolders(t TestingT, store cloudstorage.Store) {
 	folders, err = store.Folders(ctx, q)
 	assert.NotEqual(t, nil, err)
 	assert.Equal(t, 0, len(folders), "incorrect list len. wanted 0 folders. %v", folders)
+
+	// List objects from a missing folder
+	q = cloudstorage.NewQuery("does-not-exist/")
+	resp, err := store.List(context.Background(), q)
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Empty(t, resp.Objects)
+	folders, err = store.Folders(context.Background(), q)
+	assert.NoError(t, err)
+	assert.Empty(t, folders)
 }
 
 func Truncate(t TestingT, store cloudstorage.Store) {

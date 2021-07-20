@@ -197,7 +197,7 @@ func (l *LocalStore) Objects(ctx context.Context, csq cloudstorage.Query) (cloud
 func (l *LocalStore) Folders(ctx context.Context, csq cloudstorage.Query) ([]string, error) {
 	spath := path.Join(l.storepath, csq.Prefix)
 	if !cloudstorage.Exists(spath) {
-		return nil, fmt.Errorf("That folder %q does not exist", spath)
+		return []string{}, nil
 	}
 	select {
 	case <-ctx.Done():
