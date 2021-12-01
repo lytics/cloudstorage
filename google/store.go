@@ -132,6 +132,12 @@ func (g *GcsFS) Get(ctx context.Context, objectpath string) (cloudstorage.Object
 // If q is nil, no filtering is done.
 func (g *GcsFS) Objects(ctx context.Context, csq cloudstorage.Query) (cloudstorage.ObjectIterator, error) {
 	var q = &storage.Query{Prefix: csq.Prefix}
+	if csq.StartOffset != "" {
+		q.StartOffset = csq.StartOffset
+	}
+	if csq.EndOffset != "" {
+		q.EndOffset = csq.EndOffset
+	}
 	iter := g.gcsb().Objects(ctx, q)
 	return &objectIterator{g, ctx, iter}, nil
 }
