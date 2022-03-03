@@ -321,12 +321,13 @@ func newObject(g *GcsFS, o *storage.ObjectAttrs) *object {
 	}
 	metadata["content_length"] = strconv.FormatInt(o.Size, 10)
 	return &object{
-		name:      o.Name,
-		updated:   o.Updated,
-		metadata:  metadata,
-		gcsb:      g.gcsb(),
-		bucket:    g.bucket,
-		cachepath: cloudstorage.CachePathObj(g.cachepath, o.Name, g.Id),
+		name:         o.Name,
+		updated:      o.Updated,
+		metadata:     metadata,
+		gcsb:         g.gcsb(),
+		bucket:       g.bucket,
+		cachepath:    cloudstorage.CachePathObj(g.cachepath, o.Name, g.Id),
+		googleObject: o,
 	}
 }
 func (o *object) StorageSource() string {
