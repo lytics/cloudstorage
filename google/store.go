@@ -320,6 +320,8 @@ func newObject(g *GcsFS, o *storage.ObjectAttrs) *object {
 		metadata = make(map[string]string)
 	}
 	metadata["content_length"] = strconv.FormatInt(o.Size, 10)
+	metadata["attrs_content_type"] = o.ContentType
+	metadata["attrs_cache_control"] = o.CacheControl
 	return &object{
 		name:      o.Name,
 		updated:   o.Updated,
