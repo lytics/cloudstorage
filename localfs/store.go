@@ -219,10 +219,25 @@ func (l *LocalStore) Folders(ctx context.Context, csq cloudstorage.Query) ([]str
 func (l *LocalStore) NewReader(o string) (io.ReadCloser, error) {
 	return l.NewReaderWithContext(context.Background(), o)
 }
-func (l *LocalStore) NewReaderWithContext(ctx context.Context, o string) (io.ReadCloser, error) {
+func (l *LocalStore) pathForObject(o string) (string, error) {
 	fo := path.Join(l.storepath, o)
 	if !cloudstorage.Exists(fo) {
-		return nil, cloudstorage.ErrObjectNotFound
+		return "", cloudstorage.ErrObjectNotFound
+	}
+	stat, err := os.Stat(fo)
+	if err != nil {
+		return "", err
+	}
+	if stat.IsDir() {
+		return "", cloudstorage.ErrObjectNotFound
+	}
+	return fo, nil
+}
+
+func (l *LocalStore) NewReaderWithContext(ctx context.Context, o string) (io.ReadCloser, error) {
+	fo, err := l.pathForObject(o)
+	if err != nil {
+		return nil, err
 	}
 	return csbufio.OpenReader(fo)
 }
@@ -260,11 +275,11 @@ func (l *LocalStore) NewWriterWithContext(ctx context.Context, o string, metadat
 }
 
 func (l *LocalStore) Get(ctx context.Context, o string) (cloudstorage.Object, error) {
-	fo := path.Join(l.storepath, o)
-
-	if !cloudstorage.Exists(fo) {
-		return nil, cloudstorage.ErrObjectNotFound
+	fo, err := l.pathForObject(o)
+	if err != nil {
+		return nil, err
 	}
+
 	var updated time.Time
 	if stat, err := os.Stat(fo); err == nil {
 		updated = stat.ModTime()

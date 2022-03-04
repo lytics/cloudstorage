@@ -1,6 +1,7 @@
 package localfs_test
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -50,4 +51,40 @@ func TestAll(t *testing.T) {
 	store, err = cloudstorage.NewStore(localFsConf)
 	assert.NotEqual(t, nil, err)
 	assert.Equal(t, nil, store)
+}
+
+func TestNewReaderDir(t *testing.T) {
+	// When a dir is requested, serve the index.html file instead
+	localFsConf := &cloudstorage.Config{
+		Type:       localfs.StoreType,
+		AuthMethod: localfs.AuthFileSystem,
+		LocalFS:    "/tmp/mockcloud",
+		TmpDir:     "/tmp/localcache",
+	}
+	store, err := cloudstorage.NewStore(localFsConf)
+	testutils.MockFile(store, "test/index.html", "test")
+	assert.Equal(t, nil, err)
+	assert.Equal(t, nil, err)
+	_, err = store.NewReader("test")
+	assert.Equal(t, err, cloudstorage.ErrObjectNotFound)
+	err = store.Delete(context.Background(), "test/index.html")
+	assert.Equal(t, nil, err)
+}
+
+func TestGetDir(t *testing.T) {
+	// When a dir is requested, serve the index.html file instead
+	localFsConf := &cloudstorage.Config{
+		Type:       localfs.StoreType,
+		AuthMethod: localfs.AuthFileSystem,
+		LocalFS:    "/tmp/mockcloud",
+		TmpDir:     "/tmp/localcache",
+	}
+	store, err := cloudstorage.NewStore(localFsConf)
+	testutils.MockFile(store, "test/index.html", "test")
+	assert.Equal(t, nil, err)
+	assert.Equal(t, nil, err)
+	_, err = store.Get(context.Background(), "test")
+	assert.Equal(t, err, cloudstorage.ErrObjectNotFound)
+	err = store.Delete(context.Background(), "test/index.html")
+	assert.Equal(t, nil, err)
 }
