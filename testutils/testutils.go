@@ -903,3 +903,22 @@ func MultipleRW(t TestingT, store cloudstorage.Store, conf *cloudstorage.Config)
 		assert.Equal(t, nil, err)
 	}
 }
+
+func MockFile(store cloudstorage.Store, path string, body string) error {
+	obj, err := store.NewObject(path)
+	if err != nil {
+		return err
+	}
+	f, err := obj.Open(cloudstorage.ReadWrite)
+	if err != nil {
+		return err
+	}
+	w := bufio.NewWriter(f)
+
+	if _, err := w.WriteString(body); err != nil {
+		return err
+	}
+	w.Flush()
+	obj.Close()
+	return nil
+}
