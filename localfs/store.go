@@ -26,7 +26,7 @@ func init() {
 	cloudstorage.Register(StoreType, localProvider)
 }
 func localProvider(conf *cloudstorage.Config) (cloudstorage.Store, error) {
-	store, err := NewLocalStore(conf.LocalFS, conf.TmpDir)
+	store, err := NewLocalStore(conf.Bucket, conf.LocalFS, conf.TmpDir)
 	if err != nil {
 		return nil, err
 	}
@@ -48,14 +48,13 @@ const (
 
 // LocalStore is client to local-filesystem store.
 type LocalStore struct {
-	storepath   string // possibly is relative  ./tables
-	pathCleaned string // cleaned removing  ./ = "tables"
-	cachepath   string
-	Id          string
+	storepath string // possibly is relative  ./tables
+	cachepath string
+	Id        string
 }
 
 // NewLocalStore create local store from storage path on local filesystem, and cachepath.
-func NewLocalStore(storepath, cachepath string) (*LocalStore, error) {
+func NewLocalStore(bucket, storepath, cachepath string) (*LocalStore, error) {
 
 	if storepath == "" {
 		return nil, fmt.Errorf("storepath=%q cannot be empty", storepath)
@@ -65,7 +64,7 @@ func NewLocalStore(storepath, cachepath string) (*LocalStore, error) {
 		return nil, fmt.Errorf("storepath=%q cannot be the same as cachepath=%q", storepath, cachepath)
 	}
 
-	pathCleaned := strings.TrimPrefix(storepath, "./")
+	storepath = filepath.Join(storepath, bucket)
 
 	err := os.MkdirAll(storepath, 0775)
 	if err != nil {
@@ -81,10 +80,9 @@ func NewLocalStore(storepath, cachepath string) (*LocalStore, error) {
 	uid = strings.Replace(uid, "-", "", -1)
 
 	return &LocalStore{
-		storepath:   storepath,
-		pathCleaned: pathCleaned,
-		cachepath:   cachepath,
-		Id:          uid,
+		storepath: storepath,
+		cachepath: cachepath,
+		Id:        uid,
 	}, nil
 }
 
@@ -137,7 +135,7 @@ func (l *LocalStore) List(ctx context.Context, query cloudstorage.Query) (*cloud
 			return err
 		}
 
-		obj := strings.Replace(fo, l.pathCleaned, "", 1)
+		obj := strings.Replace(fo, l.storepath, "", 1)
 
 		if f.IsDir() {
 			return nil
