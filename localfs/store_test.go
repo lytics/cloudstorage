@@ -2,10 +2,12 @@ package localfs_test
 
 import (
 	"context"
+	"io/ioutil"
 	"os"
+	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/lytics/cloudstorage"
 	"github.com/lytics/cloudstorage/localfs"
@@ -13,15 +15,18 @@ import (
 )
 
 func TestAll(t *testing.T) {
+	t.Parallel()
 
-	os.RemoveAll("/tmp/mockcloud")
-	os.RemoveAll("/tmp/localcache")
+	tmpDir, err := ioutil.TempDir("/tmp", "all")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
 
 	localFsConf := &cloudstorage.Config{
 		Type:       localfs.StoreType,
 		AuthMethod: localfs.AuthFileSystem,
-		LocalFS:    "/tmp/mockcloud",
-		TmpDir:     "/tmp/localcache",
+		LocalFS:    filepath.Join(tmpDir, "mockcloud"),
+		TmpDir:     filepath.Join(tmpDir, "localcache"),
+		Bucket:     "all",
 	}
 
 	store, err := cloudstorage.NewStore(localFsConf)
@@ -30,16 +35,20 @@ func TestAll(t *testing.T) {
 		return
 	}
 	testutils.RunTests(t, store, localFsConf)
+}
+
+func TestBrusted(t *testing.T) {
+	t.Parallel()
 
 	// invalid config:  empty/missing LocalFS
-	localFsConf = &cloudstorage.Config{
+	localFsConf := &cloudstorage.Config{
 		Type:       localfs.StoreType,
 		AuthMethod: localfs.AuthFileSystem,
 		LocalFS:    "",
 	}
-	store, err = cloudstorage.NewStore(localFsConf)
-	assert.NotEqual(t, nil, err)
-	assert.Equal(t, nil, store)
+	store, err := cloudstorage.NewStore(localFsConf)
+	require.Error(t, err)
+	require.Equal(t, nil, store)
 
 	// invalid config:  LocalFS = TempDir
 	localFsConf = &cloudstorage.Config{
@@ -49,42 +58,56 @@ func TestAll(t *testing.T) {
 		TmpDir:     "/tmp/invalid",
 	}
 	store, err = cloudstorage.NewStore(localFsConf)
-	assert.NotEqual(t, nil, err)
-	assert.Equal(t, nil, store)
+	require.Error(t, err)
+	require.Equal(t, nil, store)
 }
 
 func TestNewReaderDir(t *testing.T) {
+	t.Parallel()
+
+	tmpDir, err := ioutil.TempDir("/tmp", "newreaderdir")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
 	// When a dir is requested, serve the index.html file instead
 	localFsConf := &cloudstorage.Config{
 		Type:       localfs.StoreType,
 		AuthMethod: localfs.AuthFileSystem,
-		LocalFS:    "/tmp/mockcloud",
-		TmpDir:     "/tmp/localcache",
+		LocalFS:    filepath.Join(tmpDir, "mockcloud"),
+		TmpDir:     filepath.Join(tmpDir, "localcache"),
+		Bucket:     "newreaderdir",
 	}
 	store, err := cloudstorage.NewStore(localFsConf)
 	testutils.MockFile(store, "test/index.html", "test")
-	assert.Equal(t, nil, err)
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
+	require.Equal(t, nil, err)
 	_, err = store.NewReader("test")
-	assert.Equal(t, err, cloudstorage.ErrObjectNotFound)
+	require.Equal(t, err, cloudstorage.ErrObjectNotFound)
 	err = store.Delete(context.Background(), "test/index.html")
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 }
 
 func TestGetDir(t *testing.T) {
+	t.Parallel()
+
+	tmpDir, err := ioutil.TempDir("/tmp", "getdir")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
 	// When a dir is requested, serve the index.html file instead
 	localFsConf := &cloudstorage.Config{
 		Type:       localfs.StoreType,
 		AuthMethod: localfs.AuthFileSystem,
-		LocalFS:    "/tmp/mockcloud",
-		TmpDir:     "/tmp/localcache",
+		LocalFS:    filepath.Join(tmpDir, "mockcloud"),
+		TmpDir:     filepath.Join(tmpDir, "localcache"),
+		Bucket:     "getdir",
 	}
 	store, err := cloudstorage.NewStore(localFsConf)
-	testutils.MockFile(store, "test/index.html", "test")
-	assert.Equal(t, nil, err)
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
+	err = testutils.MockFile(store, "test/index.html", "test")
+	require.NoError(t, err)
 	_, err = store.Get(context.Background(), "test")
-	assert.Equal(t, err, cloudstorage.ErrObjectNotFound)
+	require.Equal(t, err, cloudstorage.ErrObjectNotFound)
 	err = store.Delete(context.Background(), "test/index.html")
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 }
