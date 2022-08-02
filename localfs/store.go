@@ -237,14 +237,13 @@ func (l *LocalStore) NewReaderWithContext(ctx context.Context, o string) (io.Rea
 	if err != nil {
 		return nil, err
 	}
-	return csbufio.OpenReader(fo)
+	return csbufio.OpenReader(ctx, fo)
 }
 
 func (l *LocalStore) NewWriter(o string, metadata map[string]string) (io.WriteCloser, error) {
 	return l.NewWriterWithContext(context.Background(), o, metadata)
 }
 func (l *LocalStore) NewWriterWithContext(ctx context.Context, o string, metadata map[string]string, opts ...cloudstorage.Opts) (io.WriteCloser, error) {
-
 	fo := path.Join(l.storepath, o)
 
 	err := cloudstorage.EnsureDir(fo)
@@ -269,7 +268,8 @@ func (l *LocalStore) NewWriterWithContext(ctx context.Context, o string, metadat
 	if err != nil {
 		return nil, err
 	}
-	return csbufio.NewWriter(f), nil
+
+	return csbufio.NewWriter(ctx, f), nil
 }
 
 func (l *LocalStore) Get(ctx context.Context, o string) (cloudstorage.Object, error) {
