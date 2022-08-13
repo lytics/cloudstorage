@@ -7,11 +7,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/lytics/cloudstorage"
 	"github.com/lytics/cloudstorage/localfs"
 	"github.com/lytics/cloudstorage/testutils"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestAll(t *testing.T) {
@@ -110,4 +110,37 @@ func TestGetDir(t *testing.T) {
 	require.Equal(t, err, cloudstorage.ErrObjectNotFound)
 	err = store.Delete(context.Background(), "test/index.html")
 	require.NoError(t, err)
+}
+
+func TestList(t *testing.T) {
+	t.Parallel()
+
+	for name, tt := range map[string]struct {
+		want int
+	}{
+		"empty": {
+			want: 0,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			tmpDir, err := ioutil.TempDir("/tmp", "getdir")
+			require.NoError(t, err)
+			t.Cleanup(func() { assert.NoError(t, os.RemoveAll(tmpDir)) })
+
+			store, err := localfs.NewLocalStore(
+				"list",
+				filepath.Join(tmpDir, "mockcloud"),
+				filepath.Join(tmpDir, "localcache"),
+			)
+			require.NoError(t, err)
+
+			var (
+				ctx = context.Background()
+				q   cloudstorage.Query
+			)
+			got, err := store.List(ctx, q)
+			require.NoError(t, err)
+			assert.Len(t, got.Objects, tt.want)
+		})
+	}
 }
