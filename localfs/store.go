@@ -173,7 +173,8 @@ func (l *LocalStore) List(ctx context.Context, query cloudstorage.Query) (*cloud
 		if md, ok := metadatas[objname]; ok {
 			obj.metadata = md
 		}
-		if query.StartOffset != "" && obj.name < query.StartOffset {
+		if (query.StartOffset != "" && obj.name < query.StartOffset) ||
+			(query.EndOffset != "" && obj.name >= query.EndOffset) {
 			continue
 		}
 		resp.Objects = append(resp.Objects, obj)

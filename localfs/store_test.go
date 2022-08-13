@@ -150,6 +150,29 @@ func TestList(t *testing.T) {
 			},
 			want: []string{"b", "c"},
 		},
+		"end-offset-exclusive": {
+			objs: map[string]string{
+				"a": "ijo",
+				"b": "ijo",
+				"c": "ijo",
+			},
+			q: cloudstorage.Query{
+				EndOffset: "b",
+			},
+			want: []string{"a"},
+		},
+		"start-and-end-offsets-together": {
+			objs: map[string]string{
+				"a": "ijo",
+				"b": "ijo",
+				"c": "ijo",
+			},
+			q: cloudstorage.Query{
+				StartOffset: "b",
+				EndOffset:   "c",
+			},
+			want: []string{"b"},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			ctx := context.Background()
