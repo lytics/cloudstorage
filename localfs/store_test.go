@@ -116,17 +116,20 @@ func TestList(t *testing.T) {
 	t.Parallel()
 
 	for name, tt := range map[string]struct {
-		objs map[string]string
-		want int
+		objs        map[string]string
+		q           cloudstorage.Query
+		startOffset string
+		want        []string
 	}{
 		"empty": {
-			want: 0,
+			objs: nil,
+			want: nil,
 		},
 		"one": {
 			objs: map[string]string{
 				"nimi": "ijo",
 			},
-			want: 1,
+			want: []string{"nimi"},
 		},
 		"many": {
 			objs: map[string]string{
@@ -134,7 +137,18 @@ func TestList(t *testing.T) {
 				"tu":     "jelo",
 				"tu wan": "laso",
 			},
-			want: 3,
+			want: []string{"wan", "tu", "tu wan"},
+		},
+		"start-offset-inclusive": {
+			objs: map[string]string{
+				"a": "ijo",
+				"b": "ijo",
+				"c": "ijo",
+			},
+			q: cloudstorage.Query{
+				StartOffset: "b",
+			},
+			want: []string{"b", "c"},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -160,10 +174,13 @@ func TestList(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			var q cloudstorage.Query
-			got, err := store.List(ctx, q)
+			got, err := store.List(ctx, tt.q)
 			require.NoError(t, err)
-			assert.Len(t, got.Objects, tt.want)
+			var names []string
+			for _, o := range got.Objects {
+				names = append(names, o.Name())
+			}
+			assert.ElementsMatch(t, tt.want, names)
 		})
 	}
 }
