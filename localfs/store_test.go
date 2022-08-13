@@ -116,15 +116,25 @@ func TestList(t *testing.T) {
 	t.Parallel()
 
 	for name, tt := range map[string]struct {
-		objs int
+		objs map[string]string
 		want int
 	}{
 		"empty": {
 			want: 0,
 		},
 		"one": {
-			objs: 1,
+			objs: map[string]string{
+				"nimi": "ijo",
+			},
 			want: 1,
+		},
+		"many": {
+			objs: map[string]string{
+				"wan":    "loje",
+				"tu":     "jelo",
+				"tu wan": "laso",
+			},
+			want: 3,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -141,10 +151,10 @@ func TestList(t *testing.T) {
 			)
 			require.NoError(t, err)
 
-			for i := 0; i < tt.objs; i++ {
-				w, err := store.NewWriterWithContext(ctx, "nimi", nil)
+			for k, v := range tt.objs {
+				w, err := store.NewWriterWithContext(ctx, k, nil)
 				require.NoError(t, err)
-				_, err = w.Write([]byte("ijo"))
+				_, err = w.Write([]byte(v))
 				require.NoError(t, err)
 				err = w.Close()
 				require.NoError(t, err)
