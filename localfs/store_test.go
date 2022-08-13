@@ -116,13 +116,20 @@ func TestList(t *testing.T) {
 	t.Parallel()
 
 	for name, tt := range map[string]struct {
+		objs int
 		want int
 	}{
 		"empty": {
 			want: 0,
 		},
+		"one": {
+			objs: 1,
+			want: 1,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+
 			tmpDir, err := ioutil.TempDir("/tmp", "getdir")
 			require.NoError(t, err)
 			t.Cleanup(func() { assert.NoError(t, os.RemoveAll(tmpDir)) })
@@ -134,10 +141,16 @@ func TestList(t *testing.T) {
 			)
 			require.NoError(t, err)
 
-			var (
-				ctx = context.Background()
-				q   cloudstorage.Query
-			)
+			for i := 0; i < tt.objs; i++ {
+				w, err := store.NewWriterWithContext(ctx, "nimi", nil)
+				require.NoError(t, err)
+				_, err = w.Write([]byte("ijo"))
+				require.NoError(t, err)
+				err = w.Close()
+				require.NoError(t, err)
+			}
+
+			var q cloudstorage.Query
 			got, err := store.List(ctx, q)
 			require.NoError(t, err)
 			assert.Len(t, got.Objects, tt.want)
