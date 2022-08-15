@@ -13,8 +13,8 @@ type Filter func(objects Objects) Objects
 type Query struct {
 	Delimiter   string   // Delimiter is most likely "/"
 	Prefix      string   // prefix (directory) to search for or object name if one file
-	StartOffset string   // (gcs only) "bar/", Only list objects lexicographically >= "bar/"
-	EndOffset   string   // (gcs only) "foo/", Only list objects lexicographically < "foo/"
+	StartOffset string   // (gcs/localfs only) "bar/", Only list objects lexicographically >= "bar/"
+	EndOffset   string   // (gcs/localfs only) "foo/", Only list objects lexicographically < "foo/"
 	Marker      string   // Next Page Marker if provided is a start next page fetch bookmark.
 	ShowHidden  bool     // Show hidden files?
 	Filters     []Filter // Applied to the result sets to filter out Objects (i.e. remove objects by extension)
