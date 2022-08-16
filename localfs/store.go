@@ -153,8 +153,13 @@ func (l *LocalStore) List(ctx context.Context, query cloudstorage.Query) (*cloud
 			mdkey := strings.Replace(obj, ".metadata", "", 1)
 			metadatas[mdkey] = md
 		} else {
-
 			oname := strings.TrimPrefix(obj, "/")
+
+			if (query.StartOffset != "" && oname < query.StartOffset) ||
+				(query.EndOffset != "" && oname >= query.EndOffset) {
+				return nil
+			}
+
 			objects[obj] = &object{
 				name:      oname,
 				updated:   f.ModTime(),
