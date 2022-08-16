@@ -153,8 +153,13 @@ func (l *LocalStore) List(ctx context.Context, query cloudstorage.Query) (*cloud
 			mdkey := strings.Replace(obj, ".metadata", "", 1)
 			metadatas[mdkey] = md
 		} else {
-
 			oname := strings.TrimPrefix(obj, "/")
+
+			if (query.StartOffset != "" && oname < query.StartOffset) ||
+				(query.EndOffset != "" && oname >= query.EndOffset) {
+				return nil
+			}
+
 			objects[obj] = &object{
 				name:      oname,
 				updated:   f.ModTime(),
@@ -172,10 +177,6 @@ func (l *LocalStore) List(ctx context.Context, query cloudstorage.Query) (*cloud
 	for objname, obj := range objects {
 		if md, ok := metadatas[objname]; ok {
 			obj.metadata = md
-		}
-		if (query.StartOffset != "" && obj.name < query.StartOffset) ||
-			(query.EndOffset != "" && obj.name >= query.EndOffset) {
-			continue
 		}
 		resp.Objects = append(resp.Objects, obj)
 	}
