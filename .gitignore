@@ -1,4 +1,6 @@
 google_jwt.json
 .env
 
-sniff* 
+sniff*
+vendor/
+coverage.* 
