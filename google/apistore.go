@@ -81,7 +81,7 @@ func (c *APIStore) SetBucketAgeLifecycle(name string, days int64) error {
 	bucket := &storage.Bucket{Name: name}
 	bucket.Lifecycle = new(storage.BucketLifecycle)
 	action := &storage.BucketLifecycleRuleAction{Type: "Delete"}
-	condition := &storage.BucketLifecycleRuleCondition{Age: days}
+	condition := &storage.BucketLifecycleRuleCondition{Age: &days}
 	bucket.Lifecycle.Rule = make([]*storage.BucketLifecycleRule, 1)
 	bucket.Lifecycle.Rule[0] = &storage.BucketLifecycleRule{Action: action, Condition: condition}
 	_, err := c.service.Buckets.Patch(name, bucket).Do()
