@@ -2,6 +2,7 @@ package google
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,6 +13,7 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/araddon/gou"
+	"github.com/golang/snappy"
 	"github.com/pborman/uuid"
 	"golang.org/x/net/context"
 	"google.golang.org/api/iterator"
@@ -38,7 +40,8 @@ var (
 	GCSRetries int = 55
 
 	// Ensure we implement ObjectIterator
-	_ cloudstorage.ObjectIterator = (*objectIterator)(nil)
+	_          cloudstorage.ObjectIterator = (*objectIterator)(nil)
+	snappyMime                             = "application/x-snappy-framed"
 )
 
 // GcsFS Simple wrapper for accessing smaller GCS files, it doesn't currently implement a
@@ -312,6 +315,7 @@ type object struct {
 	readonly     bool
 	opened       bool
 	cachepath    string
+	snappy       bool
 }
 
 func newObject(g *GcsFS, o *storage.ObjectAttrs) *object {
@@ -348,6 +352,9 @@ func (o *object) MetaData() map[string]string {
 }
 func (o *object) SetMetaData(meta map[string]string) {
 	o.metadata = meta
+}
+func (o *object) SetSnappy() {
+	o.snappy = true
 }
 
 func (o *object) Delete() error {
@@ -415,7 +422,17 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 				return nil, fmt.Errorf("error seeking to start of cachedcopy err=%v", err) //don't retry on local fs errors
 			}
 
-			writtenBytes, err := io.Copy(cachedcopy, rc)
+			var writtenBytes int64
+			if o.googleObject.ContentType == snappyMime {
+				writtenBytes, err = io.Copy(cachedcopy, snappy.NewReader(rc))
+				if err != nil && (errors.Is(err, snappy.ErrCorrupt) ||
+					errors.Is(err, snappy.ErrTooLarge) ||
+					errors.Is(err, snappy.ErrUnsupported)) {
+					return nil, fmt.Errorf("error decompressing snappy data err=%v", err) //don't retry on decompression errors
+				}
+			} else {
+				writtenBytes, err = io.Copy(cachedcopy, rc)
+			}
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error coping bytes. err=%v", err))
 				//recreate the cachedcopy file incase it has incomplete data
@@ -429,14 +446,17 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 				cloudstorage.Backoff(try)
 				continue
 			}
-			// make sure the whole object was downloaded from google
-			if contentLength, ok := o.metadata["content_length"]; ok {
-				if contentLengthInt, err := strconv.ParseInt(contentLength, 10, 64); err == nil {
-					if contentLengthInt != writtenBytes {
-						return nil, fmt.Errorf("partial file download error. tfile=%v", o.name)
+
+			if o.googleObject.ContentType != snappyMime { // snappy checks crc
+				// make sure the whole object was downloaded from google
+				if contentLength, ok := o.metadata["content_length"]; ok {
+					if contentLengthInt, err := strconv.ParseInt(contentLength, 10, 64); err == nil {
+						if contentLengthInt != writtenBytes {
+							return nil, fmt.Errorf("partial file download error. tfile=%v", o.name)
+						}
+					} else {
+						return nil, fmt.Errorf("content_length is not a number. tfile=%v", o.name)
 					}
-				} else {
-					return nil, fmt.Errorf("content_length is not a number. tfile=%v", o.name)
 				}
 			}
 		}
@@ -515,20 +535,50 @@ func (o *object) Sync() error {
 			wc.ContentType = ctype
 		}
 
-		if _, err = io.Copy(wc, rd); err != nil {
-			errs = append(errs, fmt.Sprintf("copy to remote object error:%v", err))
-			err2 := wc.CloseWithError(err)
-			if err2 != nil {
-				errs = append(errs, fmt.Sprintf("CloseWithError error:%v", err2))
+		if o.snappy {
+			wc.ContentType = snappyMime
+			sw := snappy.NewBufferedWriter(wc)
+			if _, err = io.Copy(sw, rd); err != nil {
+				errs = append(errs, fmt.Sprintf("copy to remote object error:%v", err))
+				err3 := sw.Close()
+				if err3 != nil {
+					errs = append(errs, fmt.Sprintf("closing snappy writer error:%v", err3))
+				}
+				err2 := wc.Close()
+				if err2 != nil {
+					errs = append(errs, fmt.Sprintf("Close writer error:%v", err2))
+				}
+				cloudstorage.Backoff(try)
+				continue
 			}
-			cloudstorage.Backoff(try)
-			continue
-		}
 
-		if err = wc.Close(); err != nil {
-			errs = append(errs, fmt.Sprintf("close gcs writer error:%v", err))
-			cloudstorage.Backoff(try)
-			continue
+			if err = sw.Close(); err != nil {
+				errs = append(errs, fmt.Sprintf("close snappy writer error:%v", err))
+				cloudstorage.Backoff(try)
+				continue
+			}
+
+			if err = wc.Close(); err != nil {
+				errs = append(errs, fmt.Sprintf("Close writer error:%v", err))
+				cloudstorage.Backoff(try)
+				continue
+			}
+		} else {
+			if _, err = io.Copy(wc, rd); err != nil {
+				errs = append(errs, fmt.Sprintf("copy to remote object error:%v", err))
+				err2 := wc.CloseWithError(err)
+				if err2 != nil {
+					errs = append(errs, fmt.Sprintf("CloseWithError error:%v", err2))
+				}
+				cloudstorage.Backoff(try)
+				continue
+			}
+
+			if err = wc.Close(); err != nil {
+				errs = append(errs, fmt.Sprintf("close gcs writer error:%v", err))
+				cloudstorage.Backoff(try)
+				continue
+			}
 		}
 
 		return nil

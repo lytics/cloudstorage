@@ -547,20 +547,20 @@ func newObject(f *FS, o *az.Blob) *object {
 }
 
 /*
-func newObjectFromHead(f *FS, name string, o *s3.HeadObjectOutput) *object {
-	obj := &object{
-		fs:        f,
-		name:      name,
-		bucket:    f.bucket,
-		cachepath: cloudstorage.CachePathObj(f.cachepath, name, f.ID),
+	func newObjectFromHead(f *FS, name string, o *s3.HeadObjectOutput) *object {
+		obj := &object{
+			fs:        f,
+			name:      name,
+			bucket:    f.bucket,
+			cachepath: cloudstorage.CachePathObj(f.cachepath, name, f.ID),
+		}
+		if o.LastModified != nil {
+			obj.updated = *o.LastModified
+		}
+		// metadata?
+		obj.metadata, _ = convertMetaData(o.Metadata)
+		return obj
 	}
-	if o.LastModified != nil {
-		obj.updated = *o.LastModified
-	}
-	// metadata?
-	obj.metadata, _ = convertMetaData(o.Metadata)
-	return obj
-}
 */
 func (o *object) StorageSource() string {
 	return StoreType
@@ -579,6 +579,9 @@ func (o *object) MetaData() map[string]string {
 }
 func (o *object) SetMetaData(meta map[string]string) {
 	o.metadata = meta
+}
+func (o *object) SetSnappy() {
+	panic("snappy not implemented")
 }
 
 func (o *object) Delete() error {

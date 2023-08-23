@@ -586,17 +586,18 @@ func (m *Client) NewWriterWithContext(ctx context.Context, name string, metadata
 
 /*
 // NewFile creates file with filename in upload folder
-func (m *Client) NewFile(filename string) (Uploader, error) {
-	moveto := Concat(m.Folder, filename)
-	gou.InfoCtx(m.clientCtx, "creating file %s", moveto)
 
-	file, err := m.client.Create(moveto)
-	if err != nil {
-		return nil, err
+	func (m *Client) NewFile(filename string) (Uploader, error) {
+		moveto := Concat(m.Folder, filename)
+		gou.InfoCtx(m.clientCtx, "creating file %s", moveto)
+
+		file, err := m.client.Create(moveto)
+		if err != nil {
+			return nil, err
+		}
+
+		return &object{file: file}, nil
 	}
-
-	return &object{file: file}, nil
-}
 */
 func (m *Client) fetchFiles(f string) ([]os.FileInfo, error) {
 	folder := Concat(m.bucket, f)
@@ -905,6 +906,9 @@ func (o *object) MetaData() map[string]string {
 }
 func (o *object) SetMetaData(meta map[string]string) {
 	//o.metadata = meta
+}
+func (o *object) SetSnappy() {
+	panic("snappy not implemented")
 }
 func (o *object) StorageSource() string {
 	return StoreType
