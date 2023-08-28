@@ -5,17 +5,22 @@ import (
 	"context"
 	"io"
 	"os"
+
+	"github.com/golang/snappy"
 )
 
-func OpenReader(ctx context.Context, name string) (io.ReadCloser, error) {
+func OpenReader(ctx context.Context, name string, enableCompression bool) (io.ReadCloser, error) {
 	f, err := os.Open(name)
 	if err != nil {
 		return nil, err
 	}
-	return NewReader(ctx, f), nil
+	return NewReader(ctx, f, enableCompression), nil
 }
 
-func NewReader(ctx context.Context, rc io.ReadCloser) io.ReadCloser {
+func NewReader(ctx context.Context, rc io.ReadCloser, enableCompression bool) io.ReadCloser {
+	if enableCompression {
+		return &bufReadCloser{ctx, snappy.NewReader(rc), rc}
+	}
 	return &bufReadCloser{ctx, bufio.NewReader(rc), rc}
 }
 

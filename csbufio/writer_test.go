@@ -14,7 +14,7 @@ func TestWriterContextDone(t *testing.T) {
 	cancel()
 
 	var m memRWC
-	wc := NewWriter(ctx, &m)
+	wc := NewWriter(ctx, &m, false)
 
 	n, err := wc.Write([]byte("some-data"))
 	require.ErrorIs(t, err, context.Canceled)

@@ -907,9 +907,6 @@ func (o *object) MetaData() map[string]string {
 func (o *object) SetMetaData(meta map[string]string) {
 	//o.metadata = meta
 }
-func (o *object) SetSnappy() {
-	panic("snappy not implemented")
-}
 func (o *object) StorageSource() string {
 	return StoreType
 }

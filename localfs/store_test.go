@@ -35,6 +35,15 @@ func TestAll(t *testing.T) {
 		return
 	}
 	testutils.RunTests(t, store, localFsConf)
+
+	localFsConf.EnableCompression = true
+	store, err = cloudstorage.NewStore(localFsConf)
+	if err != nil {
+		t.Fatalf("Could not create store: config=%+v  err=%v", localFsConf, err)
+		return
+	}
+	testutils.RunTests(t, store, localFsConf)
+
 }
 
 func TestBrusted(t *testing.T) {
@@ -80,7 +89,7 @@ func TestNewReaderDir(t *testing.T) {
 	store, err := cloudstorage.NewStore(localFsConf)
 	testutils.MockFile(store, "test/index.html", "test")
 	require.NoError(t, err)
-	require.Equal(t, nil, err)
+	require.NoError(t, err)
 	_, err = store.NewReader("test")
 	require.Equal(t, err, cloudstorage.ErrObjectNotFound)
 	err = store.Delete(context.Background(), "test/index.html")
@@ -185,6 +194,7 @@ func TestList(t *testing.T) {
 				"list",
 				filepath.Join(tmpDir, "mockcloud"),
 				filepath.Join(tmpDir, "localcache"),
+				false,
 			)
 			require.NoError(t, err)
 

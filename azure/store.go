@@ -580,9 +580,6 @@ func (o *object) MetaData() map[string]string {
 func (o *object) SetMetaData(meta map[string]string) {
 	o.metadata = meta
 }
-func (o *object) SetSnappy() {
-	panic("snappy not implemented")
-}
 
 func (o *object) Delete() error {
 	return o.fs.Delete(context.Background(), o.name)

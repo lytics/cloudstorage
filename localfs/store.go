@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/araddon/gou"
+	"github.com/golang/snappy"
 	"github.com/lytics/cloudstorage"
 	"github.com/lytics/cloudstorage/csbufio"
 	"github.com/pborman/uuid"
@@ -26,7 +27,7 @@ func init() {
 	cloudstorage.Register(StoreType, localProvider)
 }
 func localProvider(conf *cloudstorage.Config) (cloudstorage.Store, error) {
-	store, err := NewLocalStore(conf.Bucket, conf.LocalFS, conf.TmpDir)
+	store, err := NewLocalStore(conf.Bucket, conf.LocalFS, conf.TmpDir, conf.EnableCompression)
 	if err != nil {
 		return nil, err
 	}
@@ -35,7 +36,8 @@ func localProvider(conf *cloudstorage.Config) (cloudstorage.Store, error) {
 
 var (
 	// Ensure Our LocalStore implement CloudStorage interfaces
-	_ cloudstorage.StoreReader = (*LocalStore)(nil)
+	_          cloudstorage.StoreReader = (*LocalStore)(nil)
+	snappyMime                          = "application/x-snappy-framed"
 )
 
 const (
@@ -48,13 +50,14 @@ const (
 
 // LocalStore is client to local-filesystem store.
 type LocalStore struct {
-	storepath string // possibly is relative  ./tables
-	cachepath string
-	Id        string
+	storepath         string // possibly is relative  ./tables
+	cachepath         string
+	Id                string
+	enableCompression bool
 }
 
 // NewLocalStore create local store from storage path on local filesystem, and cachepath.
-func NewLocalStore(bucket, storepath, cachepath string) (*LocalStore, error) {
+func NewLocalStore(bucket, storepath, cachepath string, enableCompression bool) (*LocalStore, error) {
 
 	if storepath == "" {
 		return nil, fmt.Errorf("storepath=%q cannot be empty", storepath)
@@ -80,9 +83,10 @@ func NewLocalStore(bucket, storepath, cachepath string) (*LocalStore, error) {
 	uid = strings.Replace(uid, "-", "", -1)
 
 	return &LocalStore{
-		storepath: storepath,
-		cachepath: cachepath,
-		Id:        uid,
+		storepath:         storepath,
+		cachepath:         cachepath,
+		Id:                uid,
+		enableCompression: enableCompression,
 	}, nil
 }
 
@@ -111,10 +115,17 @@ func (l *LocalStore) NewObject(objectname string) (cloudstorage.Object, error) {
 
 	cf := cloudstorage.CachePathObj(l.cachepath, objectname, l.Id)
 
+	metadata, err := readmeta(of + ".metadata")
+	if err != nil {
+		return nil, err
+	}
+
 	return &object{
-		name:      objectname,
-		storepath: of,
-		cachepath: cf,
+		name:              objectname,
+		storepath:         of,
+		cachepath:         cf,
+		enableCompression: l.enableCompression,
+		metadata:          metadata,
 	}, nil
 }
 
@@ -140,18 +151,12 @@ func (l *LocalStore) List(ctx context.Context, query cloudstorage.Query) (*cloud
 		if f.IsDir() {
 			return nil
 		} else if filepath.Ext(f.Name()) == ".metadata" {
-			b, err := ioutil.ReadFile(fo)
+			metadata, err := readmeta(f.Name())
 			if err != nil {
 				return err
 			}
-			md := make(map[string]string)
-			err = json.Unmarshal(b, &md)
-			if err != nil {
-				return err
-			}
-
 			mdkey := strings.Replace(obj, ".metadata", "", 1)
-			metadatas[mdkey] = md
+			metadatas[mdkey] = metadata
 		} else {
 			oname := strings.TrimPrefix(obj, "/")
 
@@ -242,7 +247,7 @@ func (l *LocalStore) NewReaderWithContext(ctx context.Context, o string) (io.Rea
 	if err != nil {
 		return nil, err
 	}
-	return csbufio.OpenReader(ctx, fo)
+	return csbufio.OpenReader(ctx, fo, l.enableCompression)
 }
 
 func (l *LocalStore) NewWriter(o string, metadata map[string]string) (io.WriteCloser, error) {
@@ -256,7 +261,7 @@ func (l *LocalStore) NewWriterWithContext(ctx context.Context, o string, metadat
 		return nil, err
 	}
 
-	if metadata != nil && len(metadata) > 0 {
+	if len(metadata) == 0 {
 		metadata = make(map[string]string)
 	}
 
@@ -274,7 +279,7 @@ func (l *LocalStore) NewWriterWithContext(ctx context.Context, o string, metadat
 		return nil, err
 	}
 
-	return csbufio.NewWriter(ctx, f), nil
+	return csbufio.NewWriter(ctx, f, l.enableCompression), nil
 }
 
 func (l *LocalStore) Get(ctx context.Context, o string) (cloudstorage.Object, error) {
@@ -288,11 +293,18 @@ func (l *LocalStore) Get(ctx context.Context, o string) (cloudstorage.Object, er
 		updated = stat.ModTime()
 	}
 
+	metadata, err := readmeta(fo + ".metadata")
+	if err != nil {
+		return nil, err
+	}
+
 	return &object{
-		name:      o,
-		updated:   updated,
-		storepath: fo,
-		cachepath: cloudstorage.CachePathObj(l.cachepath, o, l.Id),
+		name:              o,
+		updated:           updated,
+		storepath:         fo,
+		metadata:          metadata,
+		enableCompression: l.enableCompression,
+		cachepath:         cloudstorage.CachePathObj(l.cachepath, o, l.Id),
 	}, nil
 }
 
@@ -376,9 +388,10 @@ type object struct {
 	storepath string
 	cachepath string
 
-	cachedcopy *os.File
-	readonly   bool
-	opened     bool
+	cachedcopy        *os.File
+	readonly          bool
+	opened            bool
+	enableCompression bool
 }
 
 func (o *object) StorageSource() string {
@@ -398,9 +411,6 @@ func (o *object) MetaData() map[string]string {
 }
 func (o *object) SetMetaData(meta map[string]string) {
 	o.metadata = meta
-}
-func (o *object) SetSnappy() {
-	panic("snappy not implemented")
 }
 
 func (o *object) Delete() error {
@@ -442,9 +452,17 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 		return nil, fmt.Errorf("localfs: cachepath=%s could not create cachedcopy err=%v", o.cachepath, err)
 	}
 
-	_, err = io.Copy(cachedcopy, storecopy)
-	if err != nil {
-		return nil, fmt.Errorf("localfs: storepath=%s cachedcopy=%v could not copy from store to cache err=%v", o.storepath, cachedcopy.Name(), err)
+	ce, ok := o.metadata["Content-Encoding"]
+	if ok && ce == snappyMime {
+		_, err = io.Copy(cachedcopy, snappy.NewReader(storecopy))
+		if err != nil {
+			return nil, fmt.Errorf("localfs: storepath=%s cachedcopy=%v could not decompress from store to cache err=%v", o.storepath, cachedcopy.Name(), err)
+		}
+	} else {
+		_, err = io.Copy(cachedcopy, storecopy)
+		if err != nil {
+			return nil, fmt.Errorf("localfs: storepath=%s cachedcopy=%v could not copy from store to cache err=%v", o.storepath, cachedcopy.Name(), err)
+		}
 	}
 
 	if readonly {
@@ -503,17 +521,43 @@ func (o *object) Sync() error {
 	}
 	defer storecopy.Close()
 
-	_, err = io.Copy(storecopy, cachedcopy)
-	if err != nil {
-		return err
+	if len(o.metadata) == 0 {
+		o.metadata = make(map[string]string)
 	}
 
-	if o.metadata != nil && len(o.metadata) > 0 {
-		o.metadata = make(map[string]string)
+	if o.enableCompression {
+		sw := snappy.NewBufferedWriter(storecopy)
+		defer sw.Close()
+		_, err = io.Copy(sw, cachedcopy)
+		if err != nil {
+			return fmt.Errorf("failed to decompress file to cache: %w", err)
+		}
+		o.metadata["Content-Encoding"] = snappyMime
+	} else {
+		_, err = io.Copy(storecopy, cachedcopy)
+		if err != nil {
+			return err
+		}
 	}
 
 	fmd := o.storepath + ".metadata"
 	return writemeta(fmd, o.metadata)
+}
+
+func readmeta(filename string) (map[string]string, error) {
+	metadata := make(map[string]string)
+	b, err := os.ReadFile(filename)
+	if err == nil {
+		err = json.Unmarshal(b, &metadata)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+	}
+	return metadata, nil
 }
 
 func writemeta(filename string, meta map[string]string) error {

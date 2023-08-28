@@ -14,7 +14,7 @@ func TestReaderContextDone(t *testing.T) {
 	cancel()
 
 	m := memRWC([]byte("some-data"))
-	rc := NewReader(ctx, &m)
+	rc := NewReader(ctx, &m, false)
 
 	var p []byte
 	n, err := rc.Read(p)

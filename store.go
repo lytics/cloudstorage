@@ -127,8 +127,6 @@ type (
 		MetaData() map[string]string
 		// SetMetaData allows you to set key/value pairs.
 		SetMetaData(meta map[string]string)
-		// SetSnappy transparently compresses/decompresses the object on sync and read
-		SetSnappy()
 		// StorageSource is the type of store.
 		StorageSource() string
 		// Open copies the remote file to a local cache and opens the cached version
@@ -208,6 +206,9 @@ type (
 		Settings gou.JsonHelper `json:"settings,omitempty"`
 		// LogPrefix Logging Prefix/Context message
 		LogPrefix string
+		// EnableCompression turns on transparent compression of objects
+		// Reading pre-existing non-compressed objects continues to work
+		EnableCompression bool `json:"enablecompression,omitempty"`
 	}
 
 	// JwtConf For use with google/google_jwttransporter.go

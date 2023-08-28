@@ -47,15 +47,16 @@ var (
 // GcsFS Simple wrapper for accessing smaller GCS files, it doesn't currently implement a
 // Reader/Writer interface so not useful for stream reading of large files yet.
 type GcsFS struct {
-	gcs       *storage.Client
-	bucket    string
-	cachepath string
-	PageSize  int
-	Id        string
+	gcs               *storage.Client
+	bucket            string
+	cachepath         string
+	PageSize          int
+	Id                string
+	enableCompression bool
 }
 
 // NewGCSStore Create Google Cloud Storage Store.
-func NewGCSStore(gcs *storage.Client, bucket, cachepath string, pagesize int) (*GcsFS, error) {
+func NewGCSStore(gcs *storage.Client, bucket, cachepath string, enableCompression bool, pagesize int) (*GcsFS, error) {
 	err := os.MkdirAll(path.Dir(cachepath), 0775)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create path. path=%s err=%v", cachepath, err)
@@ -65,11 +66,12 @@ func NewGCSStore(gcs *storage.Client, bucket, cachepath string, pagesize int) (*
 	uid = strings.Replace(uid, "-", "", -1)
 
 	return &GcsFS{
-		gcs:       gcs,
-		bucket:    bucket,
-		cachepath: cachepath,
-		Id:        uid,
-		PageSize:  pagesize,
+		gcs:               gcs,
+		bucket:            bucket,
+		cachepath:         cachepath,
+		Id:                uid,
+		PageSize:          pagesize,
+		enableCompression: enableCompression,
 	}, nil
 }
 
@@ -104,12 +106,13 @@ func (g *GcsFS) NewObject(objectname string) (cloudstorage.Object, error) {
 	cf := cloudstorage.CachePathObj(g.cachepath, objectname, g.Id)
 
 	return &object{
-		name:       objectname,
-		metadata:   map[string]string{cloudstorage.ContentTypeKey: cloudstorage.ContentType(objectname)},
-		gcsb:       g.gcsb(),
-		bucket:     g.bucket,
-		cachedcopy: nil,
-		cachepath:  cf,
+		name:              objectname,
+		metadata:          map[string]string{cloudstorage.ContentTypeKey: cloudstorage.ContentType(objectname)},
+		gcsb:              g.gcsb(),
+		bucket:            g.bucket,
+		cachedcopy:        nil,
+		cachepath:         cf,
+		enableCompression: g.enableCompression,
 	}, nil
 }
 
@@ -305,17 +308,17 @@ func (it *objectIterator) Next() (cloudstorage.Object, error) {
 }
 
 type object struct {
-	name         string
-	updated      time.Time
-	metadata     map[string]string
-	googleObject *storage.ObjectAttrs
-	gcsb         *storage.BucketHandle
-	bucket       string
-	cachedcopy   *os.File
-	readonly     bool
-	opened       bool
-	cachepath    string
-	snappy       bool
+	name              string
+	updated           time.Time
+	metadata          map[string]string
+	googleObject      *storage.ObjectAttrs
+	gcsb              *storage.BucketHandle
+	bucket            string
+	cachedcopy        *os.File
+	readonly          bool
+	opened            bool
+	cachepath         string
+	enableCompression bool
 }
 
 func newObject(g *GcsFS, o *storage.ObjectAttrs) *object {
@@ -354,7 +357,7 @@ func (o *object) SetMetaData(meta map[string]string) {
 	o.metadata = meta
 }
 func (o *object) SetSnappy() {
-	o.snappy = true
+	o.enableCompression = true
 }
 
 func (o *object) Delete() error {
@@ -423,7 +426,7 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 			}
 
 			var writtenBytes int64
-			if o.googleObject.ContentType == snappyMime {
+			if o.googleObject.ContentEncoding == snappyMime {
 				writtenBytes, err = io.Copy(cachedcopy, snappy.NewReader(rc))
 				if err != nil && (errors.Is(err, snappy.ErrCorrupt) ||
 					errors.Is(err, snappy.ErrTooLarge) ||
@@ -447,7 +450,7 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 				continue
 			}
 
-			if o.googleObject.ContentType != snappyMime { // snappy checks crc
+			if o.googleObject.ContentEncoding != snappyMime { // snappy checks crc
 				// make sure the whole object was downloaded from google
 				if contentLength, ok := o.metadata["content_length"]; ok {
 					if contentLengthInt, err := strconv.ParseInt(contentLength, 10, 64); err == nil {
@@ -535,8 +538,8 @@ func (o *object) Sync() error {
 			wc.ContentType = ctype
 		}
 
-		if o.snappy {
-			wc.ContentType = snappyMime
+		if o.enableCompression {
+			wc.ContentEncoding = snappyMime
 			sw := snappy.NewBufferedWriter(wc)
 			if _, err = io.Copy(sw, rd); err != nil {
 				errs = append(errs, fmt.Sprintf("copy to remote object error:%v", err))

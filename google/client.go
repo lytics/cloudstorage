@@ -48,7 +48,7 @@ func gcsCommonClient(client *http.Client, conf *cloudstorage.Config) (cloudstora
 	if err != nil {
 		return nil, err
 	}
-	store, err := NewGCSStore(gcs, conf.Bucket, conf.TmpDir, cloudstorage.MaxResults)
+	store, err := NewGCSStore(gcs, conf.Bucket, conf.TmpDir, conf.EnableCompression, cloudstorage.MaxResults)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +96,7 @@ func BuildGoogleFileJWTTransporter(keyPath string, scope string) (GoogleOAuthCli
 }
 
 /*
-   The account may be empty or the string "default" to use the instance's main account.
+The account may be empty or the string "default" to use the instance's main account.
 */
 func BuildGCEMetadatTransporter(serviceAccount string) (GoogleOAuthClient, error) {
 	client := &http.Client{
@@ -112,23 +112,27 @@ func BuildGCEMetadatTransporter(serviceAccount string) (GoogleOAuthClient, error
 }
 
 // BuildDefaultGoogleTransporter builds a transpoter that wraps the google DefaultClient:
-//    Ref https://github.com/golang/oauth2/blob/master/google/default.go#L33
+//
+//	Ref https://github.com/golang/oauth2/blob/master/google/default.go#L33
+//
 // DefaultClient returns an HTTP Client that uses the
 // DefaultTokenSource to obtain authentication credentials
-//    Ref : https://github.com/golang/oauth2/blob/master/google/default.go#L41
+//
+//	Ref : https://github.com/golang/oauth2/blob/master/google/default.go#L41
+//
 // DefaultTokenSource is a token source that uses
 // "Application Default Credentials".
 //
 // It looks for credentials in the following places,
 // preferring the first location found:
 //
-//   1. A JSON file whose path is specified by the
-//      GOOGLE_APPLICATION_CREDENTIALS environment variable.
-//   2. A JSON file in a location known to the gcloud command-line tool.
-//      On other systems, $HOME/.config/gcloud/credentials.
-//   3. On Google App Engine it uses the appengine.AccessToken function.
-//   4. On Google Compute Engine, it fetches credentials from the metadata server.
-//      (In this final case any provided scopes are ignored.)
+//  1. A JSON file whose path is specified by the
+//     GOOGLE_APPLICATION_CREDENTIALS environment variable.
+//  2. A JSON file in a location known to the gcloud command-line tool.
+//     On other systems, $HOME/.config/gcloud/credentials.
+//  3. On Google App Engine it uses the appengine.AccessToken function.
+//  4. On Google Compute Engine, it fetches credentials from the metadata server.
+//     (In this final case any provided scopes are ignored.)
 //
 // For more details, see:
 // https://developers.google.com/accounts/docs/application-default-credentials
