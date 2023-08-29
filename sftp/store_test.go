@@ -55,9 +55,7 @@ func getKey() string {
 	return buf.String()
 }
 func TestConfig(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("/tmp", "TestConfig")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	sshConf, err := sftp.ConfigUserKey("user", getKey())
 	require.NoError(t, err)
@@ -79,9 +77,7 @@ func TestConfig(t *testing.T) {
 	require.Error(t, err)
 }
 func TestAll(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("/tmp", "TestAll")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 	config.TmpDir = filepath.Join(tmpDir, "localcache", "sftp")
 
 	config.Settings[sftp.ConfKeyUser] = os.Getenv("SFTP_USER")

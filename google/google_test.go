@@ -11,7 +11,6 @@ import (
 	"github.com/lytics/cloudstorage"
 	"github.com/lytics/cloudstorage/google"
 	"github.com/lytics/cloudstorage/testutils"
-	"github.com/stretchr/testify/require"
 )
 
 /*
@@ -36,10 +35,7 @@ func TestAll(t *testing.T) {
 		return
 	}
 
-	tmpDir, err := os.MkdirTemp("/tmp", "TestAll")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
-	config.TmpDir = tmpDir
+	config.TmpDir = t.TempDir()
 
 	jc := &cloudstorage.JwtConf{}
 
@@ -68,13 +64,11 @@ func TestAll(t *testing.T) {
 
 func TestConfigValidation(t *testing.T) {
 
-	tmpDir, err := os.MkdirTemp("/tmp", "TestAll")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// VALIDATE errors for AuthJWTKeySource
 	config := &cloudstorage.Config{}
-	_, err = cloudstorage.NewStore(config)
+	_, err := cloudstorage.NewStore(config)
 	if err == nil {
 		t.Fatalf("expected an error for an empty config: config=%+v", config)
 	}

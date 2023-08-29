@@ -30,9 +30,7 @@ func TestS3(t *testing.T) {
 		return
 	}
 
-	tmpDir, err := os.MkdirTemp("/tmp", "TestS3")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	conf := &cloudstorage.Config{
 		Type: awss3.StoreType,
@@ -41,7 +39,7 @@ func TestS3(t *testing.T) {
 		},
 	}
 	// Should error with empty config
-	_, err = cloudstorage.NewStore(conf)
+	_, err := cloudstorage.NewStore(conf)
 	require.Error(t, err)
 
 	conf.AuthMethod = awss3.AuthAccessKey
@@ -84,9 +82,7 @@ func TestS3(t *testing.T) {
 }
 
 func TestAll(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("/tmp", "TestS3")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	config := &cloudstorage.Config{
 		Type:       awss3.StoreType,

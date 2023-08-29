@@ -73,11 +73,7 @@ func TestAll(t *testing.T) {
 		return
 	}
 
-	tmpDir, err := os.MkdirTemp("/tmp", "TestAll")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
-
-	config.TmpDir = tmpDir
+	config.TmpDir = t.TempDir()
 
 	config.Settings[azure.ConfKeyAuthKey] = os.Getenv("AZURE_KEY")
 	store, err := cloudstorage.NewStore(config)

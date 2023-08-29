@@ -2,7 +2,6 @@ package cloudstorage_test
 
 import (
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -12,9 +11,7 @@ import (
 )
 
 func TestStore(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("/tmp", "TestStore")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	invalidConf := &cloudstorage.Config{}
 
