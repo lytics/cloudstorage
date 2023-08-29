@@ -5,11 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/lytics/cloudstorage"
 	"github.com/lytics/cloudstorage/localfs"
 	"github.com/lytics/cloudstorage/testutils"
+	"github.com/stretchr/testify/require"
 )
 
 func TestAll(t *testing.T) {
@@ -34,16 +33,16 @@ func TestStore(t *testing.T) {
 	invalidConf := &cloudstorage.Config{}
 
 	store, err := cloudstorage.NewStore(invalidConf)
-	assert.NotEqual(t, nil, err)
-	assert.Equal(t, nil, store)
+	require.Error(t, err)
+	require.Nil(t, store)
 
 	missingStoreConf := &cloudstorage.Config{
 		Type: "non-existent-store",
 	}
 
 	store, err = cloudstorage.NewStore(missingStoreConf)
-	assert.NotEqual(t, nil, err)
-	assert.Equal(t, nil, store)
+	require.Error(t, err)
+	require.Nil(t, store)
 
 	// test missing temp dir, assign local temp
 	localFsConf := &cloudstorage.Config{
@@ -53,8 +52,8 @@ func TestStore(t *testing.T) {
 	}
 
 	store, err = cloudstorage.NewStore(localFsConf)
-	assert.Equal(t, nil, err)
-	assert.NotEqual(t, nil, store)
+	require.NoError(t, err)
+	require.NotNil(t, store)
 }
 
 func TestJwtConf(t *testing.T) {
@@ -77,12 +76,12 @@ func TestJwtConf(t *testing.T) {
 	// t.Logf("b64  %q", v)
 	conf := &cloudstorage.Config{}
 	err := json.Unmarshal([]byte(configInput), conf)
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 	conf.JwtConf.PrivateKey = "------helo-------\naGVsbG8td29ybGQ=\n-----------------end--------"
-	assert.NotEqual(t, nil, conf.JwtConf)
-	assert.Equal(t, nil, conf.JwtConf.Validate())
-	assert.Equal(t, "aGVsbG8td29ybGQ=", conf.JwtConf.PrivateKey)
-	assert.Equal(t, "service_account", conf.JwtConf.Type)
+	require.NotNil(t, conf.JwtConf)
+	require.Nil(t, conf.JwtConf.Validate())
+	require.Equal(t, "aGVsbG8td29ybGQ=", conf.JwtConf.PrivateKey)
+	require.Equal(t, "service_account", conf.JwtConf.Type)
 
 	// note on this one the "keytype" & "private_keybase64"
 	configInput = `
@@ -101,9 +100,9 @@ func TestJwtConf(t *testing.T) {
 	}`
 	conf = &cloudstorage.Config{}
 	err = json.Unmarshal([]byte(configInput), conf)
-	assert.Equal(t, nil, err)
-	assert.NotEqual(t, nil, conf.JwtConf)
-	assert.Equal(t, nil, conf.JwtConf.Validate())
-	assert.Equal(t, "aGVsbG8td29ybGQ=", conf.JwtConf.PrivateKey)
-	assert.Equal(t, "service_account", conf.JwtConf.Type)
+	require.NoError(t, err)
+	require.NotNil(t, conf.JwtConf)
+	require.Nil(t, conf.JwtConf.Validate())
+	require.Equal(t, "aGVsbG8td29ybGQ=", conf.JwtConf.PrivateKey)
+	require.Equal(t, "service_account", conf.JwtConf.Type)
 }

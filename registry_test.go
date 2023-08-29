@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/lytics/cloudstorage"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRegistry(t *testing.T) {
@@ -14,7 +13,7 @@ func TestRegistry(t *testing.T) {
 	paniced := didPanic(func() {
 		cloudstorage.Register("teststore", fakeProvider)
 	})
-	assert.True(t, paniced)
+	require.True(t, paniced)
 }
 func didPanic(f func()) (dp bool) {
 	defer func() {

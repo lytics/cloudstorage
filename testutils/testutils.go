@@ -212,7 +212,7 @@ func BasicRW(t *testing.T, store cloudstorage.Store) {
 	require.NoError(t, err)
 	obj, err = store.Get(context.Background(), "prefix/test.csv")
 	require.Equal(t, cloudstorage.ErrObjectNotFound, err)
-	require.Equal(t, nil, obj)
+	require.Nil(t, obj)
 
 	// Store should be empty again
 	all, err = store.List(context.Background(), cloudstorage.NewQueryAll())
@@ -642,7 +642,7 @@ func ListObjsAndFolders(t *testing.T, store cloudstorage.Store) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	folders, err = store.Folders(ctx, q)
-	require.NotNil(t, err)
+	require.Error(t, err)
 	require.Equal(t, 0, len(folders), "incorrect list len. wanted 0 folders. %v", folders)
 
 	// List objects from a missing folder
@@ -740,7 +740,7 @@ func NewObjectWithExisting(t *testing.T, store cloudstorage.Store) {
 	// because the object exits.
 	obj2, err := store.NewObject("test.csv")
 	require.Equal(t, cloudstorage.ErrObjectExists, err, "error.")
-	require.Equal(t, nil, obj2, "object should be nil.")
+	require.Nil(t, obj2, "object should be nil.")
 
 	// Read the object back out of the cloud storage.
 	obj3, err := store.Get(context.Background(), "test.csv")
@@ -811,7 +811,7 @@ func TestReadWriteCloser(t *testing.T, store cloudstorage.Store) {
 		require.Equalf(t, data, buf2.String(), "round trip data don't match: loop-cnt:%v", i) // extra data means we didn't truncate the file
 
 		// make sure we clean up and close
-		require.Equal(t, nil, rc.Close())
+		require.Nil(t, rc.Close())
 
 		_, err = store.NewReader("bogus/notreal.csv")
 		require.Equalf(t, cloudstorage.ErrObjectNotFound, err, "at loop-cnt:%v", i)
@@ -896,7 +896,7 @@ func MultipleRW(t *testing.T, store cloudstorage.Store, conf *cloudstorage.Confi
 		require.Equal(t, fmt.Sprintf("%p", f2), fmt.Sprintf("%p", obj2.File()))
 		bytes, err := ioutil.ReadAll(f2)
 		require.NoError(t, err)
-		require.Equal(t, nil, f2.Close())
+		require.Nil(t, f2.Close())
 
 		require.Equal(t, data, string(bytes))
 

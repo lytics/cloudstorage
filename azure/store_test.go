@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/araddon/gou"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/lytics/cloudstorage"
 	"github.com/lytics/cloudstorage/azure"
@@ -13,13 +13,11 @@ import (
 )
 
 /*
-
 # to use azure tests ensure you have exported
 
 export AZURE_KEY="aaa"
 export AZURE_PROJECT="bbb"
 export AZURE_BUCKET="cloudstorageunittests"
-
 */
 var config = &cloudstorage.Config{
 	Type:       azure.StoreType,
@@ -42,29 +40,29 @@ func TestConfig(t *testing.T) {
 	}
 	// Should error with empty config
 	_, err := cloudstorage.NewStore(conf)
-	assert.NotEqual(t, nil, err)
+	require.Error(t, err)
 
 	conf.AuthMethod = azure.AuthKey
 	conf.Settings[azure.ConfKeyAuthKey] = ""
 	_, err = cloudstorage.NewStore(conf)
-	assert.NotEqual(t, nil, err)
+	require.Error(t, err)
 
 	conf.Settings[azure.ConfKeyAuthKey] = "bad"
 	_, err = cloudstorage.NewStore(conf)
-	assert.NotEqual(t, nil, err)
+	require.Error(t, err)
 
 	conf.Settings[azure.ConfKeyAuthKey] = os.Getenv("AZURE_KEY")
 	client, sess, err := azure.NewClient(conf)
-	assert.Equal(t, nil, err)
-	assert.NotEqual(t, nil, client)
+	require.NoError(t, err)
+	require.NotNil(t, client)
 	conf.TmpDir = ""
 	_, err = azure.NewStore(client, sess, conf)
-	assert.NotEqual(t, nil, err)
+	require.Error(t, err)
 
 	// Trying to find dir they don't have access to?
 	conf.TmpDir = "/home/fake"
 	_, err = cloudstorage.NewStore(conf)
-	assert.NotEqual(t, nil, err)
+	require.Error(t, err)
 }
 
 func TestAll(t *testing.T) {
@@ -82,7 +80,7 @@ func TestAll(t *testing.T) {
 		return
 	}
 	client := store.Client()
-	assert.NotEqual(t, nil, client)
+	require.NotNil(t, client)
 
 	testutils.RunTests(t, store, config)
 }

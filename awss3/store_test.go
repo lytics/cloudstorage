@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/araddon/gou"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/lytics/cloudstorage"
 	"github.com/lytics/cloudstorage/awss3"
@@ -36,7 +36,7 @@ func TestS3(t *testing.T) {
 	}
 	// Should error with empty config
 	_, err := cloudstorage.NewStore(conf)
-	assert.NotEqual(t, nil, err)
+	require.Error(t, err)
 
 	conf.AuthMethod = awss3.AuthAccessKey
 	conf.Settings[awss3.ConfKeyAccessKey] = ""
@@ -44,37 +44,37 @@ func TestS3(t *testing.T) {
 	conf.Bucket = os.Getenv("AWS_BUCKET")
 	conf.TmpDir = "/tmp/localcache/aws"
 	_, err = cloudstorage.NewStore(conf)
-	assert.NotEqual(t, nil, err)
+	require.Error(t, err)
 
 	conf.Settings[awss3.ConfKeyAccessSecret] = ""
 	_, err = cloudstorage.NewStore(conf)
-	assert.NotEqual(t, nil, err)
+	require.Error(t, err)
 
 	// conf.Settings[awss3.ConfKeyAccessKey] = "bad"
 	// conf.Settings[awss3.ConfKeyAccessSecret] = "bad"
 	// _, err = cloudstorage.NewStore(conf)
-	// assert.NotEqual(t, nil, err)
+	// require. NotEqual(t, nil, err)
 
 	conf.BaseUrl = "s3.custom.endpoint.com"
 	conf.Settings[awss3.ConfKeyAccessKey] = os.Getenv("AWS_ACCESS_KEY")
 	conf.Settings[awss3.ConfKeyAccessSecret] = os.Getenv("AWS_SECRET_KEY")
 	client, sess, err := awss3.NewClient(conf)
-	assert.Equal(t, nil, err)
-	assert.NotEqual(t, nil, client)
+	require.NoError(t, err)
+	require.NotNil(t, client)
 
 	conf.Settings[awss3.ConfKeyDisableSSL] = true
 	client, sess, err = awss3.NewClient(conf)
-	assert.Equal(t, nil, err)
-	assert.NotEqual(t, nil, client)
+	require.NoError(t, err)
+	require.NotNil(t, client)
 
 	conf.TmpDir = ""
 	_, err = awss3.NewStore(client, sess, conf)
-	assert.NotEqual(t, nil, err)
+	require.Error(t, err)
 
 	// Trying to find dir they don't have access to?
 	conf.TmpDir = "/home/fake"
 	_, err = cloudstorage.NewStore(conf)
-	assert.NotEqual(t, nil, err)
+	require.Error(t, err)
 }
 
 func TestAll(t *testing.T) {

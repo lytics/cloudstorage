@@ -10,11 +10,11 @@ import (
 	"testing"
 
 	"github.com/araddon/gou"
+	"github.com/stretchr/testify/require"
 
 	"github.com/lytics/cloudstorage"
 	"github.com/lytics/cloudstorage/sftp"
 	"github.com/lytics/cloudstorage/testutils"
-	"github.com/stretchr/testify/assert"
 )
 
 /*
@@ -56,8 +56,8 @@ func getKey() string {
 }
 func TestConfig(t *testing.T) {
 	sshConf, err := sftp.ConfigUserKey("user", getKey())
-	assert.Equal(t, nil, err)
-	assert.NotEqual(t, nil, sshConf)
+	require.NoError(t, err)
+	require.NotNil(t, sshConf)
 
 	conf := &cloudstorage.Config{
 		Type:       sftp.StoreType,
@@ -72,7 +72,7 @@ func TestConfig(t *testing.T) {
 	conf.Settings[sftp.ConfKeyHost] = os.Getenv("SFTP_HOST")
 	conf.Settings[sftp.ConfKeyPort] = "22"
 	_, err = sftp.NewStore(conf)
-	assert.NotEqual(t, nil, err)
+	require.Error(t, err)
 }
 func TestAll(t *testing.T) {
 	config.Settings[sftp.ConfKeyUser] = os.Getenv("SFTP_USER")
