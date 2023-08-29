@@ -2,34 +2,20 @@ package cloudstorage_test
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/lytics/cloudstorage"
 	"github.com/lytics/cloudstorage/localfs"
-	"github.com/lytics/cloudstorage/testutils"
 	"github.com/stretchr/testify/require"
 )
 
-func TestAll(t *testing.T) {
-	localFsConf := &cloudstorage.Config{
-		Type:       localfs.StoreType,
-		AuthMethod: localfs.AuthFileSystem,
-		LocalFS:    "/tmp/mockcloud",
-		TmpDir:     "/tmp/localcache",
-	}
-
-	store, err := cloudstorage.NewStore(localFsConf)
-	if err != nil {
-		t.Fatalf("Could not create store: config=%+v  err=%v", localFsConf, err)
-		return
-	}
-	testutils.RunTests(t, store, localFsConf)
-	// verify cleanup
-	cloudstorage.CleanupCacheFiles(time.Minute*1, localFsConf.TmpDir)
-}
-
 func TestStore(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("/tmp", "TestStore")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
 	invalidConf := &cloudstorage.Config{}
 
 	store, err := cloudstorage.NewStore(invalidConf)
@@ -48,11 +34,11 @@ func TestStore(t *testing.T) {
 	localFsConf := &cloudstorage.Config{
 		Type:       localfs.StoreType,
 		AuthMethod: localfs.AuthFileSystem,
-		LocalFS:    "/tmp/mockcloud",
+		LocalFS:    filepath.Join(tmpDir, "mockcloud"),
 	}
 
 	store, err = cloudstorage.NewStore(localFsConf)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	require.NotNil(t, store)
 }
 
@@ -76,7 +62,7 @@ func TestJwtConf(t *testing.T) {
 	// t.Logf("b64  %q", v)
 	conf := &cloudstorage.Config{}
 	err := json.Unmarshal([]byte(configInput), conf)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	conf.JwtConf.PrivateKey = "------helo-------\naGVsbG8td29ybGQ=\n-----------------end--------"
 	require.NotNil(t, conf.JwtConf)
 	require.Nil(t, conf.JwtConf.Validate())
@@ -100,7 +86,7 @@ func TestJwtConf(t *testing.T) {
 	}`
 	conf = &cloudstorage.Config{}
 	err = json.Unmarshal([]byte(configInput), conf)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	require.NotNil(t, conf.JwtConf)
 	require.Nil(t, conf.JwtConf.Validate())
 	require.Equal(t, "aGVsbG8td29ybGQ=", conf.JwtConf.PrivateKey)

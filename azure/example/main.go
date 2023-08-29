@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/araddon/gou"
 	"google.golang.org/api/iterator"
@@ -23,12 +24,19 @@ export AZURE_BUCKET="cloudstorageunittests"
 */
 
 func main() {
+	tmpDir, err := os.MkdirTemp("/tmp", "azure_example")
+	if err != nil {
+		fmt.Println("Could not create temp dir", err)
+		os.Exit(1)
+	}
+	defer os.RemoveAll(tmpDir)
+
 	conf := &cloudstorage.Config{
 		Type:       azure.StoreType,
 		AuthMethod: azure.AuthKey,
 		Bucket:     os.Getenv("AZURE_BUCKET"),
 		Project:    os.Getenv("AZURE_PROJECT"),
-		TmpDir:     "/tmp/localcache/azure",
+		TmpDir:     filepath.Join(tmpDir, "localcache", "azure"),
 		Settings:   make(gou.JsonHelper),
 	}
 

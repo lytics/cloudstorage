@@ -23,7 +23,6 @@ var config = &cloudstorage.Config{
 	Type:       azure.StoreType,
 	AuthMethod: azure.AuthKey,
 	Bucket:     os.Getenv("AZURE_BUCKET"),
-	TmpDir:     "/tmp/localcache/azure",
 	Settings:   make(gou.JsonHelper),
 }
 
@@ -33,6 +32,7 @@ func TestConfig(t *testing.T) {
 		t.Skip()
 		return
 	}
+
 	conf := &cloudstorage.Config{
 		Type:     azure.StoreType,
 		Project:  os.Getenv("AZURE_PROJECT"),
@@ -72,6 +72,13 @@ func TestAll(t *testing.T) {
 		t.Skip()
 		return
 	}
+
+	tmpDir, err := os.MkdirTemp("/tmp", "TestAll")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	config.TmpDir = tmpDir
+
 	config.Settings[azure.ConfKeyAuthKey] = os.Getenv("AZURE_KEY")
 	store, err := cloudstorage.NewStore(config)
 	if err != nil {

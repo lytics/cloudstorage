@@ -2,6 +2,7 @@ package awss3_test
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/araddon/gou"
@@ -28,6 +29,11 @@ func TestS3(t *testing.T) {
 		t.Skip()
 		return
 	}
+
+	tmpDir, err := os.MkdirTemp("/tmp", "TestS3")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
 	conf := &cloudstorage.Config{
 		Type: awss3.StoreType,
 		Settings: gou.JsonHelper{
@@ -35,14 +41,14 @@ func TestS3(t *testing.T) {
 		},
 	}
 	// Should error with empty config
-	_, err := cloudstorage.NewStore(conf)
+	_, err = cloudstorage.NewStore(conf)
 	require.Error(t, err)
 
 	conf.AuthMethod = awss3.AuthAccessKey
 	conf.Settings[awss3.ConfKeyAccessKey] = ""
 	conf.Settings[awss3.ConfKeyAccessSecret] = os.Getenv("AWS_SECRET_KEY")
 	conf.Bucket = os.Getenv("AWS_BUCKET")
-	conf.TmpDir = "/tmp/localcache/aws"
+	conf.TmpDir = filepath.Join(tmpDir, "localcache", "aws")
 	_, err = cloudstorage.NewStore(conf)
 	require.Error(t, err)
 
@@ -58,12 +64,12 @@ func TestS3(t *testing.T) {
 	conf.BaseUrl = "s3.custom.endpoint.com"
 	conf.Settings[awss3.ConfKeyAccessKey] = os.Getenv("AWS_ACCESS_KEY")
 	conf.Settings[awss3.ConfKeyAccessSecret] = os.Getenv("AWS_SECRET_KEY")
-	client, sess, err := awss3.NewClient(conf)
+	client, _, err := awss3.NewClient(conf)
 	require.NoError(t, err)
 	require.NotNil(t, client)
 
 	conf.Settings[awss3.ConfKeyDisableSSL] = true
-	client, sess, err = awss3.NewClient(conf)
+	client, sess, err := awss3.NewClient(conf)
 	require.NoError(t, err)
 	require.NotNil(t, client)
 
@@ -78,11 +84,15 @@ func TestS3(t *testing.T) {
 }
 
 func TestAll(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("/tmp", "TestS3")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
 	config := &cloudstorage.Config{
 		Type:       awss3.StoreType,
 		AuthMethod: awss3.AuthAccessKey,
 		Bucket:     os.Getenv("AWS_BUCKET"),
-		TmpDir:     "/tmp/localcache/aws",
+		TmpDir:     filepath.Join(tmpDir, "localcache", "aws"),
 		Settings:   make(gou.JsonHelper),
 		Region:     "us-east-1",
 	}

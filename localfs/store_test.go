@@ -2,7 +2,6 @@ package localfs_test
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -16,7 +15,7 @@ import (
 func TestAll(t *testing.T) {
 	t.Parallel()
 
-	tmpDir, err := ioutil.TempDir("/tmp", "all")
+	tmpDir, err := os.MkdirTemp("/tmp", "TestAll")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
@@ -42,11 +41,14 @@ func TestAll(t *testing.T) {
 		return
 	}
 	testutils.RunTests(t, store, localFsConf)
-
 }
 
-func TestBrusted(t *testing.T) {
+func TestBusted(t *testing.T) {
 	t.Parallel()
+
+	tmpDir, err := os.MkdirTemp("/tmp", "TestBusted")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
 
 	// invalid config:  empty/missing LocalFS
 	localFsConf := &cloudstorage.Config{
@@ -62,8 +64,8 @@ func TestBrusted(t *testing.T) {
 	localFsConf = &cloudstorage.Config{
 		Type:       localfs.StoreType,
 		AuthMethod: localfs.AuthFileSystem,
-		LocalFS:    "/tmp/invalid",
-		TmpDir:     "/tmp/invalid",
+		LocalFS:    filepath.Join(tmpDir, "invalid"),
+		TmpDir:     filepath.Join(tmpDir, "invalid"),
 	}
 	store, err = cloudstorage.NewStore(localFsConf)
 	require.Error(t, err)
@@ -73,7 +75,7 @@ func TestBrusted(t *testing.T) {
 func TestNewReaderDir(t *testing.T) {
 	t.Parallel()
 
-	tmpDir, err := ioutil.TempDir("/tmp", "newreaderdir")
+	tmpDir, err := os.MkdirTemp("/tmp", "TestNewReaderDir")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
@@ -98,7 +100,7 @@ func TestNewReaderDir(t *testing.T) {
 func TestGetDir(t *testing.T) {
 	t.Parallel()
 
-	tmpDir, err := ioutil.TempDir("/tmp", "getdir")
+	tmpDir, err := os.MkdirTemp("/tmp", "TestGetDir")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
@@ -185,7 +187,7 @@ func TestList(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			ctx := context.Background()
 
-			tmpDir, err := ioutil.TempDir("/tmp", "getdir")
+			tmpDir, err := os.MkdirTemp("/tmp", "TestList")
 			require.NoError(t, err)
 			t.Cleanup(func() { require.NoError(t, os.RemoveAll(tmpDir)) })
 

@@ -3,6 +3,7 @@ package google_test
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/lytics/cloudstorage"
 	"github.com/lytics/cloudstorage/google"
 	"github.com/lytics/cloudstorage/testutils"
+	"github.com/stretchr/testify/require"
 )
 
 /*
@@ -25,7 +27,6 @@ var config = &cloudstorage.Config{
 	AuthMethod: google.AuthJWTKeySource,
 	Project:    "tbd",
 	Bucket:     "liotesting-int-tests-nl",
-	TmpDir:     "/tmp/localcache/google",
 }
 
 func TestAll(t *testing.T) {
@@ -34,6 +35,12 @@ func TestAll(t *testing.T) {
 		t.Skip("Not testing no CS_GCS_JWTKEY env var")
 		return
 	}
+
+	tmpDir, err := os.MkdirTemp("/tmp", "TestAll")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+	config.TmpDir = tmpDir
+
 	jc := &cloudstorage.JwtConf{}
 
 	if err := json.Unmarshal([]byte(jwtVal), jc); err != nil {
@@ -50,13 +57,24 @@ func TestAll(t *testing.T) {
 		t.Fatalf("Could not create store: config=%+v  err=%v", config, err)
 	}
 	testutils.RunTests(t, store, config)
+
+	config.EnableCompression = true
+	store, err = cloudstorage.NewStore(config)
+	if err != nil {
+		t.Fatalf("Could not create store: config=%+v  err=%v", config, err)
+	}
+	testutils.RunTests(t, store, config)
 }
 
 func TestConfigValidation(t *testing.T) {
 
+	tmpDir, err := os.MkdirTemp("/tmp", "TestAll")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
 	// VALIDATE errors for AuthJWTKeySource
 	config := &cloudstorage.Config{}
-	_, err := cloudstorage.NewStore(config)
+	_, err = cloudstorage.NewStore(config)
 	if err == nil {
 		t.Fatalf("expected an error for an empty config: config=%+v", config)
 	}
@@ -74,7 +92,7 @@ func TestConfigValidation(t *testing.T) {
 		AuthMethod: google.AuthJWTKeySource,
 		Project:    "tbd",
 		Bucket:     "liotesting-int-tests-nl",
-		TmpDir:     "/tmp/localcache/google",
+		TmpDir:     filepath.Join(tmpDir, "localcache", "google"),
 	}
 
 	_, err = cloudstorage.NewStore(config)
@@ -107,7 +125,7 @@ func TestConfigValidation(t *testing.T) {
 		AuthMethod: google.AuthGoogleJWTKeySource,
 		Project:    "tbd",
 		Bucket:     "tbd",
-		TmpDir:     "/tmp/tbd",
+		TmpDir:     filepath.Join(tmpDir, "localcache", "google"),
 		JwtFile:    "./jwt.json",
 	}
 	_, err = cloudstorage.NewStore(config)

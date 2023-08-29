@@ -166,10 +166,11 @@ func (l *LocalStore) List(ctx context.Context, query cloudstorage.Query) (*cloud
 			}
 
 			objects[obj] = &object{
-				name:      oname,
-				updated:   f.ModTime(),
-				storepath: fo,
-				cachepath: cloudstorage.CachePathObj(l.cachepath, oname, l.Id),
+				name:              oname,
+				updated:           f.ModTime(),
+				storepath:         fo,
+				cachepath:         cloudstorage.CachePathObj(l.cachepath, oname, l.Id),
+				enableCompression: l.enableCompression,
 			}
 		}
 		return err
@@ -566,7 +567,7 @@ func writemeta(filename string, meta map[string]string) error {
 		return err
 	}
 
-	err = ioutil.WriteFile(filename, bm, 0664)
+	err = os.WriteFile(filename, bm, 0664)
 	if err != nil {
 		return err
 	}

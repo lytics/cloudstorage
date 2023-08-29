@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/araddon/gou"
@@ -31,7 +32,6 @@ var config = &cloudstorage.Config{
 	Type:       sftp.StoreType,
 	AuthMethod: sftp.AuthUserPass,
 	Bucket:     os.Getenv("SFTP_FOLDER"),
-	TmpDir:     "/tmp/localcache/sftp",
 	Settings:   make(gou.JsonHelper),
 	LogPrefix:  "sftp-testing",
 }
@@ -55,6 +55,10 @@ func getKey() string {
 	return buf.String()
 }
 func TestConfig(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("/tmp", "TestConfig")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
 	sshConf, err := sftp.ConfigUserKey("user", getKey())
 	require.NoError(t, err)
 	require.NotNil(t, sshConf)
@@ -63,7 +67,7 @@ func TestConfig(t *testing.T) {
 		Type:       sftp.StoreType,
 		AuthMethod: sftp.AuthUserKey,
 		Bucket:     os.Getenv("SFTP_FOLDER"),
-		TmpDir:     "/tmp/localcache/sftp",
+		TmpDir:     filepath.Join(tmpDir, "localcache", "sftp"),
 		Settings:   make(gou.JsonHelper),
 		LogPrefix:  "sftp-testing",
 	}
@@ -75,6 +79,11 @@ func TestConfig(t *testing.T) {
 	require.Error(t, err)
 }
 func TestAll(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("/tmp", "TestAll")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+	config.TmpDir = filepath.Join(tmpDir, "localcache", "sftp")
+
 	config.Settings[sftp.ConfKeyUser] = os.Getenv("SFTP_USER")
 	config.Settings[sftp.ConfKeyPassword] = os.Getenv("SFTP_PASSWORD")
 	config.Settings[sftp.ConfKeyHost] = os.Getenv("SFTP_HOST")
