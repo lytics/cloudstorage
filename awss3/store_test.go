@@ -106,8 +106,6 @@ func TestAll(t *testing.T) {
 		t.Skip()
 		return
 	}
-	if store == nil {
-		t.Fatalf("No store???")
-	}
+	require.NotNil(t, store, "no store?")
 	testutils.RunTests(t, store, config)
 }
