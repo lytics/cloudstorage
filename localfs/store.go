@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -215,7 +214,7 @@ func (l *LocalStore) Folders(ctx context.Context, csq cloudstorage.Query) ([]str
 	}
 
 	folders := make([]string, 0)
-	files, _ := ioutil.ReadDir(spath)
+	files, _ := os.ReadDir(spath)
 	for _, f := range files {
 		if f.IsDir() {
 			folders = append(folders, fmt.Sprintf("%s/", path.Join(csq.Prefix, f.Name())))

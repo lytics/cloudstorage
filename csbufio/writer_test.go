@@ -50,7 +50,7 @@ func TestRoundtrip(t *testing.T) {
 	err = pw.Close()
 	require.NoError(t, err, "failed to close writer, but the other one")
 
-	rc := NewReader(context.Background(), pr, false)
+	rc := NewReader(context.Background(), pr)
 	x, err := io.ReadAll(rc)
 	require.NoError(t, err, "failed to read")
 	//require.Equal(t, m.Length(), len(x), "wrong number of compressed bytes read")
@@ -76,7 +76,7 @@ func TestRoundtripWithCompression(t *testing.T) {
 	err = pw.Close()
 	require.NoError(t, err, "failed to close writer, but the other one")
 
-	rc := NewReader(context.Background(), pr, true)
+	rc := NewReader(context.Background(), pr)
 	x, err := io.ReadAll(rc)
 	require.NoError(t, err, "failed to read")
 	//require.Equal(t, m.Length(), len(x), "wrong number of compressed bytes read")

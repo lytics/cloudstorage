@@ -14,19 +14,30 @@ func OpenReader(ctx context.Context, name string, enableCompression bool) (io.Re
 	if err != nil {
 		return nil, err
 	}
-	return NewReader(ctx, f, enableCompression), nil
+	return NewReader(ctx, f), nil
 }
 
-func NewReader(ctx context.Context, rc io.ReadCloser, enableCompression bool) io.ReadCloser {
-	if enableCompression {
-		return &bufReadCloser{ctx, snappy.NewReader(rc), rc}
+var snappyHeader = []byte{0xff, 0x06, 0x00, 0x00, 0x73, 0x4e, 0x61, 0x50, 0x70, 0x59}
+
+func NewReader(ctx context.Context, rc io.ReadCloser) io.ReadCloser {
+	br := bufio.NewReader(rc)
+	header, _ := br.Peek(10) // errors are handled by treating it not as snappy
+	if len(header) == 10 {
+		for i := range header {
+			if header[i] != snappyHeader[i] {
+				break
+			}
+			if i == 9 {
+				return &bufReadCloser{ctx, bufio.NewReader(snappy.NewReader(br)), rc}
+			}
+		}
 	}
-	return &bufReadCloser{ctx, bufio.NewReader(rc), rc}
+	return &bufReadCloser{ctx, br, rc}
 }
 
 type bufReadCloser struct {
 	ctx context.Context
-	r   io.Reader
+	r   *bufio.Reader
 	c   io.Closer
 }
 

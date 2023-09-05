@@ -14,8 +14,9 @@ func TestReaderContextDone(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	pr, _ := bufpipe.New([]byte("some-data"))
-	rc := NewReader(ctx, pr, false)
+	pr, pw := bufpipe.New([]byte("some-data"))
+	pw.Close()
+	rc := NewReader(ctx, pr)
 
 	var p []byte
 	n, err := rc.Read(p)
