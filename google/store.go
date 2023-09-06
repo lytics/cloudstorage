@@ -40,8 +40,8 @@ var (
 	GCSRetries int = 55
 
 	// Ensure we implement ObjectIterator
-	_          cloudstorage.ObjectIterator = (*objectIterator)(nil)
-	snappyMime                             = "application/x-snappy-framed"
+	_               cloudstorage.ObjectIterator = (*objectIterator)(nil)
+	compressionMime                             = "application/x-snappy-framed"
 )
 
 // GcsFS Simple wrapper for accessing smaller GCS files, it doesn't currently implement a
@@ -356,9 +356,6 @@ func (o *object) MetaData() map[string]string {
 func (o *object) SetMetaData(meta map[string]string) {
 	o.metadata = meta
 }
-func (o *object) SetSnappy() {
-	o.enableCompression = true
-}
 
 func (o *object) Delete() error {
 	o.Release()
@@ -426,12 +423,13 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 			}
 
 			var writtenBytes int64
-			if o.googleObject.ContentEncoding == snappyMime {
-				writtenBytes, err = io.Copy(cachedcopy, snappy.NewReader(rc))
+			if o.googleObject.ContentEncoding == compressionMime {
+				cr := snappy.NewReader(rc)
+				writtenBytes, err = io.Copy(cachedcopy, cr)
 				if err != nil && (errors.Is(err, snappy.ErrCorrupt) ||
 					errors.Is(err, snappy.ErrTooLarge) ||
 					errors.Is(err, snappy.ErrUnsupported)) {
-					return nil, fmt.Errorf("error decompressing snappy data err=%v", err) //don't retry on decompression errors
+					return nil, fmt.Errorf("error decompressing data err=%v", err) //don't retry on decompression errors
 				}
 			} else {
 				writtenBytes, err = io.Copy(cachedcopy, rc)
@@ -450,7 +448,7 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 				continue
 			}
 
-			if o.googleObject.ContentEncoding != snappyMime { // snappy checks crc
+			if o.googleObject.ContentEncoding != compressionMime { // compression checks crc
 				// make sure the whole object was downloaded from google
 				if contentLength, ok := o.metadata["content_length"]; ok {
 					if contentLengthInt, err := strconv.ParseInt(contentLength, 10, 64); err == nil {
@@ -539,13 +537,13 @@ func (o *object) Sync() error {
 		}
 
 		if o.enableCompression {
-			wc.ContentEncoding = snappyMime
-			sw := snappy.NewBufferedWriter(wc)
-			if _, err = io.Copy(sw, rd); err != nil {
+			wc.ContentEncoding = compressionMime
+			cw := snappy.NewBufferedWriter(wc)
+			if _, err = io.Copy(cw, rd); err != nil {
 				errs = append(errs, fmt.Sprintf("copy to remote object error:%v", err))
-				err3 := sw.Close()
+				err3 := cw.Close()
 				if err3 != nil {
-					errs = append(errs, fmt.Sprintf("closing snappy writer error:%v", err3))
+					errs = append(errs, fmt.Sprintf("closing compression writer error:%v", err3))
 				}
 				err2 := wc.Close()
 				if err2 != nil {
@@ -555,8 +553,8 @@ func (o *object) Sync() error {
 				continue
 			}
 
-			if err = sw.Close(); err != nil {
-				errs = append(errs, fmt.Sprintf("close snappy writer error:%v", err))
+			if err = cw.Close(); err != nil {
+				errs = append(errs, fmt.Sprintf("close compression writer error:%v", err))
 				cloudstorage.Backoff(try)
 				continue
 			}

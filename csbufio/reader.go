@@ -17,18 +17,19 @@ func OpenReader(ctx context.Context, name string, enableCompression bool) (io.Re
 	return NewReader(ctx, f), nil
 }
 
-var snappyHeader = []byte{0xff, 0x06, 0x00, 0x00, 0x73, 0x4e, 0x61, 0x50, 0x70, 0x59}
+var compressionHeader = []byte{0xff, 0x06, 0x00, 0x00, 0x73, 0x4e, 0x61, 0x50, 0x70, 0x59}
 
 func NewReader(ctx context.Context, rc io.ReadCloser) io.ReadCloser {
 	br := bufio.NewReader(rc)
-	header, _ := br.Peek(10) // errors are handled by treating it not as snappy
-	if len(header) == 10 {
+	header, _ := br.Peek(len(compressionHeader)) // errors are handled by treating it as uncompressed data
+	if len(header) == len(compressionHeader) {
 		for i := range header {
-			if header[i] != snappyHeader[i] {
+			if header[i] != compressionHeader[i] {
 				break
 			}
 			if i == 9 {
-				return &bufReadCloser{ctx, bufio.NewReader(snappy.NewReader(br)), rc}
+				cr := snappy.NewReader(br)
+				return &bufReadCloser{ctx, bufio.NewReader(cr), rc}
 			}
 		}
 	}

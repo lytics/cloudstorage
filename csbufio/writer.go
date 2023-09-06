@@ -31,8 +31,8 @@ func OpenWriter(ctx context.Context, name string, enableCompression bool) (io.Wr
 // NewWriter is a io.WriteCloser.
 func NewWriter(ctx context.Context, rc io.WriteCloser, enableCompression bool) io.WriteCloser {
 	if enableCompression {
-		sw := snappy.NewBufferedWriter(rc)
-		return &bufWriteFlusherCloser{ctx, sw, sw, sw}
+		cw := snappy.NewBufferedWriter(rc)
+		return &bufWriteFlusherCloser{ctx, cw, cw, cw}
 	}
 	bw := bufio.NewWriter(rc)
 	return &bufWriteFlusherCloser{ctx, bw, bw, rc}
