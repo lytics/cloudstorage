@@ -35,8 +35,8 @@ func localProvider(conf *cloudstorage.Config) (cloudstorage.Store, error) {
 
 var (
 	// Ensure Our LocalStore implement CloudStorage interfaces
-	_          cloudstorage.StoreReader = (*LocalStore)(nil)
-	snappyMime                          = "application/x-snappy-framed"
+	_               cloudstorage.StoreReader = (*LocalStore)(nil)
+	compressionMime                          = "application/x-snappy-framed"
 )
 
 const (
@@ -453,8 +453,9 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 	}
 
 	ce, ok := o.metadata["Content-Encoding"]
-	if ok && ce == snappyMime {
-		_, err = io.Copy(cachedcopy, snappy.NewReader(storecopy))
+	if ok && ce == compressionMime {
+		cr := snappy.NewReader(storecopy)
+		_, err = io.Copy(cachedcopy, cr)
 		if err != nil {
 			return nil, fmt.Errorf("localfs: storepath=%s cachedcopy=%v could not decompress from store to cache err=%v", o.storepath, cachedcopy.Name(), err)
 		}
@@ -532,7 +533,7 @@ func (o *object) Sync() error {
 		if err != nil {
 			return fmt.Errorf("failed to decompress file to cache: %w", err)
 		}
-		o.metadata["Content-Encoding"] = snappyMime
+		o.metadata["Content-Encoding"] = compressionMime
 	} else {
 		_, err = io.Copy(storecopy, cachedcopy)
 		if err != nil {
