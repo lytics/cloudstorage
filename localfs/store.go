@@ -1,6 +1,7 @@
 package localfs
 
 import (
+	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,7 +15,6 @@ import (
 	"time"
 
 	"github.com/araddon/gou"
-	"github.com/golang/snappy"
 	"github.com/lytics/cloudstorage"
 	"github.com/lytics/cloudstorage/csbufio"
 	"github.com/pborman/uuid"
@@ -36,7 +36,7 @@ func localProvider(conf *cloudstorage.Config) (cloudstorage.Store, error) {
 var (
 	// Ensure Our LocalStore implement CloudStorage interfaces
 	_               cloudstorage.StoreReader = (*LocalStore)(nil)
-	compressionMime                          = "application/x-snappy-framed"
+	compressionMime                          = "gzip"
 )
 
 const (
@@ -454,7 +454,7 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 
 	ce, ok := o.metadata["Content-Encoding"]
 	if ok && ce == compressionMime {
-		cr := snappy.NewReader(storecopy)
+		cr, _ := gzip.NewReader(storecopy) // TODO: Handle error?
 		_, err = io.Copy(cachedcopy, cr)
 		if err != nil {
 			return nil, fmt.Errorf("localfs: storepath=%s cachedcopy=%v could not decompress from store to cache err=%v", o.storepath, cachedcopy.Name(), err)
@@ -527,7 +527,7 @@ func (o *object) Sync() error {
 	}
 
 	if o.enableCompression {
-		sw := snappy.NewBufferedWriter(storecopy)
+		sw := gzip.NewWriter(storecopy)
 		defer sw.Close()
 		_, err = io.Copy(sw, cachedcopy)
 		if err != nil {

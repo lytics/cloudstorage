@@ -23,8 +23,8 @@ export CS_GCS_JWTKEY="{\"project_id\": \"lio-testing\", \"private_key_id\": \"
 
 var config = &cloudstorage.Config{
 	Type:       google.StoreType,
-	AuthMethod: google.AuthJWTKeySource,
-	Project:    "tbd",
+	AuthMethod: google.AuthGCEDefaultOAuthToken,
+	Project:    "lio-testing",
 	Bucket:     "liotesting-int-tests-nl",
 }
 

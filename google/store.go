@@ -2,6 +2,7 @@ package google
 
 import (
 	"bufio"
+	"compress/gzip"
 	"errors"
 	"fmt"
 	"io"
@@ -13,7 +14,6 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/araddon/gou"
-	"github.com/golang/snappy"
 	"github.com/pborman/uuid"
 	"golang.org/x/net/context"
 	"google.golang.org/api/iterator"
@@ -41,7 +41,7 @@ var (
 
 	// Ensure we implement ObjectIterator
 	_               cloudstorage.ObjectIterator = (*objectIterator)(nil)
-	compressionMime                             = "application/x-snappy-framed"
+	compressionMime                             = "gzip"
 )
 
 // GcsFS Simple wrapper for accessing smaller GCS files, it doesn't currently implement a
@@ -418,18 +418,16 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 			}
 			defer rc.Close()
 
-			if _, err := cachedcopy.Seek(0, os.SEEK_SET); err != nil {
-				return nil, fmt.Errorf("error seeking to start of cachedcopy err=%v", err) //don't retry on local fs errors
+			if _, err := cachedcopy.Seek(0, io.SeekStart); err != nil {
+				return nil, fmt.Errorf("error seeking to start of cachedcopy err=%v", err) // don't retry on local fs errors
 			}
 
 			var writtenBytes int64
 			if o.googleObject.ContentEncoding == compressionMime {
-				cr := snappy.NewReader(rc)
+				cr, _ := gzip.NewReader(rc) // TODO: Handle error?
 				writtenBytes, err = io.Copy(cachedcopy, cr)
-				if err != nil && (errors.Is(err, snappy.ErrCorrupt) ||
-					errors.Is(err, snappy.ErrTooLarge) ||
-					errors.Is(err, snappy.ErrUnsupported)) {
-					return nil, fmt.Errorf("error decompressing data err=%v", err) //don't retry on decompression errors
+				if err != nil && (errors.Is(gzip.ErrChecksum, err) || errors.Is(gzip.ErrHeader, err)) {
+					return nil, fmt.Errorf("error decompressing data err=%v", err) // don't retry on decompression errors
 				}
 			} else {
 				writtenBytes, err = io.Copy(cachedcopy, rc)
@@ -538,7 +536,7 @@ func (o *object) Sync() error {
 
 		if o.enableCompression {
 			wc.ContentEncoding = compressionMime
-			cw := snappy.NewBufferedWriter(wc)
+			cw := gzip.NewWriter(wc)
 			if _, err = io.Copy(cw, rd); err != nil {
 				errs = append(errs, fmt.Sprintf("copy to remote object error:%v", err))
 				err3 := cw.Close()

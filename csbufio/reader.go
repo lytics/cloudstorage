@@ -2,11 +2,10 @@ package csbufio
 
 import (
 	"bufio"
+	"compress/gzip"
 	"context"
 	"io"
 	"os"
-
-	"github.com/golang/snappy"
 )
 
 func OpenReader(ctx context.Context, name string, enableCompression bool) (io.ReadCloser, error) {
@@ -17,7 +16,7 @@ func OpenReader(ctx context.Context, name string, enableCompression bool) (io.Re
 	return NewReader(ctx, f), nil
 }
 
-var compressionHeader = []byte{0xff, 0x06, 0x00, 0x00, 0x73, 0x4e, 0x61, 0x50, 0x70, 0x59}
+var compressionHeader = []byte{0x1f, 0x8b, 0x08}
 
 func NewReader(ctx context.Context, rc io.ReadCloser) io.ReadCloser {
 	br := bufio.NewReader(rc)
@@ -27,8 +26,8 @@ func NewReader(ctx context.Context, rc io.ReadCloser) io.ReadCloser {
 			if header[i] != compressionHeader[i] {
 				break
 			}
-			if i == 9 {
-				cr := snappy.NewReader(br)
+			if i == len(compressionHeader)-1 {
+				cr, _ := gzip.NewReader(br) // TODO: handle error? Also this may be double-wrapping bufio.Readers but I'm not sure
 				return &bufReadCloser{ctx, bufio.NewReader(cr), rc}
 			}
 		}

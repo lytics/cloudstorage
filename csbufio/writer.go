@@ -2,11 +2,10 @@ package csbufio
 
 import (
 	"bufio"
+	"compress/gzip"
 	"context"
 	"io"
 	"os"
-
-	"github.com/golang/snappy"
 )
 
 type flusher interface {
@@ -31,7 +30,7 @@ func OpenWriter(ctx context.Context, name string, enableCompression bool) (io.Wr
 // NewWriter is a io.WriteCloser.
 func NewWriter(ctx context.Context, rc io.WriteCloser, enableCompression bool) io.WriteCloser {
 	if enableCompression {
-		cw := snappy.NewBufferedWriter(rc)
+		cw := gzip.NewWriter(rc)
 		return &bufWriteFlusherCloser{ctx, cw, cw, cw}
 	}
 	bw := bufio.NewWriter(rc)
