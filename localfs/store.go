@@ -454,7 +454,10 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 
 	ce, ok := o.metadata["Content-Encoding"]
 	if ok && ce == compressionMime {
-		cr, _ := gzip.NewReader(storecopy) // TODO: Handle error?
+		cr, err := gzip.NewReader(storecopy)
+		if err != nil {
+			return nil, fmt.Errorf("localfs: storepath=%s cachedcopy=%v could not decompress from store to cache err=%v", o.storepath, cachedcopy.Name(), err)
+		}
 		_, err = io.Copy(cachedcopy, cr)
 		if err != nil {
 			return nil, fmt.Errorf("localfs: storepath=%s cachedcopy=%v could not decompress from store to cache err=%v", o.storepath, cachedcopy.Name(), err)

@@ -3,7 +3,6 @@ package google
 import (
 	"bufio"
 	"compress/gzip"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -410,7 +409,7 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 
 		if o.googleObject != nil {
 			//we have a preexisting object, so lets download it..
-			rc, err := o.gcsb.Object(o.name).NewReader(context.Background())
+			rc, err := o.gcsb.Object(o.name).ReadCompressed(true).NewReader(context.Background())
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error storage.NewReader err=%v", err))
 				cloudstorage.Backoff(try)
@@ -424,10 +423,13 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 
 			var writtenBytes int64
 			if o.googleObject.ContentEncoding == compressionMime {
-				cr, _ := gzip.NewReader(rc) // TODO: Handle error?
-				writtenBytes, err = io.Copy(cachedcopy, cr)
-				if err != nil && (errors.Is(gzip.ErrChecksum, err) || errors.Is(gzip.ErrHeader, err)) {
+				cr, err := gzip.NewReader(rc)
+				if err != nil {
 					return nil, fmt.Errorf("error decompressing data err=%v", err) // don't retry on decompression errors
+				}
+				writtenBytes, err = io.Copy(cachedcopy, cr)
+				if err != nil && (strings.HasPrefix(err.Error(), "gzip: ")) {
+					return nil, fmt.Errorf("error copying/decompressing data err=%v", err) // don't retry on decompression errors
 				}
 			} else {
 				writtenBytes, err = io.Copy(cachedcopy, rc)
