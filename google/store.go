@@ -541,14 +541,6 @@ func (o *object) Sync() error {
 			cw := gzip.NewWriter(wc)
 			if _, err = io.Copy(cw, rd); err != nil {
 				errs = append(errs, fmt.Sprintf("copy to remote object error:%v", err))
-				err3 := cw.Close()
-				if err3 != nil {
-					errs = append(errs, fmt.Sprintf("closing compression writer error:%v", err3))
-				}
-				err2 := wc.Close()
-				if err2 != nil {
-					errs = append(errs, fmt.Sprintf("Close writer error:%v", err2))
-				}
 				cloudstorage.Backoff(try)
 				continue
 			}
