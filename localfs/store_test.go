@@ -179,7 +179,6 @@ func TestList(t *testing.T) {
 				"list",
 				filepath.Join(tmpDir, "mockcloud"),
 				filepath.Join(tmpDir, "localcache"),
-				false,
 			)
 			require.NoError(t, err)
 

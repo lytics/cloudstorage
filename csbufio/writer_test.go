@@ -17,7 +17,7 @@ func TestWriterContextDone(t *testing.T) {
 	cancel()
 
 	pr, pw := bufpipe.New(nil)
-	wc := NewWriter(ctx, pw, false)
+	wc := NewWriter(ctx, pw)
 
 	n, err := wc.Write([]byte("some-data"))
 	require.ErrorIs(t, err, context.Canceled)
@@ -39,7 +39,7 @@ func TestRoundtrip(t *testing.T) {
 	numBytes := 1000
 	testVal := bytes.Repeat([]byte("x"), numBytes)
 	pr, pw := bufpipe.New(nil)
-	wc := NewWriter(context.Background(), pw, false)
+	wc := NewWriter(context.Background(), pw)
 
 	n, err := wc.Write(testVal)
 	require.NoError(t, err, "failed to write")
@@ -50,8 +50,7 @@ func TestRoundtrip(t *testing.T) {
 	err = pw.Close()
 	require.NoError(t, err, "failed to close writer, but the other one")
 
-	rc, err := NewReader(context.Background(), pr)
-	require.NoError(t, err, "failed to create reader")
+	rc := NewReader(context.Background(), pr)
 	x, err := io.ReadAll(rc)
 	require.NoError(t, err, "failed to read")
 	//require.Equal(t, m.Length(), len(x), "wrong number of compressed bytes read")
@@ -66,7 +65,7 @@ func TestRoundtripWithCompression(t *testing.T) {
 	numBytes := 1000
 	testVal := bytes.Repeat([]byte("x"), numBytes)
 	pr, pw := bufpipe.New(nil)
-	wc := NewWriter(context.Background(), pw, true)
+	wc := NewWriter(context.Background(), pw)
 
 	n, err := wc.Write(testVal)
 	require.NoError(t, err, "failed to write")
@@ -76,8 +75,7 @@ func TestRoundtripWithCompression(t *testing.T) {
 	err = pw.Close()
 	require.NoError(t, err, "failed to close writer, but the other one")
 
-	rc, err := NewReader(context.Background(), pr)
-	require.NoError(t, err, "failed to create reader")
+	rc := NewReader(context.Background(), pr)
 	x, err := io.ReadAll(rc)
 	require.NoError(t, err, "failed to read")
 	err = rc.Close()

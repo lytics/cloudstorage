@@ -1,7 +1,6 @@
 package localfs
 
 import (
-	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,7 +25,7 @@ func init() {
 	cloudstorage.Register(StoreType, localProvider)
 }
 func localProvider(conf *cloudstorage.Config) (cloudstorage.Store, error) {
-	store, err := NewLocalStore(conf.Bucket, conf.LocalFS, conf.TmpDir, conf.EnableCompression)
+	store, err := NewLocalStore(conf.Bucket, conf.LocalFS, conf.TmpDir)
 	if err != nil {
 		return nil, err
 	}
@@ -35,8 +34,7 @@ func localProvider(conf *cloudstorage.Config) (cloudstorage.Store, error) {
 
 var (
 	// Ensure Our LocalStore implement CloudStorage interfaces
-	_               cloudstorage.StoreReader = (*LocalStore)(nil)
-	compressionMime                          = "gzip"
+	_ cloudstorage.StoreReader = (*LocalStore)(nil)
 )
 
 const (
@@ -49,14 +47,13 @@ const (
 
 // LocalStore is client to local-filesystem store.
 type LocalStore struct {
-	storepath         string // possibly is relative  ./tables
-	cachepath         string
-	Id                string
-	enableCompression bool
+	storepath string // possibly is relative  ./tables
+	cachepath string
+	Id        string
 }
 
 // NewLocalStore create local store from storage path on local filesystem, and cachepath.
-func NewLocalStore(bucket, storepath, cachepath string, enableCompression bool) (*LocalStore, error) {
+func NewLocalStore(bucket, storepath, cachepath string) (*LocalStore, error) {
 
 	if storepath == "" {
 		return nil, fmt.Errorf("storepath=%q cannot be empty", storepath)
@@ -82,10 +79,9 @@ func NewLocalStore(bucket, storepath, cachepath string, enableCompression bool) 
 	uid = strings.Replace(uid, "-", "", -1)
 
 	return &LocalStore{
-		storepath:         storepath,
-		cachepath:         cachepath,
-		Id:                uid,
-		enableCompression: enableCompression,
+		storepath: storepath,
+		cachepath: cachepath,
+		Id:        uid,
 	}, nil
 }
 
@@ -120,11 +116,10 @@ func (l *LocalStore) NewObject(objectname string) (cloudstorage.Object, error) {
 	}
 
 	return &object{
-		name:              objectname,
-		storepath:         of,
-		cachepath:         cf,
-		enableCompression: l.enableCompression,
-		metadata:          metadata,
+		name:      objectname,
+		storepath: of,
+		cachepath: cf,
+		metadata:  metadata,
 	}, nil
 }
 
@@ -165,11 +160,10 @@ func (l *LocalStore) List(ctx context.Context, query cloudstorage.Query) (*cloud
 			}
 
 			objects[obj] = &object{
-				name:              oname,
-				updated:           f.ModTime(),
-				storepath:         fo,
-				cachepath:         cloudstorage.CachePathObj(l.cachepath, oname, l.Id),
-				enableCompression: l.enableCompression,
+				name:      oname,
+				updated:   f.ModTime(),
+				storepath: fo,
+				cachepath: cloudstorage.CachePathObj(l.cachepath, oname, l.Id),
 			}
 		}
 		return err
@@ -247,7 +241,7 @@ func (l *LocalStore) NewReaderWithContext(ctx context.Context, o string) (io.Rea
 	if err != nil {
 		return nil, err
 	}
-	return csbufio.OpenReader(ctx, fo, l.enableCompression)
+	return csbufio.OpenReader(ctx, fo)
 }
 
 func (l *LocalStore) NewWriter(o string, metadata map[string]string) (io.WriteCloser, error) {
@@ -279,7 +273,7 @@ func (l *LocalStore) NewWriterWithContext(ctx context.Context, o string, metadat
 		return nil, err
 	}
 
-	return csbufio.NewWriter(ctx, f, l.enableCompression), nil
+	return csbufio.NewWriter(ctx, f), nil
 }
 
 func (l *LocalStore) Get(ctx context.Context, o string) (cloudstorage.Object, error) {
@@ -299,12 +293,11 @@ func (l *LocalStore) Get(ctx context.Context, o string) (cloudstorage.Object, er
 	}
 
 	return &object{
-		name:              o,
-		updated:           updated,
-		storepath:         fo,
-		metadata:          metadata,
-		enableCompression: l.enableCompression,
-		cachepath:         cloudstorage.CachePathObj(l.cachepath, o, l.Id),
+		name:      o,
+		updated:   updated,
+		storepath: fo,
+		metadata:  metadata,
+		cachepath: cloudstorage.CachePathObj(l.cachepath, o, l.Id),
 	}, nil
 }
 
@@ -388,10 +381,9 @@ type object struct {
 	storepath string
 	cachepath string
 
-	cachedcopy        *os.File
-	readonly          bool
-	opened            bool
-	enableCompression bool
+	cachedcopy *os.File
+	readonly   bool
+	opened     bool
 }
 
 func (o *object) StorageSource() string {
@@ -452,21 +444,9 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 		return nil, fmt.Errorf("localfs: cachepath=%s could not create cachedcopy err=%v", o.cachepath, err)
 	}
 
-	ce, ok := o.metadata["Content-Encoding"]
-	if ok && ce == compressionMime {
-		cr, err := gzip.NewReader(storecopy)
-		if err != nil {
-			return nil, fmt.Errorf("localfs: storepath=%s cachedcopy=%v could not decompress from store to cache err=%v", o.storepath, cachedcopy.Name(), err)
-		}
-		_, err = io.Copy(cachedcopy, cr)
-		if err != nil {
-			return nil, fmt.Errorf("localfs: storepath=%s cachedcopy=%v could not decompress from store to cache err=%v", o.storepath, cachedcopy.Name(), err)
-		}
-	} else {
-		_, err = io.Copy(cachedcopy, storecopy)
-		if err != nil {
-			return nil, fmt.Errorf("localfs: storepath=%s cachedcopy=%v could not copy from store to cache err=%v", o.storepath, cachedcopy.Name(), err)
-		}
+	_, err = io.Copy(cachedcopy, storecopy)
+	if err != nil {
+		return nil, fmt.Errorf("localfs: storepath=%s cachedcopy=%v could not copy from store to cache err=%v", o.storepath, cachedcopy.Name(), err)
 	}
 
 	if readonly {
@@ -529,19 +509,9 @@ func (o *object) Sync() error {
 		o.metadata = make(map[string]string)
 	}
 
-	if o.enableCompression {
-		sw := gzip.NewWriter(storecopy)
-		defer sw.Close()
-		_, err = io.Copy(sw, cachedcopy)
-		if err != nil {
-			return fmt.Errorf("failed to decompress file to cache: %w", err)
-		}
-		o.metadata["Content-Encoding"] = compressionMime
-	} else {
-		_, err = io.Copy(storecopy, cachedcopy)
-		if err != nil {
-			return err
-		}
+	_, err = io.Copy(storecopy, cachedcopy)
+	if err != nil {
+		return err
 	}
 
 	fmd := o.storepath + ".metadata"

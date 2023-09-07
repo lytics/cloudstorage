@@ -2,20 +2,14 @@ package csbufio
 
 import (
 	"bufio"
-	"compress/gzip"
 	"context"
 	"io"
 	"os"
 )
 
-type flusher interface {
-	Flush() error
-}
-
-type bufWriteFlusherCloser struct {
+type bufWriteCloser struct {
 	ctx context.Context
-	w   io.Writer
-	f   flusher
+	w   *bufio.Writer
 	c   io.Closer
 }
 
@@ -24,31 +18,26 @@ func OpenWriter(ctx context.Context, name string, enableCompression bool) (io.Wr
 	if err != nil {
 		return nil, err
 	}
-	return NewWriter(ctx, f, enableCompression), nil
+	return NewWriter(ctx, f), nil
 }
 
 // NewWriter is a io.WriteCloser.
-func NewWriter(ctx context.Context, rc io.WriteCloser, enableCompression bool) io.WriteCloser {
-	if enableCompression {
-		cw := gzip.NewWriter(rc)
-		return &bufWriteFlusherCloser{ctx, cw, cw, cw}
-	}
-	bw := bufio.NewWriter(rc)
-	return &bufWriteFlusherCloser{ctx, bw, bw, rc}
+func NewWriter(ctx context.Context, rc io.WriteCloser) io.WriteCloser {
+	return &bufWriteCloser{ctx, bufio.NewWriter(rc), rc}
 }
 
-func (b *bufWriteFlusherCloser) Write(p []byte) (int, error) {
+func (b *bufWriteCloser) Write(p []byte) (int, error) {
 	if err := b.ctx.Err(); err != nil {
 		return 0, err
 	}
 	return b.w.Write(p)
 }
 
-func (b *bufWriteFlusherCloser) Close() error {
+func (b *bufWriteCloser) Close() error {
 	if err := b.ctx.Err(); err != nil {
 		return err
 	}
-	if err := b.f.Flush(); err != nil {
+	if err := b.w.Flush(); err != nil {
 		return err
 	}
 	return b.c.Close()

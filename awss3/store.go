@@ -450,7 +450,7 @@ func (f *FS) NewWriterWithContext(ctx context.Context, objectName string, metada
 	uploader := s3manager.NewUploader(f.sess)
 
 	pr, pw := io.Pipe()
-	bw := csbufio.NewWriter(ctx, pw, false)
+	bw := csbufio.NewWriter(ctx, pw)
 
 	go func() {
 		// TODO:  this needs to be managed, ie shutdown signals, close, handler err etc.

@@ -16,8 +16,7 @@ func TestReaderContextDone(t *testing.T) {
 
 	pr, pw := bufpipe.New([]byte("some-data"))
 	pw.Close()
-	rc, err := NewReader(ctx, pr)
-	require.NoError(t, err)
+	rc := NewReader(ctx, pr)
 
 	var p []byte
 	n, err := rc.Read(p)
