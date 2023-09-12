@@ -36,6 +36,16 @@ func TestAll(t *testing.T) {
 		t.Fatalf("Could not create store: config=%+v  err=%v", config, err)
 	}
 	testutils.RunTests(t, store, config)
+
+	config.EnableCompression = true
+	store, err = cloudstorage.NewStore(config)
+	if err != nil {
+		if strings.Contains(err.Error(), "could not find default credentials") {
+			t.Skip("could not find default credentials, skipping Google Storage tests")
+		}
+		t.Fatalf("Could not create store: config=%+v  err=%v", config, err)
+	}
+	testutils.RunTests(t, store, config)
 }
 
 func TestConfigValidation(t *testing.T) {
