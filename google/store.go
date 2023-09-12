@@ -408,6 +408,9 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 		}
 
 		if o.googleObject != nil {
+			// Copy this into generic metadata so we have it available to the client API
+			o.metadata["Content-Encoding"] = o.googleObject.ContentEncoding
+
 			//we have a preexisting object, so lets download it..
 			rc, err := o.gcsb.Object(o.name).ReadCompressed(true).NewReader(context.Background())
 			if err != nil {
