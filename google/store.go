@@ -328,6 +328,8 @@ func newObject(g *GcsFS, o *storage.ObjectAttrs) *object {
 	metadata["content_length"] = strconv.FormatInt(o.Size, 10)
 	metadata["attrs_content_type"] = o.ContentType
 	metadata["attrs_cache_control"] = o.CacheControl
+	metadata["content_encoding"] = o.ContentEncoding
+
 	return &object{
 		name:      o.Name,
 		updated:   o.Updated,
@@ -408,9 +410,6 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 		}
 
 		if o.googleObject != nil {
-			// Copy this into generic metadata so we have it available to the client API
-			o.metadata["Content-Encoding"] = o.googleObject.ContentEncoding
-
 			//we have a preexisting object, so lets download it..
 			rc, err := o.gcsb.Object(o.name).ReadCompressed(true).NewReader(context.Background())
 			if err != nil {
