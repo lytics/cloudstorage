@@ -231,6 +231,7 @@ func (g *GcsFS) NewReader(o string) (io.ReadCloser, error) {
 
 // NewReaderWithContext create new GCS File reader with context.
 func (g *GcsFS) NewReaderWithContext(ctx context.Context, o string) (io.ReadCloser, error) {
+	// TODO: Support native gzip decompression vs relying on the magic kind
 	rc, err := g.gcsb().Object(o).NewReader(ctx)
 	if err == storage.ErrObjectNotExist {
 		return rc, cloudstorage.ErrObjectNotFound
@@ -257,6 +258,7 @@ func (g *GcsFS) NewWriterWithContext(ctx context.Context, o string, metadata map
 		wc.ContentType = ctype
 	}
 	if g.enableCompression {
+		wc.ContentEncoding = compressionMime
 		return gzip.NewWriter(wc), nil
 	}
 	return wc, nil
