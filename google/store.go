@@ -232,7 +232,28 @@ func (g *GcsFS) NewReader(o string) (io.ReadCloser, error) {
 // NewReaderWithContext create new GCS File reader with context.
 func (g *GcsFS) NewReaderWithContext(ctx context.Context, o string) (io.ReadCloser, error) {
 	// TODO: Support native gzip decompression vs relying on the magic kind
-	rc, err := g.gcsb().Object(o).NewReader(ctx)
+	obj := g.gcsb().Object(o)
+	attrs, err := obj.Attrs(ctx)
+	if err == storage.ErrObjectNotExist {
+		return nil, cloudstorage.ErrObjectNotFound
+	} else if err != nil {
+		return nil, err
+	}
+	if attrs.ContentEncoding == compressionMime {
+		rc, err := obj.ReadCompressed(true).NewReader(ctx)
+		if err == storage.ErrObjectNotExist {
+			return nil, cloudstorage.ErrObjectNotFound
+		} else if err != nil {
+			return nil, err
+		}
+		gr, err := gzip.NewReader(rc)
+		if err != nil {
+			return nil, err
+		}
+		return gr, err
+	}
+
+	rc, err := obj.NewReader(ctx)
 	if err == storage.ErrObjectNotExist {
 		return rc, cloudstorage.ErrObjectNotFound
 	}
@@ -242,6 +263,34 @@ func (g *GcsFS) NewReaderWithContext(ctx context.Context, o string) (io.ReadClos
 // NewWriter create GCS Object Writer.
 func (g *GcsFS) NewWriter(o string, metadata map[string]string) (io.WriteCloser, error) {
 	return g.NewWriterWithContext(context.Background(), o, metadata)
+}
+
+type gzipWriteCloser struct {
+	ctx context.Context
+	w   io.WriteCloser
+	c   io.Closer
+}
+
+// NewWriter is a io.WriteCloser.
+func newGZIPWriteCloser(ctx context.Context, rc io.WriteCloser) io.WriteCloser {
+	return &gzipWriteCloser{ctx, gzip.NewWriter(rc), rc}
+}
+
+func (b *gzipWriteCloser) Write(p []byte) (int, error) {
+	if err := b.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return b.w.Write(p)
+}
+
+func (b *gzipWriteCloser) Close() error {
+	if err := b.ctx.Err(); err != nil {
+		return err
+	}
+	if err := b.w.Close(); err != nil {
+		return err
+	}
+	return b.c.Close()
 }
 
 // NewWriterWithContext create writer with provided context and metadata.
@@ -259,7 +308,7 @@ func (g *GcsFS) NewWriterWithContext(ctx context.Context, o string, metadata map
 	}
 	if g.enableCompression {
 		wc.ContentEncoding = compressionMime
-		return gzip.NewWriter(wc), nil
+		return newGZIPWriteCloser(ctx, wc), nil
 	}
 	return wc, nil
 }
