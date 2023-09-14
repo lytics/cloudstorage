@@ -256,6 +256,9 @@ func (g *GcsFS) NewWriterWithContext(ctx context.Context, o string, metadata map
 		ctype := cloudstorage.EnsureContextType(o, metadata)
 		wc.ContentType = ctype
 	}
+	if g.enableCompression {
+		return gzip.NewWriter(wc), nil
+	}
 	return wc, nil
 }
 
