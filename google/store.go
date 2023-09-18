@@ -274,7 +274,7 @@ type gzipWriteCloser struct {
 	c   io.Closer
 }
 
-// NewWriter is a io.WriteCloser.
+// newGZIPWriteCloser is a io.WriteCloser that closes both the gzip writer and also the passed in writer
 func newGZIPWriteCloser(ctx context.Context, rc io.WriteCloser) io.WriteCloser {
 	return &gzipWriteCloser{ctx, gzip.NewWriter(rc), rc}
 }
