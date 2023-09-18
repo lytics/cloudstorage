@@ -231,16 +231,19 @@ func (g *GcsFS) NewReader(o string) (io.ReadCloser, error) {
 
 // NewReaderWithContext create new GCS File reader with context.
 func (g *GcsFS) NewReaderWithContext(ctx context.Context, o string) (io.ReadCloser, error) {
-	// TODO: Support native gzip decompression vs relying on the magic kind
-	obj := g.gcsb().Object(o)
+	obj := g.gcsb().Object(o).ReadCompressed(true)
 	attrs, err := obj.Attrs(ctx)
 	if err == storage.ErrObjectNotExist {
 		return nil, cloudstorage.ErrObjectNotFound
 	} else if err != nil {
 		return nil, err
 	}
-	if attrs.ContentEncoding == compressionMime {
-		rc, err := obj.ReadCompressed(true).NewReader(ctx)
+	// we check ContentType here because files uploaded compressed without an
+	// explicit ContentType set get autodetected as "application/x-gzip" instead
+	// of "application/octet-stream", but files with the gzip ContentType get
+	// auto-decompressed regardless of your Accept-Encoding header
+	if attrs.ContentEncoding == compressionMime && attrs.ContentType != "application/x-gzip" {
+		rc, err := obj.NewReader(ctx)
 		if err == storage.ErrObjectNotExist {
 			return nil, cloudstorage.ErrObjectNotFound
 		} else if err != nil {
