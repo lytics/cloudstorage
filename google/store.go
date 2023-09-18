@@ -482,7 +482,11 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 			}
 
 			var writtenBytes int64
-			if o.googleObject.ContentEncoding == compressionMime {
+			// we check ContentType here because files uploaded compressed without an
+			// explicit ContentType set get autodetected as "application/x-gzip" instead
+			// of "application/octet-stream", but files with the gzip ContentType get
+			// auto-decompressed regardless of your Accept-Encoding header
+			if o.googleObject.ContentEncoding == compressionMime && o.googleObject.ContentType != "application/x-gzip" {
 				cr, err := gzip.NewReader(rc)
 				if err != nil {
 					return nil, fmt.Errorf("error decompressing data err=%v", err) // don't retry on decompression errors
