@@ -7,14 +7,15 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/araddon/gou"
+	"github.com/stretchr/testify/require"
 
 	"github.com/lytics/cloudstorage"
 	"github.com/lytics/cloudstorage/sftp"
 	"github.com/lytics/cloudstorage/testutils"
-	"github.com/stretchr/testify/assert"
 )
 
 /*
@@ -31,7 +32,6 @@ var config = &cloudstorage.Config{
 	Type:       sftp.StoreType,
 	AuthMethod: sftp.AuthUserPass,
 	Bucket:     os.Getenv("SFTP_FOLDER"),
-	TmpDir:     "/tmp/localcache/sftp",
 	Settings:   make(gou.JsonHelper),
 	LogPrefix:  "sftp-testing",
 }
@@ -55,15 +55,17 @@ func getKey() string {
 	return buf.String()
 }
 func TestConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+
 	sshConf, err := sftp.ConfigUserKey("user", getKey())
-	assert.Equal(t, nil, err)
-	assert.NotEqual(t, nil, sshConf)
+	require.NoError(t, err)
+	require.NotNil(t, sshConf)
 
 	conf := &cloudstorage.Config{
 		Type:       sftp.StoreType,
 		AuthMethod: sftp.AuthUserKey,
 		Bucket:     os.Getenv("SFTP_FOLDER"),
-		TmpDir:     "/tmp/localcache/sftp",
+		TmpDir:     filepath.Join(tmpDir, "localcache", "sftp"),
 		Settings:   make(gou.JsonHelper),
 		LogPrefix:  "sftp-testing",
 	}
@@ -72,9 +74,12 @@ func TestConfig(t *testing.T) {
 	conf.Settings[sftp.ConfKeyHost] = os.Getenv("SFTP_HOST")
 	conf.Settings[sftp.ConfKeyPort] = "22"
 	_, err = sftp.NewStore(conf)
-	assert.NotEqual(t, nil, err)
+	require.Error(t, err)
 }
 func TestAll(t *testing.T) {
+	tmpDir := t.TempDir()
+	config.TmpDir = filepath.Join(tmpDir, "localcache", "sftp")
+
 	config.Settings[sftp.ConfKeyUser] = os.Getenv("SFTP_USER")
 	config.Settings[sftp.ConfKeyPassword] = os.Getenv("SFTP_PASSWORD")
 	config.Settings[sftp.ConfKeyHost] = os.Getenv("SFTP_HOST")

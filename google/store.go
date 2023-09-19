@@ -2,6 +2,7 @@ package google
 
 import (
 	"bufio"
+	"compress/gzip"
 	"fmt"
 	"io"
 	"os"
@@ -38,21 +39,23 @@ var (
 	GCSRetries int = 55
 
 	// Ensure we implement ObjectIterator
-	_ cloudstorage.ObjectIterator = (*objectIterator)(nil)
+	_               cloudstorage.ObjectIterator = (*objectIterator)(nil)
+	compressionMime                             = "gzip"
 )
 
 // GcsFS Simple wrapper for accessing smaller GCS files, it doesn't currently implement a
 // Reader/Writer interface so not useful for stream reading of large files yet.
 type GcsFS struct {
-	gcs       *storage.Client
-	bucket    string
-	cachepath string
-	PageSize  int
-	Id        string
+	gcs               *storage.Client
+	bucket            string
+	cachepath         string
+	PageSize          int
+	Id                string
+	enableCompression bool
 }
 
 // NewGCSStore Create Google Cloud Storage Store.
-func NewGCSStore(gcs *storage.Client, bucket, cachepath string, pagesize int) (*GcsFS, error) {
+func NewGCSStore(gcs *storage.Client, bucket, cachepath string, enableCompression bool, pagesize int) (*GcsFS, error) {
 	err := os.MkdirAll(path.Dir(cachepath), 0775)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create path. path=%s err=%v", cachepath, err)
@@ -62,11 +65,12 @@ func NewGCSStore(gcs *storage.Client, bucket, cachepath string, pagesize int) (*
 	uid = strings.Replace(uid, "-", "", -1)
 
 	return &GcsFS{
-		gcs:       gcs,
-		bucket:    bucket,
-		cachepath: cachepath,
-		Id:        uid,
-		PageSize:  pagesize,
+		gcs:               gcs,
+		bucket:            bucket,
+		cachepath:         cachepath,
+		Id:                uid,
+		PageSize:          pagesize,
+		enableCompression: enableCompression,
 	}, nil
 }
 
@@ -101,12 +105,13 @@ func (g *GcsFS) NewObject(objectname string) (cloudstorage.Object, error) {
 	cf := cloudstorage.CachePathObj(g.cachepath, objectname, g.Id)
 
 	return &object{
-		name:       objectname,
-		metadata:   map[string]string{cloudstorage.ContentTypeKey: cloudstorage.ContentType(objectname)},
-		gcsb:       g.gcsb(),
-		bucket:     g.bucket,
-		cachedcopy: nil,
-		cachepath:  cf,
+		name:              objectname,
+		metadata:          map[string]string{cloudstorage.ContentTypeKey: cloudstorage.ContentType(objectname)},
+		gcsb:              g.gcsb(),
+		bucket:            g.bucket,
+		cachedcopy:        nil,
+		cachepath:         cf,
+		enableCompression: g.enableCompression,
 	}, nil
 }
 
@@ -226,7 +231,32 @@ func (g *GcsFS) NewReader(o string) (io.ReadCloser, error) {
 
 // NewReaderWithContext create new GCS File reader with context.
 func (g *GcsFS) NewReaderWithContext(ctx context.Context, o string) (io.ReadCloser, error) {
-	rc, err := g.gcsb().Object(o).NewReader(ctx)
+	obj := g.gcsb().Object(o).ReadCompressed(true)
+	attrs, err := obj.Attrs(ctx)
+	if err == storage.ErrObjectNotExist {
+		return nil, cloudstorage.ErrObjectNotFound
+	} else if err != nil {
+		return nil, err
+	}
+	// we check ContentType here because files uploaded compressed without an
+	// explicit ContentType set get autodetected as "application/x-gzip" instead
+	// of "application/octet-stream", but files with the gzip ContentType get
+	// auto-decompressed regardless of your Accept-Encoding header
+	if attrs.ContentEncoding == compressionMime && attrs.ContentType != "application/x-gzip" {
+		rc, err := obj.NewReader(ctx)
+		if err == storage.ErrObjectNotExist {
+			return nil, cloudstorage.ErrObjectNotFound
+		} else if err != nil {
+			return nil, err
+		}
+		gr, err := gzip.NewReader(rc)
+		if err != nil {
+			return nil, err
+		}
+		return gr, err
+	}
+
+	rc, err := obj.NewReader(ctx)
 	if err == storage.ErrObjectNotExist {
 		return rc, cloudstorage.ErrObjectNotFound
 	}
@@ -236,6 +266,34 @@ func (g *GcsFS) NewReaderWithContext(ctx context.Context, o string) (io.ReadClos
 // NewWriter create GCS Object Writer.
 func (g *GcsFS) NewWriter(o string, metadata map[string]string) (io.WriteCloser, error) {
 	return g.NewWriterWithContext(context.Background(), o, metadata)
+}
+
+type gzipWriteCloser struct {
+	ctx context.Context
+	w   io.WriteCloser
+	c   io.Closer
+}
+
+// newGZIPWriteCloser is a io.WriteCloser that closes both the gzip writer and also the passed in writer
+func newGZIPWriteCloser(ctx context.Context, rc io.WriteCloser) io.WriteCloser {
+	return &gzipWriteCloser{ctx, gzip.NewWriter(rc), rc}
+}
+
+func (b *gzipWriteCloser) Write(p []byte) (int, error) {
+	if err := b.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return b.w.Write(p)
+}
+
+func (b *gzipWriteCloser) Close() error {
+	if err := b.ctx.Err(); err != nil {
+		return err
+	}
+	if err := b.w.Close(); err != nil {
+		return err
+	}
+	return b.c.Close()
 }
 
 // NewWriterWithContext create writer with provided context and metadata.
@@ -250,6 +308,10 @@ func (g *GcsFS) NewWriterWithContext(ctx context.Context, o string, metadata map
 		//contenttype is only used for viewing the file in a browser. (i.e. the GCS Object browser).
 		ctype := cloudstorage.EnsureContextType(o, metadata)
 		wc.ContentType = ctype
+	}
+	if g.enableCompression {
+		wc.ContentEncoding = compressionMime
+		return newGZIPWriteCloser(ctx, wc), nil
 	}
 	return wc, nil
 }
@@ -302,16 +364,17 @@ func (it *objectIterator) Next() (cloudstorage.Object, error) {
 }
 
 type object struct {
-	name         string
-	updated      time.Time
-	metadata     map[string]string
-	googleObject *storage.ObjectAttrs
-	gcsb         *storage.BucketHandle
-	bucket       string
-	cachedcopy   *os.File
-	readonly     bool
-	opened       bool
-	cachepath    string
+	name              string
+	updated           time.Time
+	metadata          map[string]string
+	googleObject      *storage.ObjectAttrs
+	gcsb              *storage.BucketHandle
+	bucket            string
+	cachedcopy        *os.File
+	readonly          bool
+	opened            bool
+	cachepath         string
+	enableCompression bool
 }
 
 func newObject(g *GcsFS, o *storage.ObjectAttrs) *object {
@@ -322,13 +385,16 @@ func newObject(g *GcsFS, o *storage.ObjectAttrs) *object {
 	metadata["content_length"] = strconv.FormatInt(o.Size, 10)
 	metadata["attrs_content_type"] = o.ContentType
 	metadata["attrs_cache_control"] = o.CacheControl
+	metadata["content_encoding"] = o.ContentEncoding
+
 	return &object{
-		name:      o.Name,
-		updated:   o.Updated,
-		metadata:  metadata,
-		gcsb:      g.gcsb(),
-		bucket:    g.bucket,
-		cachepath: cloudstorage.CachePathObj(g.cachepath, o.Name, g.Id),
+		name:              o.Name,
+		updated:           o.Updated,
+		metadata:          metadata,
+		gcsb:              g.gcsb(),
+		bucket:            g.bucket,
+		cachepath:         cloudstorage.CachePathObj(g.cachepath, o.Name, g.Id),
+		enableCompression: g.enableCompression,
 	}
 }
 func (o *object) StorageSource() string {
@@ -403,7 +469,7 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 
 		if o.googleObject != nil {
 			//we have a preexisting object, so lets download it..
-			rc, err := o.gcsb.Object(o.name).NewReader(context.Background())
+			rc, err := o.gcsb.Object(o.name).ReadCompressed(true).NewReader(context.Background())
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error storage.NewReader err=%v", err))
 				cloudstorage.Backoff(try)
@@ -411,11 +477,27 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 			}
 			defer rc.Close()
 
-			if _, err := cachedcopy.Seek(0, os.SEEK_SET); err != nil {
-				return nil, fmt.Errorf("error seeking to start of cachedcopy err=%v", err) //don't retry on local fs errors
+			if _, err := cachedcopy.Seek(0, io.SeekStart); err != nil {
+				return nil, fmt.Errorf("error seeking to start of cachedcopy err=%v", err) // don't retry on local fs errors
 			}
 
-			writtenBytes, err := io.Copy(cachedcopy, rc)
+			var writtenBytes int64
+			// we check ContentType here because files uploaded compressed without an
+			// explicit ContentType set get autodetected as "application/x-gzip" instead
+			// of "application/octet-stream", but files with the gzip ContentType get
+			// auto-decompressed regardless of your Accept-Encoding header
+			if o.googleObject.ContentEncoding == compressionMime && o.googleObject.ContentType != "application/x-gzip" {
+				cr, err := gzip.NewReader(rc)
+				if err != nil {
+					return nil, fmt.Errorf("error decompressing data err=%v", err) // don't retry on decompression errors
+				}
+				writtenBytes, err = io.Copy(cachedcopy, cr)
+				if err != nil && (strings.HasPrefix(err.Error(), "gzip: ")) {
+					return nil, fmt.Errorf("error copying/decompressing data err=%v", err) // don't retry on decompression errors
+				}
+			} else {
+				writtenBytes, err = io.Copy(cachedcopy, rc)
+			}
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error coping bytes. err=%v", err))
 				//recreate the cachedcopy file incase it has incomplete data
@@ -429,14 +511,17 @@ func (o *object) Open(accesslevel cloudstorage.AccessLevel) (*os.File, error) {
 				cloudstorage.Backoff(try)
 				continue
 			}
-			// make sure the whole object was downloaded from google
-			if contentLength, ok := o.metadata["content_length"]; ok {
-				if contentLengthInt, err := strconv.ParseInt(contentLength, 10, 64); err == nil {
-					if contentLengthInt != writtenBytes {
-						return nil, fmt.Errorf("partial file download error. tfile=%v", o.name)
+
+			if o.googleObject.ContentEncoding != compressionMime { // compression checks crc
+				// make sure the whole object was downloaded from google
+				if contentLength, ok := o.metadata["content_length"]; ok {
+					if contentLengthInt, err := strconv.ParseInt(contentLength, 10, 64); err == nil {
+						if contentLengthInt != writtenBytes {
+							return nil, fmt.Errorf("partial file download error. tfile=%v", o.name)
+						}
+					} else {
+						return nil, fmt.Errorf("content_length is not a number. tfile=%v", o.name)
 					}
-				} else {
-					return nil, fmt.Errorf("content_length is not a number. tfile=%v", o.name)
 				}
 			}
 		}
@@ -515,20 +600,42 @@ func (o *object) Sync() error {
 			wc.ContentType = ctype
 		}
 
-		if _, err = io.Copy(wc, rd); err != nil {
-			errs = append(errs, fmt.Sprintf("copy to remote object error:%v", err))
-			err2 := wc.CloseWithError(err)
-			if err2 != nil {
-				errs = append(errs, fmt.Sprintf("CloseWithError error:%v", err2))
+		if o.enableCompression {
+			wc.ContentEncoding = compressionMime
+			cw := gzip.NewWriter(wc)
+			if _, err = io.Copy(cw, rd); err != nil {
+				errs = append(errs, fmt.Sprintf("copy to remote object error:%v", err))
+				cloudstorage.Backoff(try)
+				continue
 			}
-			cloudstorage.Backoff(try)
-			continue
-		}
 
-		if err = wc.Close(); err != nil {
-			errs = append(errs, fmt.Sprintf("close gcs writer error:%v", err))
-			cloudstorage.Backoff(try)
-			continue
+			if err = cw.Close(); err != nil {
+				errs = append(errs, fmt.Sprintf("close compression writer error:%v", err))
+				cloudstorage.Backoff(try)
+				continue
+			}
+
+			if err = wc.Close(); err != nil {
+				errs = append(errs, fmt.Sprintf("Close writer error:%v", err))
+				cloudstorage.Backoff(try)
+				continue
+			}
+		} else {
+			if _, err = io.Copy(wc, rd); err != nil {
+				errs = append(errs, fmt.Sprintf("copy to remote object error:%v", err))
+				err2 := wc.CloseWithError(err)
+				if err2 != nil {
+					errs = append(errs, fmt.Sprintf("CloseWithError error:%v", err2))
+				}
+				cloudstorage.Backoff(try)
+				continue
+			}
+
+			if err = wc.Close(); err != nil {
+				errs = append(errs, fmt.Sprintf("close gcs writer error:%v", err))
+				cloudstorage.Backoff(try)
+				continue
+			}
 		}
 
 		return nil

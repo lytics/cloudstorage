@@ -2,8 +2,10 @@ package csbufio
 
 import (
 	"context"
+	"io"
 	"testing"
 
+	"github.com/acomagu/bufpipe"
 	"github.com/stretchr/testify/require"
 )
 
@@ -13,13 +15,18 @@ func TestWriterContextDone(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	var m memRWC
-	wc := NewWriter(ctx, &m)
+	pr, pw := bufpipe.New(nil)
+	wc := NewWriter(ctx, pw)
 
 	n, err := wc.Write([]byte("some-data"))
 	require.ErrorIs(t, err, context.Canceled)
 	require.Equal(t, 0, n)
-	require.Len(t, m, 0)
+	err = pw.Close()
+	require.NoError(t, err)
+
+	b, err := io.ReadAll(pr)
+	require.NoError(t, err, "error reading")
+	require.Equal(t, 0, len(b), "")
 
 	err = wc.Close()
 	require.ErrorIs(t, err, context.Canceled)

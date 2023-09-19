@@ -14,11 +14,12 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/araddon/gou"
 	"github.com/lytics/cloudstorage"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/api/iterator"
 )
 
@@ -61,7 +62,7 @@ func Setup() {
 	})
 }
 
-func Clearstore(t TestingT, store cloudstorage.Store) {
+func Clearstore(t *testing.T, store cloudstorage.Store) {
 	//t.Logf("----------------Clearstore-----------------\n")
 	q := cloudstorage.NewQueryAll()
 	q.Sorted()
@@ -74,7 +75,7 @@ func Clearstore(t TestingT, store cloudstorage.Store) {
 	for _, o := range objs {
 		//t.Logf("clearstore(): deleting %v", o.Name())
 		err = store.Delete(ctx, o.Name())
-		assert.Equal(t, nil, err)
+		require.NoError(t, err)
 	}
 
 	switch store.Type() {
@@ -89,7 +90,7 @@ func Clearstore(t TestingT, store cloudstorage.Store) {
 	}
 }
 
-func RunTests(t TestingT, s cloudstorage.Store, conf *cloudstorage.Config) {
+func RunTests(t *testing.T, s cloudstorage.Store, conf *cloudstorage.Config) {
 	// Ensure testing dirs are clean.
 	Clearstore(t, s)
 	defer Clearstore(t, s)
@@ -140,126 +141,126 @@ func deleteIfExists(store cloudstorage.Store, filePath string) {
 	}
 }
 
-func StoreSetup(t TestingT, store cloudstorage.Store) {
+func StoreSetup(t *testing.T, store cloudstorage.Store) {
 
 	// Ensure the store has a String identifying store type
-	assert.NotEqual(t, "", store.String())
+	require.NotEqual(t, "", store.String())
 
 	// We should be able to get underlying client
-	assert.NotEqual(t, nil, store.Client())
+	require.NotNil(t, store.Client())
 }
 
-func BasicRW(t TestingT, store cloudstorage.Store) {
+func BasicRW(t *testing.T, store cloudstorage.Store) {
 
 	// Read the object from store, delete if it exists
 	deleteIfExists(store, "prefix/test.csv")
 
 	// Store should be empty
 	all, err := store.List(context.Background(), cloudstorage.NewQueryAll())
-	assert.NoError(t, err)
-	assert.NotNil(t, all)
-	assert.Empty(t, all.Objects)
+	require.NoError(t, err)
+	require.NotNil(t, all)
+	require.Empty(t, all.Objects)
 
 	// Create a new object and write to it.
 	obj, err := store.NewObject("prefix/test.csv")
-	assert.Equal(t, nil, err)
-	assert.NotEqual(t, nil, obj)
+	require.NoError(t, err)
+	require.NotNil(t, obj)
 
 	// Opening is required for new objects.
 	f, err := obj.Open(cloudstorage.ReadWrite)
-	assert.Equal(t, nil, err)
-	assert.NotEqual(t, nil, f)
+	require.NoError(t, err)
+	require.NotNil(t, f)
 
 	w := bufio.NewWriter(f)
 	_, err = w.WriteString(testcsv)
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 	err = w.Flush()
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 
 	// Close() actually does the upload/flush/write to cloud
 	err = obj.Close()
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 
 	err = obj.Release()
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 
 	// Read the object back out of the cloud store.
 	obj2, err := store.Get(context.Background(), "prefix/test.csv")
-	assert.Equal(t, nil, err)
-	assert.Equal(t, store.Type(), obj2.StorageSource())
-	assert.Equal(t, "prefix/test.csv", obj2.Name())
-	assert.Equal(t, "prefix/test.csv", obj2.String())
+	require.NoError(t, err)
+	require.Equal(t, store.Type(), obj2.StorageSource())
+	require.Equal(t, "prefix/test.csv", obj2.Name())
+	require.Equal(t, "prefix/test.csv", obj2.String())
 
 	f2, err := obj2.Open(cloudstorage.ReadOnly)
 	defer f2.Close()
-	assert.Equal(t, nil, err)
-	assert.Equal(t, fmt.Sprintf("%p", f2), fmt.Sprintf("%p", obj2.File()))
+	require.NoError(t, err)
+	require.Equal(t, fmt.Sprintf("%p", f2), fmt.Sprintf("%p", obj2.File()))
 
 	bytes, err := ioutil.ReadAll(f2)
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 
-	assert.Equal(t, testcsv, string(bytes))
+	require.Equal(t, testcsv, string(bytes))
 
 	// Store should be not empty
 	all, err = store.List(context.Background(), cloudstorage.NewQueryAll())
-	assert.NoError(t, err)
-	assert.NotNil(t, all)
-	assert.NotEmpty(t, all.Objects)
+	require.NoError(t, err)
+	require.NotNil(t, all)
+	require.NotEmpty(t, all.Objects)
 
 	// Now delete again
 	err = obj2.Delete()
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 	obj, err = store.Get(context.Background(), "prefix/test.csv")
-	assert.Equal(t, cloudstorage.ErrObjectNotFound, err)
-	assert.Equal(t, nil, obj)
+	require.Equal(t, cloudstorage.ErrObjectNotFound, err)
+	require.Nil(t, obj)
 
 	// Store should be empty again
 	all, err = store.List(context.Background(), cloudstorage.NewQueryAll())
-	assert.NoError(t, err)
-	assert.NotNil(t, all)
-	assert.Empty(t, all.Objects)
+	require.NoError(t, err)
+	require.NotNil(t, all)
+	require.Empty(t, all.Objects)
 }
 
-func createFile(t TestingT, store cloudstorage.Store, name, data string) cloudstorage.Object {
+func createFile(t *testing.T, store cloudstorage.Store, name, data string) cloudstorage.Object {
 
 	obj, err := store.NewObject(name)
-	assert.Equal(t, nil, err)
-	assert.NotEqual(t, nil, obj)
+	require.NoError(t, err)
+	require.NotNil(t, obj)
 
 	// Opening is required for new objects.
 	f, err := obj.Open(cloudstorage.ReadWrite)
-	assert.Equal(t, nil, err)
-	assert.NotEqual(t, nil, f)
+	require.NoError(t, err)
+	require.NotNil(t, f)
 
 	w := bufio.NewWriter(f)
 	_, err = w.WriteString(data)
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 	err = w.Flush()
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 
 	// Close() actually does the upload/flush/write to cloud
 	err = obj.Close()
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 
 	obj2, err := store.Get(context.Background(), name)
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 
 	f2, err := obj2.Open(cloudstorage.ReadWrite)
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 
 	bytes, err := ioutil.ReadAll(f2)
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 
-	assert.Equal(t, data, string(bytes))
+	require.Equal(t, data, string(bytes))
 
 	obj2.Close()
 
 	obj3, err := store.Get(context.Background(), name)
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 	return obj3
 }
 
-func Move(t TestingT, store cloudstorage.Store) {
+func Move(t *testing.T, store cloudstorage.Store) {
 	deleteIfExists(store, "to/testmove.txt")
 	switch store.Type() {
 	case "azure":
@@ -280,7 +281,7 @@ func Move(t TestingT, store cloudstorage.Store) {
 	}
 
 	dest, err := store.NewObject("to/testmove.txt")
-	assert.Equal(t, nil, err, "dest file")
+	require.NoError(t, err, "dest file")
 
 	// We do this multiple times with variable length data because Move
 	// should overwrite the desc object on each call.
@@ -296,15 +297,15 @@ func Move(t TestingT, store cloudstorage.Store) {
 
 		// Create a new object and write to it.
 		obj := createFile(t, store, "from/testmove.txt", data)
-		assert.NotEqual(t, nil, obj, "at row:%v", row)
+		require.NotNil(t, obj, "at row:%v", row)
 
 		err = cloudstorage.Move(context.Background(), store, obj, dest)
-		assert.Equal(t, nil, err, "at row:%v", row)
+		require.NoError(t, err, "at row:%v", row)
 
 		ensureContents(t, store, "to/testmove.txt", data, fmt.Sprintf("move `to` file validation: at row:%v", row))
 
 		_, err := store.Get(context.Background(), "from/testmove.txt")
-		assert.Equal(t, cloudstorage.ErrObjectNotFound, err, "move `from` file validation: at row:%v", row)
+		require.Equal(t, cloudstorage.ErrObjectNotFound, err, "move `from` file validation: at row:%v", row)
 	}
 }
 
@@ -316,31 +317,31 @@ func caller(calldepth int) string {
 	return fmt.Sprintf("caller-LN%v", line)
 }
 
-func ensureContents(t TestingT, store cloudstorage.Store, name, data, msg string) {
+func ensureContents(t *testing.T, store cloudstorage.Store, name, data, msg string) {
 	caller := caller(2)
 
 	obj, err := store.Get(context.Background(), name)
-	assert.Equalf(t, nil, err, msg, caller)
+	require.Equalf(t, nil, err, msg, caller)
 	if err != nil {
 		return
 	}
-	assert.Equalf(t, store.Type(), obj.StorageSource(), msg, caller)
-	assert.Equalf(t, name, obj.Name(), msg, caller)
+	require.Equalf(t, store.Type(), obj.StorageSource(), msg, caller)
+	require.Equalf(t, name, obj.Name(), msg, caller)
 
 	f, err := obj.Open(cloudstorage.ReadOnly)
 	defer func() {
 		err = obj.Close()
-		assert.Equalf(t, nil, err, msg, caller)
+		require.Equalf(t, nil, err, msg, caller)
 	}()
-	assert.Equalf(t, nil, err, msg, caller)
-	assert.Equalf(t, fmt.Sprintf("%p", f), fmt.Sprintf("%p", obj.File()), msg, caller)
+	require.Equalf(t, nil, err, msg, caller)
+	require.Equalf(t, fmt.Sprintf("%p", f), fmt.Sprintf("%p", obj.File()), msg, caller)
 
 	bytes, err := ioutil.ReadAll(f)
-	assert.Equalf(t, nil, err, msg, caller)
-	assert.Equalf(t, data, string(bytes), msg, caller)
+	require.Equalf(t, nil, err, msg, caller)
+	require.Equalf(t, data, string(bytes), msg, caller)
 }
 
-func Copy(t TestingT, store cloudstorage.Store) {
+func Copy(t *testing.T, store cloudstorage.Store) {
 	caller := caller(2)
 
 	// Read the object from store, delete if it exists
@@ -357,21 +358,21 @@ func Copy(t TestingT, store cloudstorage.Store) {
 	obj := createFile(t, store, "from/test.csv", testcsv)
 
 	dest, err := store.NewObject("to/testcopy.csv")
-	assert.Equalf(t, nil, err, caller)
+	require.Equalf(t, nil, err, caller)
 
 	err = cloudstorage.Copy(context.Background(), store, obj, dest)
-	assert.Equalf(t, nil, err, caller)
+	require.Equalf(t, nil, err, caller)
 
 	// After copy, old should exist
 	obj2, err := store.Get(context.Background(), "from/test.csv")
-	assert.Equalf(t, nil, err, caller)
-	assert.Equalf(t, "from/test.csv", obj2.Name(), caller)
+	require.Equalf(t, nil, err, caller)
+	require.Equalf(t, "from/test.csv", obj2.Name(), caller)
 
 	// And also to should exist
 	ensureContents(t, store, "to/testcopy.csv", testcsv, "target file validation")
 }
 
-func Append(t TestingT, store cloudstorage.Store) {
+func Append(t *testing.T, store cloudstorage.Store) {
 
 	deleteIfExists(store, "append.csv")
 	deleteIfExists(store, "append_native.csv")
@@ -389,54 +390,54 @@ func Append(t TestingT, store cloudstorage.Store) {
 
 	// Create a new object and write to it.
 	obj, err := store.NewObject("append.csv")
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 
 	f1, err := obj.Open(cloudstorage.ReadWrite)
-	assert.Equal(t, nil, err)
-	assert.NotEqual(t, nil, f1)
+	require.NoError(t, err)
+	require.NotNil(t, f1)
 
 	testcsv := "Year,Make,Model\n2003,VW,EuroVan\n2001,Ford,Ranger\n"
 
 	w1 := bufio.NewWriter(f1)
 	_, err = w1.WriteString(testcsv)
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 	w1.Flush()
 
 	err = obj.Close()
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 
 	// get the object and append to it...
 	morerows := "2013,VW,Jetta\n2011,Dodge,Caravan\n"
 	obj2, err := store.Get(context.Background(), "append.csv")
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 
 	// snapshot updated time pre-update
 	updated := obj2.Updated()
 	switch store.Type() {
 	case "azure":
 		// azure doesn't have sub-second granularity so will always be equal
-		assert.True(t, updated.After(now.Add(-time.Second*2)), "updated time was not set")
+		require.True(t, updated.After(now.Add(-time.Second*2)), "updated time was not set")
 	default:
-		assert.True(t, updated.After(now), "updated time was not set %v vs %v", now, updated)
+		require.True(t, updated.After(now), "updated time was not set %v vs %v", now, updated)
 	}
 
 	time.Sleep(10 * time.Millisecond)
 
 	f2, err := obj2.Open(cloudstorage.ReadWrite)
-	assert.Equal(t, nil, err)
-	assert.NotEqual(t, nil, f2)
+	require.NoError(t, err)
+	require.NotNil(t, f2)
 
 	// DANGER HERE BE DRAGONS.  This didn't used to be here
 	// so would our app have to implement this behavior?
 	_, err = f2.Seek(0, os.SEEK_END)
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 
 	w2 := bufio.NewWriter(f2)
 	ct, err := w2.WriteString(morerows)
 	w2.Flush()
 	//ct, err := f2.WriteString(morerows)
-	assert.Equal(t, nil, err)
-	assert.Equal(t, len(morerows), ct)
+	require.NoError(t, err)
+	require.Equal(t, len(morerows), ct)
 
 	switch store.Type() {
 	case "s3", "azure", "sftp":
@@ -447,37 +448,37 @@ func Append(t TestingT, store cloudstorage.Store) {
 	f2.Sync()
 
 	err = obj2.Close()
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 
 	// Read the object back out of the cloud storage.
 	obj3, err := store.Get(context.Background(), "append.csv")
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 	updated3 := obj3.Updated()
-	assert.True(t, updated3.After(updated), "updated wrong:  pre=%v post=%v", updated, updated3)
+	require.True(t, updated3.After(updated), "updated wrong:  pre=%v post=%v", updated, updated3)
 	f3, err := obj3.Open(cloudstorage.ReadOnly)
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 
 	bytes, err := ioutil.ReadAll(f3)
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 
-	assert.Equal(t, testcsv+morerows, string(bytes), "not the rows we expected.")
+	require.Equal(t, testcsv+morerows, string(bytes), "not the rows we expected.")
 
 	err = obj3.Close()
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 
 	// Now we are going to essentially repeat tests but now use the native
 	// interface object.Read(), Write() instead of OPen() -> os.File()
 
 	// Create a new object and write to it.
 	obj, err = store.NewObject("append_native.csv")
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 
 	writeCt, err := obj.Write([]byte(testcsv))
-	assert.Equal(t, nil, err)
-	assert.Equal(t, len(testcsv), writeCt)
+	require.NoError(t, err)
+	require.Equal(t, len(testcsv), writeCt)
 
 	err = obj.Close()
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 }
 
 func dumpfile(msg, file string) {
@@ -493,31 +494,31 @@ func dumpfile(msg, file string) {
 	gou.Infof("dumpfile %s  %s\n%s", msg, file, string(by))
 }
 
-func ListObjsAndFolders(t TestingT, store cloudstorage.Store) {
+func ListObjsAndFolders(t *testing.T, store cloudstorage.Store) {
 
 	Clearstore(t, store)
 
 	createObjects := func(names []string) {
 		for _, n := range names {
 			obj, err := store.NewObject(n)
-			assert.Equalf(t, nil, err, "failed trying to call new object on:%v of %v", n, names)
+			require.Equalf(t, nil, err, "failed trying to call new object on:%v of %v", n, names)
 			if obj == nil {
 				continue
 			}
 
 			f1, err := obj.Open(cloudstorage.ReadWrite)
-			assert.Equal(t, nil, err)
-			assert.NotEqual(t, nil, f1)
+			require.NoError(t, err)
+			require.NotNil(t, f1)
 
 			testcsv := "12345\n"
 
 			w1 := bufio.NewWriter(f1)
 			_, err = w1.WriteString(testcsv)
-			assert.Equal(t, nil, err)
+			require.NoError(t, err)
 			w1.Flush()
 
 			err = obj.Close()
-			assert.Equal(t, nil, err)
+			require.NoError(t, err)
 		}
 	}
 
@@ -541,21 +542,21 @@ func ListObjsAndFolders(t TestingT, store cloudstorage.Store) {
 	q.Sorted()
 	iter, _ := store.Objects(context.Background(), q)
 	objs, err := cloudstorage.ObjectsAll(iter)
-	assert.Equal(t, nil, err)
-	assert.Equal(t, 15, len(objs), "incorrect list len. wanted 15 got %d", len(objs))
+	require.NoError(t, err)
+	require.Equal(t, 15, len(objs), "incorrect list len. wanted 15 got %d", len(objs))
 	iter.Close()
 
 	iter, _ = store.Objects(context.Background(), q)
 	objr, err := cloudstorage.ObjectResponseFromIter(iter)
-	assert.Equal(t, nil, err)
-	assert.Equal(t, 15, len(objr.Objects), "incorrect list len. wanted 15 got %d", len(objr.Objects))
+	require.NoError(t, err)
+	require.Equal(t, 15, len(objr.Objects), "incorrect list len. wanted 15 got %d", len(objr.Objects))
 
 	// Now we are going to re-run this test using store.List() instead of store.Objects()
 	q = cloudstorage.NewQuery("list-test/")
 	q.Sorted()
 	objResp, err := store.List(context.Background(), q)
-	assert.Equal(t, nil, err)
-	assert.Equal(t, 15, len(objResp.Objects), "incorrect list len. wanted 15 got %d", len(objResp.Objects))
+	require.NoError(t, err)
+	require.Equal(t, 15, len(objResp.Objects), "incorrect list len. wanted 15 got %d", len(objResp.Objects))
 
 	// Now we are going to re-run this test using an Object Iterator
 	// that uses store.List() instead of store.Objects()
@@ -572,20 +573,20 @@ func ListObjsAndFolders(t TestingT, store cloudstorage.Store) {
 		objs = append(objs, o)
 		//u.Debugf("iter i=%d  len names=%v", i, len(names))
 		//u.Infof("2 %d found %v expect %v", i, o.Name(), names[i])
-		assert.Equal(t, names[i], o.Name(), "unexpected name.")
+		require.Equal(t, names[i], o.Name(), "unexpected name.")
 		i++
 	}
-	assert.Equal(t, 15, len(objs), "incorrect list len. wanted 15 got %d", len(objs))
+	require.Equal(t, 15, len(objs), "incorrect list len. wanted 15 got %d", len(objs))
 
 	q = cloudstorage.NewQuery("list-test/b")
 	q.Sorted()
 	iter, _ = store.Objects(context.Background(), q)
 	objs, err = cloudstorage.ObjectsAll(iter)
-	assert.Equal(t, nil, err)
-	assert.Equal(t, 5, len(objs), "incorrect list len. wanted 5 got %d", len(objs))
+	require.NoError(t, err)
+	require.Equal(t, 5, len(objs), "incorrect list len. wanted 5 got %d", len(objs))
 
 	for i, o := range objs {
-		assert.Equal(t, names[i+5], o.Name(), "unexpected name.")
+		require.Equal(t, names[i+5], o.Name(), "unexpected name.")
 	}
 
 	// test with iterator
@@ -599,18 +600,18 @@ func ListObjsAndFolders(t TestingT, store cloudstorage.Store) {
 		}
 		objs = append(objs, o)
 		//t.Logf("%d found %v", i, o.Name())
-		assert.Equal(t, names[i+5], o.Name(), "unexpected name.")
+		require.Equal(t, names[i+5], o.Name(), "unexpected name.")
 		i++
 	}
 
-	assert.Equal(t, 5, len(objs), "incorrect list len.")
+	require.Equal(t, 5, len(objs), "incorrect list len.")
 
 	q = cloudstorage.NewQueryForFolders("list-test/")
 	folders, err = store.Folders(context.Background(), q)
-	assert.Equal(t, nil, err)
-	assert.Equal(t, 3, len(folders), "incorrect list len. wanted 3 folders. %v", folders)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(folders), "incorrect list len. wanted 3 folders. %v", folders)
 	sort.Strings(folders)
-	assert.Equal(t, []string{"list-test/a/", "list-test/b/", "list-test/c/"}, folders)
+	require.Equal(t, []string{"list-test/a/", "list-test/b/", "list-test/c/"}, folders)
 
 	foldersInput := []string{"a/a2", "b/b1", "b/b2"}
 	names = []string{}
@@ -628,63 +629,63 @@ func ListObjsAndFolders(t TestingT, store cloudstorage.Store) {
 	q = cloudstorage.NewQueryForFolders("list-test/")
 	q.PageSize = 500
 	folders, err = store.Folders(context.Background(), q)
-	assert.Equal(t, nil, err)
-	assert.Equal(t, 3, len(folders), "incorrect list len. wanted 3 folders. %v", folders)
-	assert.Equal(t, []string{"list-test/a/", "list-test/b/", "list-test/c/"}, folders)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(folders), "incorrect list len. wanted 3 folders. %v", folders)
+	require.Equal(t, []string{"list-test/a/", "list-test/b/", "list-test/c/"}, folders)
 
 	q = cloudstorage.NewQueryForFolders("list-test/b/")
 	folders, err = store.Folders(context.Background(), q)
-	assert.Equal(t, nil, err)
-	assert.Equal(t, 2, len(folders), "incorrect list len. wanted 2 folders. %v", folders)
-	assert.Equal(t, []string{"list-test/b/b1/", "list-test/b/b2/"}, folders)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(folders), "incorrect list len. wanted 2 folders. %v", folders)
+	require.Equal(t, []string{"list-test/b/b1/", "list-test/b/b2/"}, folders)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	folders, err = store.Folders(ctx, q)
-	assert.NotEqual(t, nil, err)
-	assert.Equal(t, 0, len(folders), "incorrect list len. wanted 0 folders. %v", folders)
+	require.Error(t, err)
+	require.Equal(t, 0, len(folders), "incorrect list len. wanted 0 folders. %v", folders)
 
 	// List objects from a missing folder
 	q = cloudstorage.NewQuery("does-not-exist/")
 	resp, err := store.List(context.Background(), q)
-	assert.NoError(t, err)
-	assert.NotNil(t, resp)
-	assert.Empty(t, resp.Objects)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.Empty(t, resp.Objects)
 	folders, err = store.Folders(context.Background(), q)
-	assert.NoError(t, err)
-	assert.Empty(t, folders)
+	require.NoError(t, err)
+	require.Empty(t, folders)
 }
 
-func Truncate(t TestingT, store cloudstorage.Store) {
+func Truncate(t *testing.T, store cloudstorage.Store) {
 
 	deleteIfExists(store, "test.csv")
 
 	// Create a new object and write to it.
 	obj, err := store.NewObject("test.csv")
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 
 	f1, err := obj.Open(cloudstorage.ReadWrite)
-	assert.Equal(t, nil, err)
-	assert.NotEqual(t, nil, f1, "the file was nil")
+	require.NoError(t, err)
+	require.NotNil(t, f1, "the file was nil")
 
 	testcsv := "Year,Make,Model\n2003,VW,EuroVan\n2001,Ford,Ranger\n"
 
 	w1 := bufio.NewWriter(f1)
 	n1, err := w1.WriteString(testcsv)
-	assert.Equal(t, nil, err, "error. %d", n1)
+	require.NoError(t, err, "error. %d", n1)
 	w1.Flush()
 
 	err = obj.Close()
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 
 	// get the object and replace it...
 	newtestcsv := "Year,Make,Model\n2013,VW,Jetta\n"
 	obj2, err := store.Get(context.Background(), "test.csv")
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 
 	f2, err := obj2.Open(cloudstorage.ReadWrite)
-	assert.Equal(t, nil, err)
-	assert.NotEqual(t, nil, f2, "the file was nil")
+	require.NoError(t, err)
+	require.NotNil(t, f2, "the file was nil")
 
 	// Truncating the file will zero out the file
 	f2.Truncate(0)
@@ -693,71 +694,71 @@ func Truncate(t TestingT, store cloudstorage.Store) {
 
 	w2 := bufio.NewWriter(f2)
 	n2, err := w2.WriteString(newtestcsv)
-	assert.Equal(t, nil, err, "error. %d", n2)
+	require.NoError(t, err, "error. %d", n2)
 	w2.Flush()
 
 	err = obj2.Close()
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 
 	// Read the object back out of the cloud storage.
 	obj3, err := store.Get(context.Background(), "test.csv")
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 
 	f3, err := obj3.Open(cloudstorage.ReadOnly)
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 
 	bytes, err := ioutil.ReadAll(f3)
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 
-	assert.Equal(t, newtestcsv, string(bytes), "not the rows we expected.")
+	require.Equal(t, newtestcsv, string(bytes), "not the rows we expected.")
 }
 
-func NewObjectWithExisting(t TestingT, store cloudstorage.Store) {
+func NewObjectWithExisting(t *testing.T, store cloudstorage.Store) {
 
 	deleteIfExists(store, "test.csv")
 
 	// Create a new object and write to it.
 	obj, err := store.NewObject("test.csv")
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 
 	f, err := obj.Open(cloudstorage.ReadWrite)
-	assert.Equal(t, nil, err)
-	assert.NotEqual(t, nil, f, "the file was nil")
+	require.NoError(t, err)
+	require.NotNil(t, f, "the file was nil")
 
 	testcsv := "Year,Make,Model\n2003,VW,EuroVan\n2001,Ford,Ranger\n"
 
 	w := bufio.NewWriter(f)
 	n, err := w.WriteString(testcsv)
-	assert.Equal(t, nil, err, "error. %d", n)
+	require.NoError(t, err, "error. %d", n)
 	err = w.Flush()
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 
 	err = obj.Close()
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 
 	// Ensure calling NewObject on an existing object returns an error,
 	// because the object exits.
 	obj2, err := store.NewObject("test.csv")
-	assert.Equal(t, cloudstorage.ErrObjectExists, err, "error.")
-	assert.Equal(t, nil, obj2, "object should be nil.")
+	require.Equal(t, cloudstorage.ErrObjectExists, err, "error.")
+	require.Nil(t, obj2, "object should be nil.")
 
 	// Read the object back out of the cloud storage.
 	obj3, err := store.Get(context.Background(), "test.csv")
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 
 	f3, err := obj3.Open(cloudstorage.ReadOnly)
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 
 	bytes, err := ioutil.ReadAll(f3)
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 
-	assert.Equal(t, testcsv, string(bytes))
+	require.Equal(t, testcsv, string(bytes))
 
 	err = obj3.Close()
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 }
 
-func TestReadWriteCloser(t TestingT, store cloudstorage.Store) {
+func TestReadWriteCloser(t *testing.T, store cloudstorage.Store) {
 
 	deleteIfExists(store, "prefix/iorw.test")
 
@@ -777,51 +778,51 @@ func TestReadWriteCloser(t TestingT, store cloudstorage.Store) {
 		data := fmt.Sprintf("pad:%v:pid:%v:time:%v:index:%v:", padding, os.Getpid(), time.Now().Nanosecond(), i)
 
 		wc, err := store.NewWriter(fileName, nil)
-		assert.Equalf(t, nil, err, "at loop-cnt:%v", i)
+		require.Equalf(t, nil, err, "at loop-cnt:%v", i)
 		buf1 := bytes.NewBufferString(data)
 		_, err = buf1.WriteTo(wc)
-		assert.Equalf(t, nil, err, "at loop-cnt:%v", i)
+		require.Equalf(t, nil, err, "at loop-cnt:%v", i)
 		err = wc.Close()
-		assert.Equalf(t, nil, err, "at loop-cnt:%v", i)
+		require.Equalf(t, nil, err, "at loop-cnt:%v", i)
 		time.Sleep(time.Millisecond * 100)
 
 		wc, err = store.NewWriterWithContext(context.Background(), fileName, nil, cloudstorage.Opts{IfNotExists: true})
 		if err == nil {
 			// If err == nil then we're gcs so try writing
 			_, err = bytes.NewBufferString(data).WriteTo(wc)
-			assert.NoErrorf(t, err, "at loop-cnt:%v", i)
+			require.NoErrorf(t, err, "at loop-cnt:%v", i)
 			err = wc.Close()
 			time.Sleep(time.Millisecond * 100)
 		}
-		assert.Error(t, err)
+		require.Error(t, err)
 
 		// Read the object from store, delete if it exists
 		deleteIfExists(store, "prefix/test.csv")
 
 		rc, err := store.NewReader(fileName)
-		assert.Equalf(t, nil, err, "at loop-cnt:%v", i)
+		require.Equalf(t, nil, err, "at loop-cnt:%v", i)
 		if rc == nil {
 			t.Fatalf("could not create reader")
 			return
 		}
 		buf2 := bytes.Buffer{}
 		_, err = buf2.ReadFrom(rc)
-		assert.Equalf(t, nil, err, "at loop-cnt:%v", i)
-		assert.Equalf(t, data, buf2.String(), "round trip data don't match: loop-cnt:%v", i) // extra data means we didn't truncate the file
+		require.Equalf(t, nil, err, "at loop-cnt:%v", i)
+		require.Equalf(t, data, buf2.String(), "round trip data don't match: loop-cnt:%v", i) // extra data means we didn't truncate the file
 
 		// make sure we clean up and close
-		assert.Equal(t, nil, rc.Close())
+		require.Nil(t, rc.Close())
 
 		_, err = store.NewReader("bogus/notreal.csv")
-		assert.Equalf(t, cloudstorage.ErrObjectNotFound, err, "at loop-cnt:%v", i)
+		require.Equalf(t, cloudstorage.ErrObjectNotFound, err, "at loop-cnt:%v", i)
 	}
 }
 
-func MultipleRW(t TestingT, store cloudstorage.Store, conf *cloudstorage.Config) {
+func MultipleRW(t *testing.T, store cloudstorage.Store, conf *cloudstorage.Config) {
 	const TestFileName = "multi_rw/multi_rw_test.csv"
 
 	oldFiles, err := filepath.Glob(conf.TmpDir + "/multi_rw/*")
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 	for _, f := range oldFiles {
 		if f != "" && strings.Contains(f, TestFileName) {
 			gou.Warnf("should have been cleaned up for the: test-file:%v cachefile:%v allfiles:%v", TestFileName, f, oldFiles)
@@ -829,7 +830,7 @@ func MultipleRW(t TestingT, store cloudstorage.Store, conf *cloudstorage.Config)
 	}
 
 	err = os.RemoveAll(conf.TmpDir + "/multi_rw/")
-	assert.Equal(t, nil, err)
+	require.NoError(t, err)
 
 	// Read the object from store, delete if it exists
 	deleteIfExists(store, TestFileName)
@@ -852,29 +853,29 @@ func MultipleRW(t TestingT, store cloudstorage.Store, conf *cloudstorage.Config)
 		if err == cloudstorage.ErrObjectExists {
 			obj, err = store.Get(context.Background(), TestFileName)
 		}
-		assert.Equal(t, nil, err)
-		assert.NotEqual(t, nil, obj)
+		require.NoError(t, err)
+		require.NotNil(t, obj)
 
 		// Opening is required for new objects.
 		f, err := obj.Open(cloudstorage.ReadWrite)
-		assert.Equal(t, nil, err)
-		assert.NotEqual(t, nil, f)
+		require.NoError(t, err)
+		require.NotNil(t, f)
 
 		err = f.Truncate(0) //since we intend to replace the data, lets truncate the file.
-		assert.Equal(t, nil, err)
+		require.NoError(t, err)
 
 		w := bufio.NewWriter(f)
 		_, err = w.WriteString(data)
-		assert.Equal(t, nil, err)
+		require.NoError(t, err)
 		err = w.Flush()
-		assert.Equal(t, nil, err)
+		require.NoError(t, err)
 
 		// Close() actually does the upload/flush/write to cloud
 		err = obj.Close()
-		assert.Equal(t, nil, err)
+		require.NoError(t, err)
 
 		files, err := filepath.Glob(conf.TmpDir + "/multi_rw/*")
-		assert.Equal(t, nil, err)
+		require.NoError(t, err)
 		for _, f := range files {
 			if f != "" && strings.Contains(f, TestFileName) {
 				t.Fatalf("tc:%v the cache files should have been cleaned up for the: test-file:%v cachefile:%v allfiles:%v", i, TestFileName, f, files)
@@ -884,23 +885,23 @@ func MultipleRW(t TestingT, store cloudstorage.Store, conf *cloudstorage.Config)
 
 		// Read the object back out of the cloud store.
 		obj2, err := store.Get(context.Background(), TestFileName)
-		assert.Equal(t, nil, err)
-		assert.Equal(t, store.Type(), obj2.StorageSource())
-		assert.Equal(t, TestFileName, obj2.Name())
-		assert.Equal(t, TestFileName, obj2.String())
+		require.NoError(t, err)
+		require.Equal(t, store.Type(), obj2.StorageSource())
+		require.Equal(t, TestFileName, obj2.Name())
+		require.Equal(t, TestFileName, obj2.String())
 
 		f2, err := obj2.Open(cloudstorage.ReadOnly)
 
-		assert.Equal(t, nil, err)
-		assert.Equal(t, fmt.Sprintf("%p", f2), fmt.Sprintf("%p", obj2.File()))
+		require.NoError(t, err)
+		require.Equal(t, fmt.Sprintf("%p", f2), fmt.Sprintf("%p", obj2.File()))
 		bytes, err := ioutil.ReadAll(f2)
-		assert.Equal(t, nil, err)
-		assert.Equal(t, nil, f2.Close())
+		require.NoError(t, err)
+		require.Nil(t, f2.Close())
 
-		assert.Equal(t, data, string(bytes))
+		require.Equal(t, data, string(bytes))
 
 		err = obj2.Close()
-		assert.Equal(t, nil, err)
+		require.NoError(t, err)
 	}
 }
 

@@ -1,8 +1,7 @@
 package google_test
 
 import (
-	"encoding/json"
-	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -14,45 +13,44 @@ import (
 
 /*
 
-# to use Google Cloud Storage ensure you create a google-cloud jwt token
+# to use Google Cloud Storage ensure you have application default authentication working
 
-export CS_GCS_JWTKEY="{\"project_id\": \"lio-testing\", \"private_key_id\": \"
+gcloud auth application-default login
 
 */
 
-var config = &cloudstorage.Config{
-	Type:       google.StoreType,
-	AuthMethod: google.AuthJWTKeySource,
-	Project:    "tbd",
-	Bucket:     "liotesting-int-tests-nl",
-	TmpDir:     "/tmp/localcache/google",
-}
-
 func TestAll(t *testing.T) {
-	jwtVal := os.Getenv("CS_GCS_JWTKEY")
-	if jwtVal == "" {
-		t.Skip("Not testing no CS_GCS_JWTKEY env var")
-		return
+	config := &cloudstorage.Config{
+		Type:       google.StoreType,
+		AuthMethod: google.AuthGCEDefaultOAuthToken,
+		Project:    "lio-testing",
+		Bucket:     "liotesting-int-tests-nl",
+		TmpDir:     t.TempDir(),
 	}
-	jc := &cloudstorage.JwtConf{}
-
-	if err := json.Unmarshal([]byte(jwtVal), jc); err != nil {
-		t.Fatalf("Could not read CS_GCS_JWTKEY %v", err)
-		return
-	}
-	if jc.ProjectID != "" {
-		config.Project = jc.ProjectID
-	}
-	config.JwtConf = jc
 
 	store, err := cloudstorage.NewStore(config)
 	if err != nil {
+		if strings.Contains(err.Error(), "could not find default credentials") {
+			t.Skip("could not find default credentials, skipping Google Storage tests")
+		}
+		t.Fatalf("Could not create store: config=%+v  err=%v", config, err)
+	}
+	testutils.RunTests(t, store, config)
+
+	config.EnableCompression = true
+	store, err = cloudstorage.NewStore(config)
+	if err != nil {
+		if strings.Contains(err.Error(), "could not find default credentials") {
+			t.Skip("could not find default credentials, skipping Google Storage tests")
+		}
 		t.Fatalf("Could not create store: config=%+v  err=%v", config, err)
 	}
 	testutils.RunTests(t, store, config)
 }
 
 func TestConfigValidation(t *testing.T) {
+
+	tmpDir := t.TempDir()
 
 	// VALIDATE errors for AuthJWTKeySource
 	config := &cloudstorage.Config{}
@@ -74,7 +72,7 @@ func TestConfigValidation(t *testing.T) {
 		AuthMethod: google.AuthJWTKeySource,
 		Project:    "tbd",
 		Bucket:     "liotesting-int-tests-nl",
-		TmpDir:     "/tmp/localcache/google",
+		TmpDir:     filepath.Join(tmpDir, "localcache", "google"),
 	}
 
 	_, err = cloudstorage.NewStore(config)
@@ -107,7 +105,7 @@ func TestConfigValidation(t *testing.T) {
 		AuthMethod: google.AuthGoogleJWTKeySource,
 		Project:    "tbd",
 		Bucket:     "tbd",
-		TmpDir:     "/tmp/tbd",
+		TmpDir:     filepath.Join(tmpDir, "localcache", "google"),
 		JwtFile:    "./jwt.json",
 	}
 	_, err = cloudstorage.NewStore(config)

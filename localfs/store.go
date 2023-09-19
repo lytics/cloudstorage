@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -111,10 +110,16 @@ func (l *LocalStore) NewObject(objectname string) (cloudstorage.Object, error) {
 
 	cf := cloudstorage.CachePathObj(l.cachepath, objectname, l.Id)
 
+	metadata, err := readmeta(of + ".metadata")
+	if err != nil {
+		return nil, err
+	}
+
 	return &object{
 		name:      objectname,
 		storepath: of,
 		cachepath: cf,
+		metadata:  metadata,
 	}, nil
 }
 
@@ -140,18 +145,12 @@ func (l *LocalStore) List(ctx context.Context, query cloudstorage.Query) (*cloud
 		if f.IsDir() {
 			return nil
 		} else if filepath.Ext(f.Name()) == ".metadata" {
-			b, err := ioutil.ReadFile(fo)
+			metadata, err := readmeta(f.Name())
 			if err != nil {
 				return err
 			}
-			md := make(map[string]string)
-			err = json.Unmarshal(b, &md)
-			if err != nil {
-				return err
-			}
-
 			mdkey := strings.Replace(obj, ".metadata", "", 1)
-			metadatas[mdkey] = md
+			metadatas[mdkey] = metadata
 		} else {
 			oname := strings.TrimPrefix(obj, "/")
 
@@ -209,7 +208,7 @@ func (l *LocalStore) Folders(ctx context.Context, csq cloudstorage.Query) ([]str
 	}
 
 	folders := make([]string, 0)
-	files, _ := ioutil.ReadDir(spath)
+	files, _ := os.ReadDir(spath)
 	for _, f := range files {
 		if f.IsDir() {
 			folders = append(folders, fmt.Sprintf("%s/", path.Join(csq.Prefix, f.Name())))
@@ -256,7 +255,7 @@ func (l *LocalStore) NewWriterWithContext(ctx context.Context, o string, metadat
 		return nil, err
 	}
 
-	if metadata != nil && len(metadata) > 0 {
+	if len(metadata) == 0 {
 		metadata = make(map[string]string)
 	}
 
@@ -288,10 +287,16 @@ func (l *LocalStore) Get(ctx context.Context, o string) (cloudstorage.Object, er
 		updated = stat.ModTime()
 	}
 
+	metadata, err := readmeta(fo + ".metadata")
+	if err != nil {
+		return nil, err
+	}
+
 	return &object{
 		name:      o,
 		updated:   updated,
 		storepath: fo,
+		metadata:  metadata,
 		cachepath: cloudstorage.CachePathObj(l.cachepath, o, l.Id),
 	}, nil
 }
@@ -500,17 +505,33 @@ func (o *object) Sync() error {
 	}
 	defer storecopy.Close()
 
+	if len(o.metadata) == 0 {
+		o.metadata = make(map[string]string)
+	}
+
 	_, err = io.Copy(storecopy, cachedcopy)
 	if err != nil {
 		return err
 	}
 
-	if o.metadata != nil && len(o.metadata) > 0 {
-		o.metadata = make(map[string]string)
-	}
-
 	fmd := o.storepath + ".metadata"
 	return writemeta(fmd, o.metadata)
+}
+
+func readmeta(filename string) (map[string]string, error) {
+	metadata := make(map[string]string)
+	b, err := os.ReadFile(filename)
+	if err == nil {
+		err = json.Unmarshal(b, &metadata)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+	}
+	return metadata, nil
 }
 
 func writemeta(filename string, meta map[string]string) error {
@@ -519,7 +540,7 @@ func writemeta(filename string, meta map[string]string) error {
 		return err
 	}
 
-	err = ioutil.WriteFile(filename, bm, 0664)
+	err = os.WriteFile(filename, bm, 0664)
 	if err != nil {
 		return err
 	}

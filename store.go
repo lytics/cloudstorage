@@ -206,6 +206,9 @@ type (
 		Settings gou.JsonHelper `json:"settings,omitempty"`
 		// LogPrefix Logging Prefix/Context message
 		LogPrefix string
+		// EnableCompression turns on transparent compression of objects
+		// Reading pre-existing non-compressed objects continues to work
+		EnableCompression bool `json:"enablecompression,omitempty"`
 	}
 
 	// JwtConf For use with google/google_jwttransporter.go

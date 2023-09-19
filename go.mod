@@ -17,6 +17,8 @@ require (
 	google.golang.org/api v0.103.0
 )
 
+require github.com/acomagu/bufpipe v1.0.4
+
 require (
 	cloud.google.com/go v0.105.0 // indirect
 	cloud.google.com/go/compute v1.12.1 // indirect
