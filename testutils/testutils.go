@@ -6,7 +6,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -50,7 +50,7 @@ func Setup() {
 		if logger != nil {
 			// don't re-setup
 		} else {
-			if (verbose != nil && *verbose == true) || os.Getenv("VERBOSELOGS") != "" {
+			if (verbose != nil && *verbose) || os.Getenv("VERBOSELOGS") != "" {
 				gou.SetupLogging("debug")
 				gou.SetColorOutput()
 			} else {
@@ -192,11 +192,16 @@ func BasicRW(t *testing.T, store cloudstorage.Store) {
 	require.Equal(t, "prefix/test.csv", obj2.String())
 
 	f2, err := obj2.Open(cloudstorage.ReadOnly)
-	defer f2.Close()
+	defer func() {
+		err := f2.Close()
+		if err != nil {
+			t.Errorf("error closing file: %v", err)
+		}
+	}()
 	require.NoError(t, err)
 	require.Equal(t, fmt.Sprintf("%p", f2), fmt.Sprintf("%p", obj2.File()))
 
-	bytes, err := ioutil.ReadAll(f2)
+	bytes, err := io.ReadAll(f2)
 	require.NoError(t, err)
 
 	require.Equal(t, testcsv, string(bytes))
@@ -248,7 +253,7 @@ func createFile(t *testing.T, store cloudstorage.Store, name, data string) cloud
 	f2, err := obj2.Open(cloudstorage.ReadWrite)
 	require.NoError(t, err)
 
-	bytes, err := ioutil.ReadAll(f2)
+	bytes, err := io.ReadAll(f2)
 	require.NoError(t, err)
 
 	require.Equal(t, data, string(bytes))
@@ -336,7 +341,7 @@ func ensureContents(t *testing.T, store cloudstorage.Store, name, data, msg stri
 	require.Equalf(t, nil, err, msg, caller)
 	require.Equalf(t, fmt.Sprintf("%p", f), fmt.Sprintf("%p", obj.File()), msg, caller)
 
-	bytes, err := ioutil.ReadAll(f)
+	bytes, err := io.ReadAll(f)
 	require.Equalf(t, nil, err, msg, caller)
 	require.Equalf(t, data, string(bytes), msg, caller)
 }
@@ -429,7 +434,7 @@ func Append(t *testing.T, store cloudstorage.Store) {
 
 	// DANGER HERE BE DRAGONS.  This didn't used to be here
 	// so would our app have to implement this behavior?
-	_, err = f2.Seek(0, os.SEEK_END)
+	_, err = f2.Seek(0, io.SeekEnd)
 	require.NoError(t, err)
 
 	w2 := bufio.NewWriter(f2)
@@ -458,7 +463,7 @@ func Append(t *testing.T, store cloudstorage.Store) {
 	f3, err := obj3.Open(cloudstorage.ReadOnly)
 	require.NoError(t, err)
 
-	bytes, err := ioutil.ReadAll(f3)
+	bytes, err := io.ReadAll(f3)
 	require.NoError(t, err)
 
 	require.Equal(t, testcsv+morerows, string(bytes), "not the rows we expected.")
@@ -479,19 +484,6 @@ func Append(t *testing.T, store cloudstorage.Store) {
 
 	err = obj.Close()
 	require.NoError(t, err)
-}
-
-func dumpfile(msg, file string) {
-	f, err := os.OpenFile(file, os.O_RDWR|os.O_CREATE, 0666)
-	if err != nil {
-		panic(err.Error())
-	}
-	defer f.Close()
-	by, err := ioutil.ReadAll(f)
-	if err != nil {
-		panic(err.Error())
-	}
-	gou.Infof("dumpfile %s  %s\n%s", msg, file, string(by))
 }
 
 func ListObjsAndFolders(t *testing.T, store cloudstorage.Store) {
@@ -707,7 +699,7 @@ func Truncate(t *testing.T, store cloudstorage.Store) {
 	f3, err := obj3.Open(cloudstorage.ReadOnly)
 	require.NoError(t, err)
 
-	bytes, err := ioutil.ReadAll(f3)
+	bytes, err := io.ReadAll(f3)
 	require.NoError(t, err)
 
 	require.Equal(t, newtestcsv, string(bytes), "not the rows we expected.")
@@ -749,7 +741,7 @@ func NewObjectWithExisting(t *testing.T, store cloudstorage.Store) {
 	f3, err := obj3.Open(cloudstorage.ReadOnly)
 	require.NoError(t, err)
 
-	bytes, err := ioutil.ReadAll(f3)
+	bytes, err := io.ReadAll(f3)
 	require.NoError(t, err)
 
 	require.Equal(t, testcsv, string(bytes))
@@ -894,7 +886,7 @@ func MultipleRW(t *testing.T, store cloudstorage.Store, conf *cloudstorage.Confi
 
 		require.NoError(t, err)
 		require.Equal(t, fmt.Sprintf("%p", f2), fmt.Sprintf("%p", obj2.File()))
-		bytes, err := ioutil.ReadAll(f2)
+		bytes, err := io.ReadAll(f2)
 		require.NoError(t, err)
 		require.Nil(t, f2.Close())
 

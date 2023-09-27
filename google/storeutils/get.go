@@ -2,7 +2,7 @@ package storeutils
 
 import (
 	"bytes"
-	"io/ioutil"
+	"io"
 
 	"cloud.google.com/go/storage"
 	"golang.org/x/net/context"
@@ -24,7 +24,7 @@ func GetObjectWithContext(ctx context.Context, gc *storage.Client, bucket, name 
 		}
 		return nil, err
 	}
-	by, err := ioutil.ReadAll(rc)
+	by, err := io.ReadAll(rc)
 	if err != nil {
 		return nil, err
 	}
