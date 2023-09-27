@@ -2,7 +2,6 @@ package google
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 
@@ -78,7 +77,7 @@ func BuildGoogleJWTTransporter(jwtConf *cloudstorage.JwtConf) (GoogleOAuthClient
 
 // BuildGoogleFileJWTTransporter creates a Google Storage Client using a JWT file for the jwt config.
 func BuildGoogleFileJWTTransporter(keyPath string, scope string) (GoogleOAuthClient, error) {
-	jsonKey, err := ioutil.ReadFile(os.ExpandEnv(keyPath))
+	jsonKey, err := os.ReadFile(os.ExpandEnv(keyPath))
 	if err != nil {
 		return nil, err
 	}
