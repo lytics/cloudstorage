@@ -6,6 +6,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -50,7 +51,7 @@ func Setup() {
 		if logger != nil {
 			// don't re-setup
 		} else {
-			if (verbose != nil && *verbose == true) || os.Getenv("VERBOSELOGS") != "" {
+			if (verbose != nil && *verbose) || os.Getenv("VERBOSELOGS") != "" {
 				gou.SetupLogging("debug")
 				gou.SetColorOutput()
 			} else {
@@ -192,11 +193,16 @@ func BasicRW(t *testing.T, store cloudstorage.Store) {
 	require.Equal(t, "prefix/test.csv", obj2.String())
 
 	f2, err := obj2.Open(cloudstorage.ReadOnly)
-	defer f2.Close()
+	defer func() {
+		err := f2.Close()
+		if err != nil {
+			t.Errorf("error closing file: %v", err)
+		}
+	}()
 	require.NoError(t, err)
 	require.Equal(t, fmt.Sprintf("%p", f2), fmt.Sprintf("%p", obj2.File()))
 
-	bytes, err := ioutil.ReadAll(f2)
+	bytes, err := io.ReadAll(f2)
 	require.NoError(t, err)
 
 	require.Equal(t, testcsv, string(bytes))
@@ -479,19 +485,6 @@ func Append(t *testing.T, store cloudstorage.Store) {
 
 	err = obj.Close()
 	require.NoError(t, err)
-}
-
-func dumpfile(msg, file string) {
-	f, err := os.OpenFile(file, os.O_RDWR|os.O_CREATE, 0666)
-	if err != nil {
-		panic(err.Error())
-	}
-	defer f.Close()
-	by, err := ioutil.ReadAll(f)
-	if err != nil {
-		panic(err.Error())
-	}
-	gou.Infof("dumpfile %s  %s\n%s", msg, file, string(by))
 }
 
 func ListObjsAndFolders(t *testing.T, store cloudstorage.Store) {
