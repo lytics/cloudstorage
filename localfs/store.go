@@ -125,12 +125,16 @@ func (l *LocalStore) NewObject(objectname string) (cloudstorage.Object, error) {
 
 // List objects at Query location.
 func (l *LocalStore) List(ctx context.Context, query cloudstorage.Query) (*cloudstorage.ObjectsResponse, error) {
-
 	resp := cloudstorage.NewObjectsResponse()
 	objects := make(map[string]*object)
 	metadatas := make(map[string]map[string]string)
 
-	spath := path.Join(l.storepath, query.Prefix)
+	spath := l.storepath
+	filePre := query.Prefix
+	li := strings.LastIndex(query.Prefix, "/")
+	if li > 0 {
+		spath = path.Join(spath, query.Prefix[:li])
+	}
 	if !cloudstorage.Exists(spath) {
 		return resp, nil
 	}
@@ -153,6 +157,9 @@ func (l *LocalStore) List(ctx context.Context, query cloudstorage.Query) (*cloud
 			metadatas[mdkey] = metadata
 		} else {
 			oname := strings.TrimPrefix(obj, "/")
+			if filePre != "" && !strings.HasPrefix(oname, filePre) {
+				return nil
+			}
 
 			if (query.StartOffset != "" && oname < query.StartOffset) ||
 				(query.EndOffset != "" && oname >= query.EndOffset) {
