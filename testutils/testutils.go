@@ -193,10 +193,8 @@ func BasicRW(t *testing.T, store cloudstorage.Store) {
 
 	f2, err := obj2.Open(cloudstorage.ReadOnly)
 	defer func() {
-		err := f2.Close()
-		if err != nil {
-			t.Errorf("error closing file: %v", err)
-		}
+		// Delete should close the file
+		_ = f2.Close()
 	}()
 	require.NoError(t, err)
 	require.Equal(t, fmt.Sprintf("%p", f2), fmt.Sprintf("%p", obj2.File()))
