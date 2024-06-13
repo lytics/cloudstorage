@@ -5,9 +5,10 @@ import (
 	"io"
 	"testing"
 
-	"github.com/lytics/cloudstorage/csbufio"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/lytics/cloudstorage/csbufio"
 )
 
 func TestBackgroundWriteCloser(t *testing.T) {

@@ -14,11 +14,13 @@ import (
 	"time"
 
 	"context"
+
 	"github.com/araddon/gou"
-	"github.com/lytics/cloudstorage"
-	"github.com/lytics/cloudstorage/csbufio"
 	"github.com/pborman/uuid"
 	"google.golang.org/api/iterator"
+
+	"github.com/lytics/cloudstorage"
+	"github.com/lytics/cloudstorage/csbufio"
 )
 
 func init() {

@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"io"
 
-	"cloud.google.com/go/storage"
 	"context"
+
+	"cloud.google.com/go/storage"
 
 	"github.com/lytics/cloudstorage"
 )

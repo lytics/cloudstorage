@@ -5,9 +5,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/lytics/cloudstorage"
 	"github.com/lytics/cloudstorage/localfs"
-	"github.com/stretchr/testify/require"
 )
 
 func TestStore(t *testing.T) {

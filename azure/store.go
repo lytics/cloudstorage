@@ -11,11 +11,13 @@ import (
 	"time"
 
 	"context"
+
 	az "github.com/Azure/azure-sdk-for-go/storage"
 	"github.com/araddon/gou"
+	"github.com/pborman/uuid"
+
 	"github.com/lytics/cloudstorage"
 	"github.com/lytics/cloudstorage/csbufio"
-	"github.com/pborman/uuid"
 )
 
 const (

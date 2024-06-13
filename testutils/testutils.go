@@ -18,9 +18,10 @@ import (
 	"time"
 
 	"github.com/araddon/gou"
-	"github.com/lytics/cloudstorage"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/api/iterator"
+
+	"github.com/lytics/cloudstorage"
 )
 
 var (
