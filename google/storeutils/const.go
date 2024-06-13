@@ -9,13 +9,13 @@ import (
 // Copied from cloudstorage
 var GCSRetries = 10
 
-//backoff sleeps a random amount so we can.
-//retry failed requests using a randomized exponential backoff:
-//wait a random period between [0..1] seconds and retry; if that fails,
-//wait a random period between [0..2] seconds and retry; if that fails,
-//wait a random period between [0..4] seconds and retry, and so on,
-//with an upper bounds to the wait period being 16 seconds.
-//http://play.golang.org/p/l9aUHgiR8J
+// backoff sleeps a random amount so we can.
+// retry failed requests using a randomized exponential backoff:
+// wait a random period between [0..1] seconds and retry; if that fails,
+// wait a random period between [0..2] seconds and retry; if that fails,
+// wait a random period between [0..4] seconds and retry, and so on,
+// with an upper bounds to the wait period being 16 seconds.
+// http://play.golang.org/p/l9aUHgiR8J
 func backoff(try int) {
 	nf := math.Pow(2, float64(try))
 	nf = math.Max(1, nf)
