@@ -1,6 +1,6 @@
 module github.com/lytics/cloudstorage
 
-go 1.19
+go 1.20
 
 require (
 	cloud.google.com/go/storage v1.28.0
