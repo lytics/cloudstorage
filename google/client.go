@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"cloud.google.com/go/storage"
-	"golang.org/x/net/context"
+	"context"
 	"golang.org/x/oauth2"
 	googleOauth2 "golang.org/x/oauth2/google"
 	"golang.org/x/oauth2/jwt"

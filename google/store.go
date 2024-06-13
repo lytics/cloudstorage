@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
+	"context"
 	"github.com/araddon/gou"
 	"github.com/pborman/uuid"
-	"golang.org/x/net/context"
 	"google.golang.org/api/iterator"
 
 	"github.com/lytics/cloudstorage"

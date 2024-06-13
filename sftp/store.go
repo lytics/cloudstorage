@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
+	"context"
 	"github.com/araddon/gou"
 	"github.com/pborman/uuid"
 	ftp "github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
-	"golang.org/x/net/context"
 
 	"github.com/lytics/cloudstorage"
 )

@@ -1,8 +1,8 @@
 package storeutils
 
 import (
+	"context"
 	"github.com/lytics/cloudstorage"
-	"golang.org/x/net/context"
 )
 
 // GetAndOpen is a convenience method that combines Store.Get() and Object.Open() into

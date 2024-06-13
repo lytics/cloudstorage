@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
+	"context"
 	"github.com/araddon/gou"
 	"github.com/pborman/uuid"
-	"golang.org/x/net/context"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"

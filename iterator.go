@@ -5,7 +5,7 @@ import (
 	"math/rand"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 	"google.golang.org/api/iterator"
 )
 
