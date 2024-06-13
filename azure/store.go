@@ -1,7 +1,6 @@
 package azure
 
 import (
-	"bufio"
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
@@ -14,9 +13,9 @@ import (
 	az "github.com/Azure/azure-sdk-for-go/storage"
 	"github.com/araddon/gou"
 	"github.com/lytics/cloudstorage"
+	"github.com/lytics/cloudstorage/csbufio"
 	"github.com/pborman/uuid"
 	"golang.org/x/net/context"
-	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -384,70 +383,22 @@ func (f *FS) NewWriterWithContext(ctx context.Context, name string, metadata map
 		return nil, fmt.Errorf("options IfNotExists not supported for store type")
 	}
 	name = strings.Replace(name, " ", "+", -1)
-	o := &object{name: name, metadata: metadata}
-	rwc := newAzureWriteCloser(ctx, f, o)
+	obj := &object{name: name, metadata: metadata}
+
+	rwc := csbufio.NewBackgroundWriteCloser(ctx,
+		func(_ context.Context, rc io.ReadCloser) error {
+			err := f.uploadMultiPart(obj, rc)
+			if err != nil {
+				err = fmt.Errorf("unable to write %q to azure bucket %q: %w", obj.name, f.bucket, err)
+
+				gou.Warnf("could not upload %v", err)
+
+				return err
+			}
+			return nil
+		})
 
 	return rwc, nil
-}
-
-// azureWriteCloser - manages data and go routines used to pipe data to azures, calling Close
-// will flush data to azures and block until all inflight data has been written or
-// we get an error.
-type azureWriteCloser struct {
-	pr *io.PipeReader
-	pw *io.PipeWriter
-	wc *bufio.Writer
-	g  *errgroup.Group
-}
-
-// azureWriteCloser is a io.WriteCloser that manages the azure connection pipe and when Close is called
-// it blocks until all data is flushed to azure via a background go routine call to uploadMultiPart.
-func newAzureWriteCloser(ctx context.Context, f *FS, obj *object) io.WriteCloser {
-	pr, pw := io.Pipe()
-	bw := bufio.NewWriter(pw)
-
-	g, _ := errgroup.WithContext(ctx)
-
-	g.Go(func() error {
-		// Upload the file to azure.
-		// Do a multipart upload
-		err := f.uploadMultiPart(obj, pr)
-		if err != nil {
-			gou.Warnf("could not upload %v", err)
-			return err
-		}
-		return nil
-	})
-
-	return azureWriteCloser{
-		pr, pw, bw, g,
-	}
-}
-
-// Write writes data to our write buffer, which writes to the backing io pipe.
-// If an error is encountered while writting we may not see it here, my guess is
-// we wouldn't see it until someone calls close and the error is returned from the
-// error group.
-func (bc azureWriteCloser) Write(p []byte) (nn int, err error) {
-	return bc.wc.Write(p)
-}
-
-// Close and block until we flush inflight data to azures
-func (bc azureWriteCloser) Close() error {
-	//Flush buffered data to the backing pipe writer.
-	if err := bc.wc.Flush(); err != nil {
-		return err
-	}
-	//Close the pipe writer so that the pipe reader will return EOF,
-	// doing so will cause uploadMultiPart to complete and return.
-	if err := bc.pw.Close(); err != nil {
-		return err
-	}
-	//Use the error group's Wait method to block until uploadMultPart has completed
-	if err := bc.g.Wait(); err != nil {
-		return err
-	}
-	return nil
 }
 
 const (
