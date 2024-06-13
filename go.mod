@@ -1,10 +1,11 @@
 module github.com/lytics/cloudstorage
 
-go 1.19
+go 1.20
 
 require (
 	cloud.google.com/go/storage v1.28.0
 	github.com/Azure/azure-sdk-for-go v67.1.0+incompatible
+	github.com/acomagu/bufpipe v1.0.4
 	github.com/araddon/gou v0.0.0-20211019181548-e7d08105776c
 	github.com/aws/aws-sdk-go v1.44.146
 	github.com/pborman/uuid v1.2.1
@@ -16,8 +17,6 @@ require (
 	golang.org/x/sync v0.1.0
 	google.golang.org/api v0.103.0
 )
-
-require github.com/acomagu/bufpipe v1.0.4
 
 require (
 	cloud.google.com/go v0.105.0 // indirect

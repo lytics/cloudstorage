@@ -1,8 +1,9 @@
 package google
 
 import (
-	"github.com/lytics/cloudstorage"
 	"google.golang.org/api/storage/v1"
+
+	"github.com/lytics/cloudstorage"
 )
 
 // APIStore a google api store

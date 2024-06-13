@@ -9,8 +9,7 @@ systems.   Then the methods (Query, filter, get, put) are common, as are
 the Files (Objects) themselves.  Writing code that supports multiple
 backends is now simple.
 
-
-Creating and iterating files
+# Creating and iterating files
 
 In this example we are going to create a local-filesystem
 store.

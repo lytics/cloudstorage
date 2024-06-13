@@ -5,9 +5,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/lytics/cloudstorage"
 	"github.com/lytics/cloudstorage/localfs"
-	"github.com/stretchr/testify/require"
 )
 
 func TestStore(t *testing.T) {
@@ -35,7 +36,7 @@ func TestStore(t *testing.T) {
 	}
 
 	store, err = cloudstorage.NewStore(localFsConf)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.NotNil(t, store)
 }
 
@@ -59,10 +60,10 @@ func TestJwtConf(t *testing.T) {
 	// t.Logf("b64  %q", v)
 	conf := &cloudstorage.Config{}
 	err := json.Unmarshal([]byte(configInput), conf)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	conf.JwtConf.PrivateKey = "------helo-------\naGVsbG8td29ybGQ=\n-----------------end--------"
 	require.NotNil(t, conf.JwtConf)
-	require.Nil(t, conf.JwtConf.Validate())
+	require.NoError(t, conf.JwtConf.Validate())
 	require.Equal(t, "aGVsbG8td29ybGQ=", conf.JwtConf.PrivateKey)
 	require.Equal(t, "service_account", conf.JwtConf.Type)
 
@@ -83,9 +84,9 @@ func TestJwtConf(t *testing.T) {
 	}`
 	conf = &cloudstorage.Config{}
 	err = json.Unmarshal([]byte(configInput), conf)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.NotNil(t, conf.JwtConf)
-	require.Nil(t, conf.JwtConf.Validate())
+	require.NoError(t, conf.JwtConf.Validate())
 	require.Equal(t, "aGVsbG8td29ybGQ=", conf.JwtConf.PrivateKey)
 	require.Equal(t, "service_account", conf.JwtConf.Type)
 }

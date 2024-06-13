@@ -10,9 +10,10 @@ import (
 	"sync"
 	"time"
 
+	"context"
+
 	"github.com/araddon/gou"
 	"github.com/pborman/uuid"
-	"golang.org/x/net/context"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -446,27 +447,32 @@ func (f *FS) NewWriterWithContext(ctx context.Context, objectName string, metada
 		return nil, fmt.Errorf("options IfNotExists not supported for store type")
 	}
 
-	// Create an uploader with the session and default options
-	uploader := s3manager.NewUploader(f.sess)
+	rwc := csbufio.NewBackgroundWriteCloser(ctx,
+		func(ctx context.Context, rc io.ReadCloser) error {
+			defer rc.Close()
 
-	pr, pw := io.Pipe()
-	bw := csbufio.NewWriter(ctx, pw)
+			uploader := s3manager.NewUploader(f.sess)
 
-	go func() {
-		// TODO:  this needs to be managed, ie shutdown signals, close, handler err etc.
+			// TODO:  this needs to be managed, ie shutdown signals, close, handler err etc.
 
-		// Upload the file to S3.
-		_, err := uploader.UploadWithContext(ctx, &s3manager.UploadInput{
-			Bucket: aws.String(f.bucket),
-			Key:    aws.String(objectName),
-			Body:   pr,
+			// Upload the file to S3.
+			_, err := uploader.UploadWithContext(ctx, &s3manager.UploadInput{
+				Bucket: aws.String(f.bucket),
+				Key:    aws.String(objectName),
+				Body:   rc,
+			})
+			if err != nil {
+				err = fmt.Errorf("unable to write %q to s3 bucket %q: %w", objectName, f.bucket, err)
+
+				gou.Warnf("could not upload %v", err)
+
+				return err
+			}
+
+			return nil
 		})
-		if err != nil {
-			gou.Warnf("could not upload %v", err)
-		}
-	}()
 
-	return bw, nil
+	return rwc, nil
 }
 
 // Delete requested object path string.

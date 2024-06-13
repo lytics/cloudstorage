@@ -22,7 +22,7 @@ func TestReaderContextDone(t *testing.T) {
 	n, err := rc.Read(p)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Equal(t, 0, n)
-	require.Len(t, p, 0)
+	require.Empty(t, p)
 
 	err = rc.Close()
 	require.ErrorIs(t, err, context.Canceled)

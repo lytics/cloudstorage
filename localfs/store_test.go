@@ -5,10 +5,11 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/lytics/cloudstorage"
 	"github.com/lytics/cloudstorage/localfs"
 	"github.com/lytics/cloudstorage/testutils"
-	"github.com/stretchr/testify/require"
 )
 
 func TestAll(t *testing.T) {

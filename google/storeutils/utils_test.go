@@ -4,8 +4,9 @@ import (
 	"os"
 	"testing"
 
+	"context"
+
 	"cloud.google.com/go/storage"
-	"golang.org/x/net/context"
 	"google.golang.org/api/option"
 
 	"github.com/lytics/cloudstorage"
