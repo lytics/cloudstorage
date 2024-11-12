@@ -299,8 +299,14 @@ func (b *gzipWriteCloser) Close() error {
 // NewWriterWithContext create writer with provided context and metadata.
 func (g *GcsFS) NewWriterWithContext(ctx context.Context, o string, metadata map[string]string, opts ...cloudstorage.Opts) (io.WriteCloser, error) {
 	obj := g.gcsb().Object(o)
-	if len(opts) > 0 && opts[0].IfNotExists {
-		obj = obj.If(storage.Conditions{DoesNotExist: true})
+	disableCompression := false
+	if len(opts) > 0 {
+		if opts[0].DisableCompression {
+			disableCompression = true
+		}
+		if opts[0].IfNotExists {
+			obj = obj.If(storage.Conditions{DoesNotExist: true})
+		}
 	}
 	wc := obj.NewWriter(ctx)
 	if metadata != nil {
@@ -309,7 +315,7 @@ func (g *GcsFS) NewWriterWithContext(ctx context.Context, o string, metadata map
 		ctype := cloudstorage.EnsureContextType(o, metadata)
 		wc.ContentType = ctype
 	}
-	if g.enableCompression {
+	if g.enableCompression && !disableCompression {
 		wc.ContentEncoding = compressionMime
 		return newGZIPWriteCloser(ctx, wc), nil
 	}
