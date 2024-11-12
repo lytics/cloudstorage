@@ -42,7 +42,8 @@ var (
 
 type (
 	Opts struct {
-		IfNotExists bool
+		IfNotExists        bool
+		DisableCompression bool
 	}
 
 	// StoreReader interface to define the Storage Interface abstracting
