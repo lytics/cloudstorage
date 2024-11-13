@@ -324,6 +324,8 @@ func (f *FS) List(ctx context.Context, q cloudstorage.Query) (*cloudstorage.Obje
 	return objResp, nil
 }
 
+func (o *object) DisableCompression() {}
+
 // Objects returns an iterator over the objects in the s3 bucket that match the Query q.
 // If q is nil, no filtering is done.
 func (f *FS) Objects(ctx context.Context, q cloudstorage.Query) (cloudstorage.ObjectIterator, error) {

@@ -130,6 +130,8 @@ type (
 		SetMetaData(meta map[string]string)
 		// StorageSource is the type of store.
 		StorageSource() string
+		// Disable transparent compression on syncs and writes for object
+		DisableCompression()
 		// Open copies the remote file to a local cache and opens the cached version
 		// for read/writing.  Calling Close/Sync will push the copy back to the
 		// backing store.

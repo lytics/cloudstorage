@@ -93,6 +93,10 @@ func (g *GcsFS) gcsb() *storage.BucketHandle {
 	return g.gcs.Bucket(g.bucket)
 }
 
+func (o *object) DisableCompression() {
+	o.enableCompression = false
+}
+
 // NewObject of Type GCS.
 func (g *GcsFS) NewObject(objectname string) (cloudstorage.Object, error) {
 	obj, err := g.Get(context.Background(), objectname)

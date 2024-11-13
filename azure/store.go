@@ -176,6 +176,8 @@ func (f *FS) NewObject(objectname string) (cloudstorage.Object, error) {
 	}, nil
 }
 
+func (o *object) DisableCompression() {}
+
 // Get a single File Object
 func (f *FS) Get(ctx context.Context, objectpath string) (cloudstorage.Object, error) {
 
