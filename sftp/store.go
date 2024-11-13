@@ -244,6 +244,8 @@ func (m *Client) String() string {
 	return fmt.Sprintf("<sftp host=%q />", m.host)
 }
 
+func (o *object) DisableCompression() {}
+
 // NewObject create a new object with given name.  Will not write to remote
 // sftp until Close is called.
 func (m *Client) NewObject(objectname string) (cloudstorage.Object, error) {

@@ -93,6 +93,8 @@ func (l *LocalStore) Client() interface{} {
 	return l
 }
 
+func (o *object) DisableCompression() {}
+
 // NewObject create new object of given name.
 func (l *LocalStore) NewObject(objectname string) (cloudstorage.Object, error) {
 	obj, err := l.Get(context.Background(), objectname)
