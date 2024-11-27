@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"cloud.google.com/go/storage"
+
 	"github.com/lytics/cloudstorage"
 	"github.com/lytics/cloudstorage/google"
 	"github.com/lytics/cloudstorage/testutils"

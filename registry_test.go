@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/lytics/cloudstorage"
 	"github.com/stretchr/testify/require"
+
+	"github.com/lytics/cloudstorage"
 )
 
 func TestRegistry(t *testing.T) {

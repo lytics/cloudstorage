@@ -26,7 +26,7 @@ func TestWriterContextDone(t *testing.T) {
 
 	b, err := io.ReadAll(pr)
 	require.NoError(t, err, "error reading")
-	require.Equal(t, 0, len(b), "")
+	require.Empty(t, b, "")
 
 	err = wc.Close()
 	require.ErrorIs(t, err, context.Canceled)

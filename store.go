@@ -8,8 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"context"
+
 	"github.com/araddon/gou"
-	"golang.org/x/net/context"
 )
 
 const (

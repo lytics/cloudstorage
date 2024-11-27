@@ -18,9 +18,10 @@ import (
 	"time"
 
 	"github.com/araddon/gou"
-	"github.com/lytics/cloudstorage"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/api/iterator"
+
+	"github.com/lytics/cloudstorage"
 )
 
 var (
@@ -324,7 +325,7 @@ func ensureContents(t *testing.T, store cloudstorage.Store, name, data, msg stri
 	caller := caller(2)
 
 	obj, err := store.Get(context.Background(), name)
-	require.Equalf(t, nil, err, msg, caller)
+	require.NoErrorf(t, err, msg, caller)
 	if err != nil {
 		return
 	}
@@ -334,13 +335,13 @@ func ensureContents(t *testing.T, store cloudstorage.Store, name, data, msg stri
 	f, err := obj.Open(cloudstorage.ReadOnly)
 	defer func() {
 		err = obj.Close()
-		require.Equalf(t, nil, err, msg, caller)
+		require.NoErrorf(t, err, msg, caller)
 	}()
-	require.Equalf(t, nil, err, msg, caller)
+	require.NoErrorf(t, err, msg, caller)
 	require.Equalf(t, fmt.Sprintf("%p", f), fmt.Sprintf("%p", obj.File()), msg, caller)
 
 	bytes, err := io.ReadAll(f)
-	require.Equalf(t, nil, err, msg, caller)
+	require.NoErrorf(t, err, msg, caller)
 	require.Equalf(t, data, string(bytes), msg, caller)
 }
 
@@ -361,14 +362,14 @@ func Copy(t *testing.T, store cloudstorage.Store) {
 	obj := createFile(t, store, "from/test.csv", testcsv)
 
 	dest, err := store.NewObject("to/testcopy.csv")
-	require.Equalf(t, nil, err, caller)
+	require.NoErrorf(t, err, caller)
 
 	err = cloudstorage.Copy(context.Background(), store, obj, dest)
-	require.Equalf(t, nil, err, caller)
+	require.NoErrorf(t, err, caller)
 
 	// After copy, old should exist
 	obj2, err := store.Get(context.Background(), "from/test.csv")
-	require.Equalf(t, nil, err, caller)
+	require.NoErrorf(t, err, caller)
 	require.Equalf(t, "from/test.csv", obj2.Name(), caller)
 
 	// And also to should exist
@@ -491,7 +492,7 @@ func ListObjsAndFolders(t *testing.T, store cloudstorage.Store) {
 	createObjects := func(names []string) {
 		for _, n := range names {
 			obj, err := store.NewObject(n)
-			require.Equalf(t, nil, err, "failed trying to call new object on:%v of %v", n, names)
+			require.NoErrorf(t, err, "failed trying to call new object on:%v of %v", n, names)
 			if obj == nil {
 				continue
 			}
@@ -533,20 +534,20 @@ func ListObjsAndFolders(t *testing.T, store cloudstorage.Store) {
 	iter, _ := store.Objects(context.Background(), q)
 	objs, err := cloudstorage.ObjectsAll(iter)
 	require.NoError(t, err)
-	require.Equal(t, 15, len(objs), "incorrect list len. wanted 15 got %d", len(objs))
+	require.Len(t, objs, 15, "incorrect list len. wanted 15 got %d", len(objs))
 	iter.Close()
 
 	iter, _ = store.Objects(context.Background(), q)
 	objr, err := cloudstorage.ObjectResponseFromIter(iter)
 	require.NoError(t, err)
-	require.Equal(t, 15, len(objr.Objects), "incorrect list len. wanted 15 got %d", len(objr.Objects))
+	require.Len(t, objr.Objects, 15, "incorrect list len. wanted 15 got %d", len(objr.Objects))
 
 	// Now we are going to re-run this test using store.List() instead of store.Objects()
 	q = cloudstorage.NewQuery("list-test/")
 	q.Sorted()
 	objResp, err := store.List(context.Background(), q)
 	require.NoError(t, err)
-	require.Equal(t, 15, len(objResp.Objects), "incorrect list len. wanted 15 got %d", len(objResp.Objects))
+	require.Len(t, objResp.Objects, 15, "incorrect list len. wanted 15 got %d", len(objResp.Objects))
 
 	// Now we are going to re-run this test using an Object Iterator
 	// that uses store.List() instead of store.Objects()
@@ -566,14 +567,14 @@ func ListObjsAndFolders(t *testing.T, store cloudstorage.Store) {
 		require.Equal(t, names[i], o.Name(), "unexpected name.")
 		i++
 	}
-	require.Equal(t, 15, len(objs), "incorrect list len. wanted 15 got %d", len(objs))
+	require.Len(t, objs, 15, "incorrect list len. wanted 15 got %d", len(objs))
 
 	q = cloudstorage.NewQuery("list-test/b")
 	q.Sorted()
 	iter, _ = store.Objects(context.Background(), q)
 	objs, err = cloudstorage.ObjectsAll(iter)
 	require.NoError(t, err)
-	require.Equal(t, 5, len(objs), "incorrect list len. wanted 5 got %d", len(objs))
+	require.Len(t, objs, 5, "incorrect list len. wanted 5 got %d", len(objs))
 
 	for i, o := range objs {
 		require.Equal(t, names[i+5], o.Name(), "unexpected name.")
@@ -594,12 +595,12 @@ func ListObjsAndFolders(t *testing.T, store cloudstorage.Store) {
 		i++
 	}
 
-	require.Equal(t, 5, len(objs), "incorrect list len.")
+	require.Len(t, objs, 5, "incorrect list len.")
 
 	q = cloudstorage.NewQueryForFolders("list-test/")
 	folders, err = store.Folders(context.Background(), q)
 	require.NoError(t, err)
-	require.Equal(t, 3, len(folders), "incorrect list len. wanted 3 folders. %v", folders)
+	require.Len(t, folders, 3, "incorrect list len. wanted 3 folders. %v", folders)
 	sort.Strings(folders)
 	require.Equal(t, []string{"list-test/a/", "list-test/b/", "list-test/c/"}, folders)
 
@@ -620,20 +621,20 @@ func ListObjsAndFolders(t *testing.T, store cloudstorage.Store) {
 	q.PageSize = 500
 	folders, err = store.Folders(context.Background(), q)
 	require.NoError(t, err)
-	require.Equal(t, 3, len(folders), "incorrect list len. wanted 3 folders. %v", folders)
+	require.Len(t, folders, 3, "incorrect list len. wanted 3 folders. %v", folders)
 	require.Equal(t, []string{"list-test/a/", "list-test/b/", "list-test/c/"}, folders)
 
 	q = cloudstorage.NewQueryForFolders("list-test/b/")
 	folders, err = store.Folders(context.Background(), q)
 	require.NoError(t, err)
-	require.Equal(t, 2, len(folders), "incorrect list len. wanted 2 folders. %v", folders)
+	require.Len(t, folders, 2, "incorrect list len. wanted 2 folders. %v", folders)
 	require.Equal(t, []string{"list-test/b/b1/", "list-test/b/b2/"}, folders)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	folders, err = store.Folders(ctx, q)
 	require.Error(t, err)
-	require.Equal(t, 0, len(folders), "incorrect list len. wanted 0 folders. %v", folders)
+	require.Empty(t, folders, "incorrect list len. wanted 0 folders. %v", folders)
 
 	// List objects from a missing folder
 	q = cloudstorage.NewQuery("does-not-exist/")
@@ -768,12 +769,12 @@ func TestReadWriteCloser(t *testing.T, store cloudstorage.Store) {
 		data := fmt.Sprintf("pad:%v:pid:%v:time:%v:index:%v:", padding, os.Getpid(), time.Now().Nanosecond(), i)
 
 		wc, err := store.NewWriter(fileName, nil)
-		require.Equalf(t, nil, err, "at loop-cnt:%v", i)
+		require.NoErrorf(t, err, "at loop-cnt:%v", i)
 		buf1 := bytes.NewBufferString(data)
 		_, err = buf1.WriteTo(wc)
-		require.Equalf(t, nil, err, "at loop-cnt:%v", i)
+		require.NoErrorf(t, err, "at loop-cnt:%v", i)
 		err = wc.Close()
-		require.Equalf(t, nil, err, "at loop-cnt:%v", i)
+		require.NoErrorf(t, err, "at loop-cnt:%v", i)
 		time.Sleep(time.Millisecond * 100)
 
 		wc, err = store.NewWriterWithContext(context.Background(), fileName, nil, cloudstorage.Opts{IfNotExists: true})
@@ -790,18 +791,18 @@ func TestReadWriteCloser(t *testing.T, store cloudstorage.Store) {
 		deleteIfExists(store, "prefix/test.csv")
 
 		rc, err := store.NewReader(fileName)
-		require.Equalf(t, nil, err, "at loop-cnt:%v", i)
+		require.NoErrorf(t, err, "at loop-cnt:%v", i)
 		if rc == nil {
 			t.Fatalf("could not create reader")
 			return
 		}
 		buf2 := bytes.Buffer{}
 		_, err = buf2.ReadFrom(rc)
-		require.Equalf(t, nil, err, "at loop-cnt:%v", i)
+		require.NoErrorf(t, err, "at loop-cnt:%v", i)
 		require.Equalf(t, data, buf2.String(), "round trip data don't match: loop-cnt:%v", i) // extra data means we didn't truncate the file
 
 		// make sure we clean up and close
-		require.Nil(t, rc.Close())
+		require.NoError(t, rc.Close())
 
 		_, err = store.NewReader("bogus/notreal.csv")
 		require.Equalf(t, cloudstorage.ErrObjectNotFound, err, "at loop-cnt:%v", i)
@@ -886,7 +887,7 @@ func MultipleRW(t *testing.T, store cloudstorage.Store, conf *cloudstorage.Confi
 		require.Equal(t, fmt.Sprintf("%p", f2), fmt.Sprintf("%p", obj2.File()))
 		bytes, err := io.ReadAll(f2)
 		require.NoError(t, err)
-		require.Nil(t, f2.Close())
+		require.NoError(t, f2.Close())
 
 		require.Equal(t, data, string(bytes))
 
