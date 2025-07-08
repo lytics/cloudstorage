@@ -3,6 +3,7 @@ package google
 import (
 	"bufio"
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -237,7 +238,7 @@ func (g *GcsFS) NewReader(o string) (io.ReadCloser, error) {
 func (g *GcsFS) NewReaderWithContext(ctx context.Context, o string) (io.ReadCloser, error) {
 	obj := g.gcsb().Object(o).ReadCompressed(true)
 	attrs, err := obj.Attrs(ctx)
-	if err == storage.ErrObjectNotExist {
+	if errors.Is(err, storage.ErrObjectNotExist) {
 		return nil, cloudstorage.ErrObjectNotFound
 	} else if err != nil {
 		return nil, err
@@ -248,7 +249,7 @@ func (g *GcsFS) NewReaderWithContext(ctx context.Context, o string) (io.ReadClos
 	// auto-decompressed regardless of your Accept-Encoding header
 	if attrs.ContentEncoding == compressionMime && attrs.ContentType != "application/x-gzip" {
 		rc, err := obj.NewReader(ctx)
-		if err == storage.ErrObjectNotExist {
+		if errors.Is(err, storage.ErrObjectNotExist) {
 			return nil, cloudstorage.ErrObjectNotFound
 		} else if err != nil {
 			return nil, err
@@ -261,7 +262,7 @@ func (g *GcsFS) NewReaderWithContext(ctx context.Context, o string) (io.ReadClos
 	}
 
 	rc, err := obj.NewReader(ctx)
-	if err == storage.ErrObjectNotExist {
+	if errors.Is(err, storage.ErrObjectNotExist) {
 		return rc, cloudstorage.ErrObjectNotFound
 	}
 	return rc, err
