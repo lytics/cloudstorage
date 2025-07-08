@@ -2,6 +2,7 @@ package storeutils
 
 import (
 	"bytes"
+	"errors"
 	"io"
 
 	"cloud.google.com/go/storage"
@@ -19,7 +20,7 @@ func GetObject(gc *storage.Client, bucket, name string) (*bytes.Buffer, error) {
 func GetObjectWithContext(ctx context.Context, gc *storage.Client, bucket, name string) (*bytes.Buffer, error) {
 	rc, err := gc.Bucket(bucket).Object(name).NewReader(ctx)
 	if err != nil {
-		if err == storage.ErrObjectNotExist {
+		if errors.Is(err, storage.ErrObjectNotExist) {
 			return nil, cloudstorage.ErrObjectNotFound
 		}
 		return nil, err
